@@ -29,7 +29,7 @@ export default function Login({ onLogin }) {
   return (
     <main className="login-page">
       <section className="login-card">
-        <div className="brand-badge"><Sparkles size={20} /> Safa AI Studio</div>
+        <div className="brand-badge"><Sparkles size={20} /> Yildiz AI Studio</div>
         <h1>Werbetechnik. KI. Design.</h1>
         <p>Ohne E-Mail anmelden, Angebote gestalten, Bilder und Videos erzeugen und Webseiten exportieren.</p>
         <form onSubmit={submit}>

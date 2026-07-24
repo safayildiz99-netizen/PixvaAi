@@ -40,13 +40,13 @@ export default function Chat() {
             <div className="message-body">{message.content}</div>
           </article>
         ))}
-        {loading && <article className="message assistant"><div className="avatar"><Bot size={18} /></div><div className="message-body typing">Safa AI denkt …</div></article>}
+        {loading && <article className="message assistant"><div className="avatar"><Bot size={18} /></div><div className="message-body typing">Yildiz AI denkt …</div></article>}
       </div>
       <div className="quick-row">
         {quickPrompts.map((prompt) => <button key={prompt} onClick={() => send(prompt)}><WandSparkles size={14} />{prompt}</button>)}
       </div>
       <div className="chat-input-wrap">
-        <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder="Frag Safa AI …" onKeyDown={(e) => {
+        <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder="Frag Yildiz AI …" onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
         }} />
         <button className="send-btn" onClick={() => send()} disabled={loading}><ArrowUp size={20} /></button>

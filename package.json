@@ -1,16 +1,12 @@
 {
-  "name": "safa-ai-studio",
-  "version": "1.0.0",
+  "name": "yildiz-ai-studio",
+  "version": "2.0.0",
   "private": true,
-  "description": "Kostenloses, selbst gehostetes KI- und Design-Studio für Werbetechnik",
+  "type": "module",
+  "description": "Yildiz AI Studio auf Vercel und Supabase",
   "scripts": {
-    "setup": "npm install --prefix server && npm install --prefix client",
-    "dev": "concurrently -n SERVER,CLIENT -c auto \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "build": "npm run build --prefix client",
-    "start": "npm run build && npm run start --prefix server"
-  },
-  "dependencies": {
-    "concurrently": "^9.2.1"
+    "build": "npm install --prefix client && npm run build --prefix client",
+    "vercel-build": "npm run build"
   },
   "engines": {
     "node": ">=20.19"
