@@ -1,0 +1,11 @@
+YILDIZ AI – OPERA + GEMINI + GASTZUGANG
+
+1. ZIP entpacken.
+2. GitHub > Yildiz-AI > Add file > Upload files.
+3. Alle Inhalte des entpackten Ordners hochladen und ersetzen.
+4. Commit changes.
+5. Vercel deployt automatisch.
+6. Prüfe in Vercel: GEMINI_API_KEY, VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY.
+7. Website mit Cmd+Shift+R neu laden.
+
+Kein neues Supabase-SQL nötig.

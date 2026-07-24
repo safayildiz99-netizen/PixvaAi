@@ -100,7 +100,7 @@ function addStarterTemplate(canvas, width, height, mode) {
   canvas.renderAll();
 }
 
-export default function DesignEditor({ mode = 'flyer', project, onSaved }) {
+export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true }) {
   const elementRef = useRef(null);
   const fabricRef = useRef(null);
   const [formatKey, setFormatKey] = useState(project?.data?.format || 'post');
@@ -232,6 +232,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved }) {
   }
 
   async function saveProject() {
+    if (!canSave) { setStatus('Zum dauerhaften Speichern bitte anmelden. PNG-Export funktioniert auch als Gast.'); return; }
     const canvas = fabricRef.current;
     setStatus('Speichern …');
     try {
@@ -285,7 +286,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved }) {
         <div className="canvas-topline">
           <span>{format.label}</span>
           <div>
-            <button onClick={saveProject}><Save size={17} />Speichern</button>
+            <button onClick={saveProject}><Save size={17} />{canSave?'Speichern':'Anmelden zum Speichern'}</button>
             <button className="primary-btn" onClick={exportPng}><Download size={17} />PNG exportieren</button>
           </div>
         </div>

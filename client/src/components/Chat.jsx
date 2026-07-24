@@ -14,7 +14,7 @@ export default function Chat() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('Gemini ist über die geschützte Vercel-API verbunden.');
+  const [status, setStatus] = useState('Gemini läuft serverseitig und funktioniert in Chrome, Opera, Safari und Edge.');
 
   async function send(text = input) {
     const clean = String(text || '').trim();
@@ -34,7 +34,7 @@ export default function Chat() {
       setStatus(`Gemini verbunden${result.model ? ` · ${result.model}` : ''}`);
     } catch (error) {
       setMessages((old) => [...old, { role: 'assistant', content: error.message }]);
-      setStatus('Gemini ist momentan nicht verfügbar.');
+      setStatus('Gemini ist momentan ausgelastet – automatische Modell-Ausweichlösung wurde versucht.');
     } finally {
       setLoading(false);
     }
@@ -42,7 +42,7 @@ export default function Chat() {
 
   return (
     <section className="chat-shell">
-      <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI mit Gemini</b><span>{status} · Keine lokale GPU erforderlich</span></div></div>
+      <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI mit Gemini</b><span>{status} · Keine lokale GPU und keine Anmeldung erforderlich</span></div></div>
       <div className="chat-messages">
         {messages.map((message, index) => (
           <article className={`message ${message.role}`} key={`${message.role}-${index}`}>

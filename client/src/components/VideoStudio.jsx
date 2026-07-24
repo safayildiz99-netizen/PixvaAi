@@ -6,7 +6,7 @@ function newScene(index) {
   return { id: crypto.randomUUID(), title: `Abschnitt ${index + 1}`, prompt: 'Beschreibe hier Inhalt, Text und Übergang dieses Abschnitts.', duration: 4, url: '', fileName: '', status: '' };
 }
 
-export default function VideoStudio({ project, onSaved }) {
+export default function VideoStudio({ project, onSaved, canSave = true }) {
   const [projectName, setProjectName] = useState(project?.name || 'Neues Werbevideo');
   const [projectId, setProjectId] = useState(project?.id || '');
   const [scenes, setScenes] = useState(project?.data?.scenes?.length ? project.data.scenes : [newScene(0), newScene(1)]);
@@ -35,6 +35,7 @@ export default function VideoStudio({ project, onSaved }) {
   }
 
   async function saveProject() {
+    if (!canSave) { setStatus('Zum dauerhaften Speichern bitte anmelden. Lokale Clips und Timeline bleiben im aktuellen Tab nutzbar.'); return; }
     setStatus('Speichern …');
     try {
       const safeScenes = scenes.map(({ url, ...scene }) => ({ ...scene, url: url?.startsWith('blob:') ? '' : url }));
@@ -45,7 +46,7 @@ export default function VideoStudio({ project, onSaved }) {
   }
 
   return <section className="video-studio">
-    <div className="studio-header"><div><h2><Film size={22}/> Kostenloses lokales Video-Studio</h2><p>Keine Video-Credits und keine Zahlungsaufforderung. Eigene Clips hochladen, Abschnitte verschieben und planen.</p></div><div className="header-actions"><input value={projectName} onChange={(e)=>setProjectName(e.target.value)}/><button onClick={saveProject}><Save size={17}/>Speichern</button><button className="primary-btn" onClick={()=>setScenes((old)=>[...old,newScene(old.length)])}><Plus size={17}/>Abschnitt</button></div></div>
+    <div className="studio-header"><div><h2><Film size={22}/> Kostenloses lokales Video-Studio</h2><p>Keine Video-Credits und keine Zahlungsaufforderung. Eigene Clips hochladen, Abschnitte verschieben und planen.</p></div><div className="header-actions"><input value={projectName} onChange={(e)=>setProjectName(e.target.value)}/><button onClick={saveProject}><Save size={17}/>{canSave?'Speichern':'Anmelden zum Speichern'}</button><button className="primary-btn" onClick={()=>setScenes((old)=>[...old,newScene(old.length)])}><Plus size={17}/>Abschnitt</button></div></div>
     <div className="timeline">{scenes.map((scene,index)=><article className="scene-card" key={scene.id}>
       <div className="scene-index">{index+1}</div>
       <div className="scene-main"><div className="scene-title-row"><input value={scene.title} onChange={(e)=>updateScene(scene.id,{title:e.target.value})}/><div className="scene-buttons"><button onClick={()=>moveScene(index,-1)}><ArrowUp size={16}/></button><button onClick={()=>moveScene(index,1)}><ArrowDown size={16}/></button><button onClick={()=>setScenes((old)=>old.filter((x)=>x.id!==scene.id))}><Trash2 size={16}/></button></div></div>
