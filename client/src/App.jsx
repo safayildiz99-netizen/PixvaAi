@@ -42,7 +42,7 @@ export default function App(){
 
   return <div className={`app-shell ${sidebar?'':'sidebar-collapsed'}`}>
     <aside className="sidebar">
-      <div className="sidebar-brand"><div className="brand-mark"><Sparkles size={18}/></div><span>Yildiz AI</span><button onClick={()=>setSidebar(false)}><PanelLeftClose size={18}/></button></div>
+      <div className="sidebar-brand"><img className="sidebar-logo" src="/yildiz-ai-logo.png" alt="Yildiz AI"/><span className="sr-only">Yildiz AI</span><button onClick={()=>setSidebar(false)}><PanelLeftClose size={18}/></button></div>
       <button className="new-project" onClick={()=>changeView('flyer')}><LayoutTemplate size={18}/>Neues Design</button>
       <nav>{nav.map((item)=>{const Icon=item.icon;return <button key={item.id} className={view===item.id?'active':''} onClick={()=>changeView(item.id)}><Icon size={19}/><span>{item.label}</span></button>})}</nav>
       <div className="sidebar-bottom">{user.role==='admin'&&<button className={view==='admin'?'active':''} onClick={()=>changeView('admin')}><Settings size={19}/><span>Admin</span></button>}<div className="user-box"><div className="user-avatar">{user.username.slice(0,2).toUpperCase()}</div><div><b>{user.username}</b><span>{user.role==='admin'?'Admin':'Mitarbeiter'}</span></div><button onClick={logout} title="Abmelden"><LogOut size={17}/></button></div></div>

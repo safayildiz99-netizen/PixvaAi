@@ -1,36 +1,3 @@
 import { pollinationsKey, readJson, send, validateUser } from '../_lib.js';
-
-export const config = { maxDuration: 60 };
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return send(res, 405, { error: 'Methode nicht erlaubt.' });
-  try {
-    await validateUser(req);
-    const body = await readJson(req);
-    const prompt = String(body.prompt || '').trim();
-    if (!prompt) return send(res, 400, { error: 'Bitte einen Bild-Prompt eingeben.' });
-    const key = pollinationsKey();
-    if (!key) return send(res, 400, { error: 'In Vercel zuerst POLLINATIONS_KEY eintragen.' });
-
-    const response = await fetch('https://gen.pollinations.ai/v1/images/generations', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        model: body.model || 'flux',
-        size: body.size || '1024x1024',
-        n: 1,
-        quality: body.quality || 'medium',
-        response_format: 'url',
-        safe: 'privacy,secrets,sexual,violence,shield'
-      })
-    });
-    if (!response.ok) throw new Error(`Bild-KI meldet ${response.status}: ${await response.text()}`);
-    const data = await response.json();
-    const url = data.data?.[0]?.url;
-    if (!url) throw new Error('Der KI-Dienst hat keine Bild-URL geliefert.');
-    return send(res, 200, { url });
-  } catch (error) {
-    return send(res, 502, { error: `Bildgenerierung fehlgeschlagen: ${error.message}` });
-  }
-}
+export const config={maxDuration:60};
+export default async function handler(req,res){if(req.method!=='POST')return send(res,405,{error:'Methode nicht erlaubt.'});try{await validateUser(req);const b=await readJson(req);const prompt=String(b.prompt||'').trim();if(!prompt)return send(res,400,{error:'Bitte einen Bild-Prompt eingeben.'});const key=pollinationsKey();if(key){const r=await fetch('https://gen.pollinations.ai/v1/images/generations',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({prompt,model:b.model||'flux',size:b.size||'1024x1024',n:1,response_format:'url'})});if(r.ok){const d=await r.json();const url=d.data?.[0]?.url;if(url)return send(res,200,{url,mode:'key'});}else if(![402,429].includes(r.status))throw new Error(`Bild-KI meldet ${r.status}: ${await r.text()}`);}const [w,h]=String(b.size||'1024x1024').split('x');const url=`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${Number(w)||1024}&height=${Number(h)||1024}&nologo=true&safe=true&seed=${Date.now()}`;return send(res,200,{url,mode:'free'});}catch(e){return send(res,502,{error:`Bildgenerierung fehlgeschlagen: ${e.message}`});}}

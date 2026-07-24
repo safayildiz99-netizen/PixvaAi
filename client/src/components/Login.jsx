@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { api, setToken } from '../api.js';
 
 export default function Login({ onLogin }) {
@@ -29,9 +29,9 @@ export default function Login({ onLogin }) {
   return (
     <main className="login-page">
       <section className="login-card">
-        <div className="brand-badge"><Sparkles size={20} /> Yildiz AI Studio</div>
-        <h1>Werbetechnik. KI. Design.</h1>
-        <p>Ohne E-Mail anmelden, Angebote gestalten, Bilder und Videos erzeugen und Webseiten exportieren.</p>
+        <div className="brand-badge"><img src="/yildiz-ai-logo.png" alt="Yildiz AI"/></div>
+        <h1>Deine KI für alles.</h1>
+        <p>Fragen beantworten, lernen, schreiben, programmieren und zusätzlich professionelle Designs für Werbetechnik erstellen.</p>
         <form onSubmit={submit}>
           <label>Benutzername<input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" /></label>
           <label>Passwort<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>

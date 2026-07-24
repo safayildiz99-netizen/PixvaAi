@@ -3,14 +3,14 @@ import { ArrowUp, Bot, User, WandSparkles } from 'lucide-react';
 import { api } from '../api.js';
 
 const quickPrompts = [
-  'Erstelle einen Werbetext für eine neue Leuchtreklame.',
-  'Schreibe ein Angebot für Fahrzeugfolierung.',
-  'Gib mir 5 Instagram-Ideen für eine Werbetechnik-Firma.'
+  'Erkläre mir ein schwieriges Thema ganz einfach.',
+  'Hilf mir bei einer Website oder einem Programmierproblem.',
+  'Erstelle einen professionellen Flyer für meine Firma.'
 ];
 
 export default function Chat() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hallo! Ich helfe dir bei Werbetechnik, Angeboten, Flyern, Webseiten und Social Media.' }
+    { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Du kannst mich zu fast allem fragen – Alltag, Lernen, Texte, Technik, Programmieren, Unternehmen und natürlich Werbetechnik und Design.' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
