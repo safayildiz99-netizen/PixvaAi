@@ -1,0 +1,11 @@
+YILDIZ AI – MITARBEITER KÖNNEN IHR PASSWORT SELBST ÄNDERN
+
+1. Diesen gesamten Ordnerinhalt bei GitHub hochladen und vorhandene Dateien ersetzen.
+2. Commit changes anklicken.
+3. MITARBEITER-PASSWORT-FIX.txt öffnen und den gesamten Text kopieren.
+4. Supabase > SQL Editor > New query öffnen, Text einfügen und Run anklicken.
+5. Vercel automatisch neu deployen lassen oder Deployments > ... > Redeploy.
+6. Nach der Anmeldung sehen Admins und Mitarbeiter links den Punkt „Mein Konto“.
+7. Dort können sie aktuelles Passwort, neues Passwort und Bestätigung eingeben.
+
+Der Gastmodus hat kein Konto und deshalb keine Passwortfunktion.
