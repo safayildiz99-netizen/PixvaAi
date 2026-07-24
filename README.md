@@ -34,3 +34,7 @@ Nur diese beiden Variablen werden benötigt:
 ## Sicherheit
 
 Die Sitzungskennung für die Anmeldung bleibt bestehen. Sie schützt Admin- und Mitarbeiterkonten und ist kein Bezahl-, Guthaben- oder Usage-System.
+
+## Gemini-Version
+
+Diese Version verwendet keine lokale WebGPU-KI mehr. Der Chat und der Website-Textgenerator senden Anfragen über die geschützte Vercel-Funktion `api/ai/chat.js` an Gemini. In Vercel muss `GEMINI_API_KEY` gesetzt sein. Der Schlüssel darf nicht mit `VITE_` beginnen.

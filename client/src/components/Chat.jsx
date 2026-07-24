@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ArrowUp, Bot, Cpu, User, WandSparkles } from 'lucide-react';
-import { getLocalModelName, localAiSupported, localChat } from '../localAi.js';
+import { ArrowUp, Bot, Cloud, User, WandSparkles } from 'lucide-react';
+import { api } from '../api.js';
 
 const quickPrompts = [
   'Erkläre mir ein schwieriges Thema ganz einfach.',
@@ -10,25 +10,31 @@ const quickPrompts = [
 
 export default function Chat() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Ich laufe kostenlos direkt in deinem Browser. Beim ersten Start wird einmal ein lokales KI-Modell geladen.' }
+    { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Ich beantworte allgemeine Fragen und helfe zusätzlich bei Design, Werbetechnik, Flyern, Webseiten und Angeboten.' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(localAiSupported() ? 'Kostenloser lokaler Modus bereit zum Laden.' : 'WebGPU ist in diesem Browser nicht verfügbar.');
+  const [status, setStatus] = useState('Gemini ist über die geschützte Vercel-API verbunden.');
 
   async function send(text = input) {
-    const clean = text.trim();
+    const clean = String(text || '').trim();
     if (!clean || loading) return;
     const history = messages;
     setMessages((old) => [...old, { role: 'user', content: clean }]);
     setInput('');
     setLoading(true);
+    setStatus('Yildiz AI denkt …');
+
     try {
-      const answer = await localChat(clean, history, setProgress);
-      setMessages((old) => [...old, { role: 'assistant', content: answer }]);
+      const result = await api('/api/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message: clean, history })
+      });
+      setMessages((old) => [...old, { role: 'assistant', content: result.answer }]);
+      setStatus(`Gemini verbunden${result.model ? ` · ${result.model}` : ''}`);
     } catch (error) {
-      setMessages((old) => [...old, { role: 'assistant', content: `Lokale KI konnte nicht starten: ${error.message}` }]);
-      setProgress('Lokale KI ist momentan nicht verfügbar.');
+      setMessages((old) => [...old, { role: 'assistant', content: error.message }]);
+      setStatus('Gemini ist momentan nicht verfügbar.');
     } finally {
       setLoading(false);
     }
@@ -36,7 +42,7 @@ export default function Chat() {
 
   return (
     <section className="chat-shell">
-      <div className="local-ai-banner"><Cpu size={17}/><div><b>Lokale KI ohne API und ohne Guthaben</b><span>{progress} · Modell: {getLocalModelName()}</span></div></div>
+      <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI mit Gemini</b><span>{status} · Keine lokale GPU erforderlich</span></div></div>
       <div className="chat-messages">
         {messages.map((message, index) => (
           <article className={`message ${message.role}`} key={`${message.role}-${index}`}>
@@ -44,7 +50,7 @@ export default function Chat() {
             <div className="message-body">{message.content}</div>
           </article>
         ))}
-        {loading && <article className="message assistant"><div className="avatar"><Bot size={18} /></div><div className="message-body typing">{progress}</div></article>}
+        {loading && <article className="message assistant"><div className="avatar"><Bot size={18} /></div><div className="message-body typing">{status}</div></article>}
       </div>
       <div className="quick-row">
         {quickPrompts.map((prompt) => <button key={prompt} onClick={() => send(prompt)}><WandSparkles size={14} />{prompt}</button>)}

@@ -1,0 +1,22 @@
+YILDIZ AI AUF GEMINI UMSTELLEN
+
+1. Google AI Studio öffnen und einen Gemini API-Key erstellen.
+2. Vercel > yildiz-ai > Settings > Environment Variables.
+3. Neue Variable anlegen:
+   Key: GEMINI_API_KEY
+   Value: dein vollständiger Gemini-Key
+   Sensitive: EIN
+   Environments: Production and Preview
+4. Diese ZIP entpacken.
+5. GitHub > Yildiz-AI > Add file > Upload files.
+6. ALLE Inhalte des entpackten Ordners hochladen und vorhandene Dateien ersetzen.
+7. Commit-Nachricht: Gemini API statt lokaler GPU-KI
+8. Vercel deployt automatisch. Falls nicht: Deployments > ... > Redeploy.
+9. Website mit Cmd+Shift+R neu laden.
+
+WICHTIG:
+- GEMINI_API_KEY niemals auf GitHub hochladen oder im Chat teilen.
+- Nicht VITE_GEMINI_API_KEY verwenden.
+- Die Supabase-Variablen bleiben unverändert.
+- WebLLM/WebGPU wurde entfernt; eine lokale GPU ist nicht mehr nötig.
+- Ohne aktivierte Google-Abrechnung entstehen keine automatischen Kosten. Beim kostenlosen Limit zeigt Yildiz AI eine normale Limit-Meldung.
