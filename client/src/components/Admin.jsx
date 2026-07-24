@@ -1,0 +1,20 @@
+import { useEffect, useState } from 'react';
+import { KeyRound, Plus, Save, Shield, UserRoundCog } from 'lucide-react';
+import { api } from '../api.js';
+
+export default function Admin({ user, onUserChanged }) {
+  const [users,setUsers]=useState([]); const [settings,setSettings]=useState(null); const [status,setStatus]=useState('');
+  const [newUser,setNewUser]=useState({username:'',password:'',role:'user'}); const [key,setKey]=useState('');
+  const [passwords,setPasswords]=useState({currentPassword:'',newPassword:''});
+  async function load(){try{const [u,s]=await Promise.all([api('/api/users'),api('/api/settings')]);setUsers(u.users);setSettings(s)}catch(e){setStatus(e.message)}}
+  useEffect(()=>{load()},[]);
+  async function createUser(e){e.preventDefault();setStatus('');try{await api('/api/users',{method:'POST',body:JSON.stringify(newUser)});setNewUser({username:'',password:'',role:'user'});setStatus('Konto erstellt.');load()}catch(e){setStatus(e.message)}}
+  async function toggle(target){try{await api(`/api/users/${target.id}`,{method:'PATCH',body:JSON.stringify({active:!target.active})});load()}catch(e){setStatus(e.message)}}
+  async function saveKey(){try{await api('/api/settings',{method:'PUT',body:JSON.stringify({pollinationsKey:key})});setKey('');setStatus('KI-Einstellungen gespeichert.');load()}catch(e){setStatus(e.message)}}
+  async function changePassword(e){e.preventDefault();try{await api('/api/auth/change-password',{method:'POST',body:JSON.stringify(passwords)});setPasswords({currentPassword:'',newPassword:''});setStatus('Passwort geändert.');onUserChanged?.({...user,mustChangePassword:false})}catch(e){setStatus(e.message)}}
+  return <section className="admin-page"><div className="page-heading"><div><h2><Shield size={22}/> Admin & Einstellungen</h2><p>Konten ohne E-Mail und KI-Zugang verwalten.</p></div></div>{status&&<div className="status-line">{status}</div>}<div className="admin-grid">
+    <article className="admin-card"><h3><KeyRound size={19}/> KI-Verbindung</h3><p>Status: <b>{settings?.hasPollinationsKey?'bereit':'noch nicht eingerichtet'}</b>{settings?.keySource==='env'?' · über .env':''}</p><label>Pollinations API-Key<input type="password" value={key} onChange={(e)=>setKey(e.target.value)} placeholder={settings?.hasPollinationsKey?'Neuen Key eintragen, um zu ersetzen':'sk_… oder pk_…'}/></label><button className="primary-btn" onClick={saveKey} disabled={settings?.keySource==='env'}><Save size={17}/>Speichern</button><small>Der Schlüssel wird nur auf deinem Server gespeichert. Bei .env-Verwendung ist das Feld gesperrt.</small></article>
+    <article className="admin-card"><h3><UserRoundCog size={19}/> Neues Konto ohne E-Mail</h3><form onSubmit={createUser}><label>Benutzername<input value={newUser.username} onChange={(e)=>setNewUser({...newUser,username:e.target.value})}/></label><label>Startpasswort<input type="password" value={newUser.password} onChange={(e)=>setNewUser({...newUser,password:e.target.value})}/></label><label>Rolle<select value={newUser.role} onChange={(e)=>setNewUser({...newUser,role:e.target.value})}><option value="user">Mitarbeiter</option><option value="admin">Admin</option></select></label><button className="primary-btn"><Plus size={17}/>Konto erstellen</button></form></article>
+    <article className="admin-card"><h3>Eigenes Passwort ändern</h3><form onSubmit={changePassword}><label>Aktuelles Passwort<input type="password" value={passwords.currentPassword} onChange={(e)=>setPasswords({...passwords,currentPassword:e.target.value})}/></label><label>Neues Passwort<input type="password" value={passwords.newPassword} onChange={(e)=>setPasswords({...passwords,newPassword:e.target.value})}/></label><button><Save size={17}/>Passwort ändern</button></form></article>
+  </div><div className="user-table"><h3>Konten</h3>{users.map((u)=><div className="user-row" key={u.id}><div><b>{u.username}</b><span>{u.role==='admin'?'Admin':'Mitarbeiter'} · {u.active?'aktiv':'deaktiviert'}</span></div><button onClick={()=>toggle(u)} disabled={u.id===user.id}>{u.active?'Deaktivieren':'Aktivieren'}</button></div>)}</div></section>;
+}
