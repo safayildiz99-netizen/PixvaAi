@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, Circle, FabricImage, FabricText, Group, Rect } from 'fabric';
 import {
-  Download, ImagePlus, Layers, MoveDown, MoveUp, Plus, Save, Sparkles,
+  Download, ImagePlus, Layers, LoaderCircle, MoveDown, MoveUp, Plus, Save, Sparkles,
   Square, Trash2, Type, Upload, WandSparkles
 } from 'lucide-react';
 import { api } from '../api.js';
@@ -108,8 +108,10 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const [projectName, setProjectName] = useState(project?.name || (mode === 'image' ? 'Neues Bilddesign' : 'Neuer Angebotsflyer'));
   const [background, setBackground] = useState('#f4f0e8');
   const [status, setStatus] = useState('');
-  const [aiPrompt, setAiPrompt] = useState('Modernes Werbetechnik-Motiv mit hellblauen und gelben Kontrasten');
+  const [aiPrompt, setAiPrompt] = useState(mode === 'image' ? 'Fotorealistisches Werbemotiv für eine moderne Werbetechnik-Firma' : 'Fotorealistisches Werbeplakat für Wochenangebote');
   const [localMotifUrl, setLocalMotifUrl] = useState('');
+  const [imageStyle, setImageStyle] = useState('realistic');
+  const [generating, setGenerating] = useState(false);
 
   const format = useMemo(() => formats[formatKey], [formatKey]);
 
@@ -254,6 +256,23 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     setStatus('Lokales Motiv erstellt – ohne API, Guthaben oder Zahlungsdienst.');
   }
 
+  async function generateAiImage() {
+    setGenerating(true);
+    setStatus('KI-Bild wird erstellt …');
+    try {
+      const result = await api('/api/ai/image', {
+        method: 'POST',
+        body: JSON.stringify({ prompt: aiPrompt, aspect: formatKey, style: imageStyle })
+      });
+      setLocalMotifUrl(result.imageDataUrl);
+      setStatus('KI-Bild erstellt. Du kannst es jetzt in dein Design einfügen.');
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <section className="editor-layout">
       <aside className="tool-panel">
@@ -274,11 +293,15 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         <label>Hintergrund<input className="color-input" type="color" value={background} onChange={(e) => setBackgroundColor(e.target.value)} /></label>
 
         <div className="panel-section ai-panel">
-          <h3><WandSparkles size={18} /> Lokales Motiv</h3>
-          <p className="panel-note">Erstellt sofort einen grafischen Hintergrund direkt im Browser. Für echte Produktfotos kannst du oben ein eigenes Bild oder Logo hochladen.</p>
+          <h3><WandSparkles size={18} /> KI-Bilderstellung & Upload</h3>
+          <p className="panel-note">Hier kannst du echte Bilder erzeugen oder eigene Bilder und Logos hochladen. Standardmäßig ist die Bildgenerierung auf realistisch / fotorealistisch eingestellt.</p>
           <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={5} />
-          <button className="primary-btn" onClick={generateLocalMotif}><Sparkles size={17} />Motiv kostenlos erstellen</button>
-          {localMotifUrl && <div className="ai-result"><img src={localMotifUrl} alt="Lokales Motiv" /><button onClick={() => addImageUrl(localMotifUrl)}><ImagePlus size={16} />In Design einfügen</button></div>}
+          <label>Stil<select value={imageStyle} onChange={(e) => setImageStyle(e.target.value)}><option value="realistic">Realistisch</option><option value="product">Produktfoto</option><option value="poster">Werbeposter</option><option value="studio">Studio</option></select></label>
+          <div className="tool-grid">
+            <button className="primary-btn" onClick={generateAiImage} disabled={generating}>{generating ? <LoaderCircle className="spin" size={17} /> : <Sparkles size={17} />}{generating ? 'Wird erstellt …' : 'KI-Bild erstellen'}</button>
+            <button onClick={generateLocalMotif}><Sparkles size={17} />Lokales Motiv</button>
+          </div>
+          {localMotifUrl && <div className="ai-result"><img src={localMotifUrl} alt="KI Motiv" /><button onClick={() => addImageUrl(localMotifUrl)}><ImagePlus size={16} />In Design einfügen</button></div>}
         </div>
       </aside>
 

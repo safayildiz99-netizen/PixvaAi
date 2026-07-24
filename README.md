@@ -16,8 +16,3 @@ Diese Version verwendet Gemini ausschließlich über eine geschützte Vercel-Fun
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
 Optional: `GEMINI_MODEL`. Ohne diese Variable wählt Yildiz AI automatisch aktuelle stabile Modelle.
-
-
-## Mitarbeiter-Passwort
-
-Alle angemeldeten Konten haben jetzt links den Bereich **Mein Konto**. Dort können Mitarbeiter und Admins ihr eigenes Passwort ändern. Für bestehende Supabase-Projekte einmal `MITARBEITER-PASSWORT-FIX.txt` im SQL Editor ausführen.

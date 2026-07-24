@@ -1,6 +1,6 @@
 import { readJson, send } from '../_lib.js';
 
-const SYSTEM_PROMPT = `Du bist Yildiz AI, ein freundlicher, präziser und vielseitiger KI-Assistent. Du hilfst bei Alltag, Lernen, Schreiben, Übersetzen, Programmieren, Unternehmen, Kreativität und Planung. Zusätzlich kennst du dich mit Werbetechnik, Angeboten, Flyern, Druckdaten, Social Media und Webseiten aus. Antworte in der Sprache des Nutzers, klar, ehrlich und praktisch. Erfinde keine Fakten und sage offen, wenn du etwas nicht sicher weißt.`;
+const SYSTEM_PROMPT = `Du bist Yildiz AI, ein freundlicher, präziser und vielseitiger KI-Assistent. Du hilfst bei Alltag, Lernen, Schreiben, Übersetzen, Programmieren, Unternehmen, Kreativität und Planung. Zusätzlich kennst du dich mit Werbetechnik, Angeboten, Flyern, Druckdaten, Social Media und Webseiten aus. Antworte in der Sprache des Nutzers, klar, ehrlich und praktisch. Wenn Bilder angehängt sind, beschreibe sie hilfreich. Wenn nur eine Videodatei als Anhang vorhanden ist und keine Frames übertragen wurden, erkläre ehrlich, dass nur die Datei vorliegt und keine Bildanalyse der Videoinhalte möglich ist.`;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -8,7 +8,7 @@ function cleanHistory(history) {
   if (!Array.isArray(history)) return [];
   return history
     .filter((item) => item && ['user', 'assistant', 'model'].includes(item.role))
-    .slice(-14)
+    .slice(-12)
     .map((item) => ({
       role: item.role === 'assistant' ? 'model' : item.role,
       parts: [{ text: String(item.content || '').slice(0, 9000) }]
@@ -23,9 +23,46 @@ function extractText(data) {
     .trim();
 }
 
-async function callGemini({ apiKey, model, message, history }) {
+function normalizeAttachments(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .slice(0, 4)
+    .map((item) => ({
+      kind: item?.kind === 'video' ? 'video' : 'image',
+      name: String(item?.name || '').slice(0, 120),
+      mimeType: String(item?.mimeType || '').slice(0, 80),
+      data: String(item?.data || ''),
+      size: Number(item?.size || 0)
+    }))
+    .filter((item) => item.name || item.data);
+}
+
+function createUserParts(message, attachments) {
+  const parts = [];
+  const videoAttachments = attachments.filter((item) => item.kind === 'video');
+  const imageAttachments = attachments.filter((item) => item.kind === 'image');
+
+  let intro = String(message || '').trim();
+  if (videoAttachments.length) {
+    const videoInfo = videoAttachments.map((item) => {
+      const sizeMb = item.size ? `${(item.size / 1024 / 1024).toFixed(1)} MB` : 'unbekannte Größe';
+      return `- ${item.name || 'Video'} (${item.mimeType || 'video/*'}, ${sizeMb})`;
+    }).join('\n');
+    intro += `\n\nZusätzliche Datei-Anhänge (kein direkter Frame-Zugriff in dieser Version):\n${videoInfo}`;
+  }
+  parts.push({ text: intro || 'Bitte hilf mir mit diesem Anhang.' });
+
+  for (const image of imageAttachments) {
+    const match = image.data.match(/^data:(.+?);base64,(.+)$/);
+    if (!match) continue;
+    parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+  }
+  return parts;
+}
+
+async function callGemini({ apiKey, model, message, history, attachments }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 22000);
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -40,7 +77,7 @@ async function callGemini({ apiKey, model, message, history }) {
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents: [
             ...cleanHistory(history),
-            { role: 'user', parts: [{ text: message }] }
+            { role: 'user', parts: createUserParts(message, attachments) }
           ],
           generationConfig: { maxOutputTokens: 2048 }
         })
@@ -65,19 +102,18 @@ export default async function handler(req, res) {
     const body = await readJson(req);
     const message = String(body?.message || '').trim().slice(0, 16000);
     const history = body?.history || [];
+    const attachments = normalizeAttachments(body?.attachments);
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
 
-    if (!message) return send(res, 400, { error: 'Bitte gib eine Nachricht ein.' });
+    if (!message && !attachments.length) return send(res, 400, { error: 'Bitte gib eine Nachricht oder einen Anhang ein.' });
     if (!apiKey) return send(res, 500, { error: 'Der Gemini API-Key fehlt in Vercel.' });
 
-    // Neuester stabiler Stand zuerst, danach sparsame Modelle als automatische Ausweichlösung.
     const configured = String(process.env.GEMINI_MODEL || '').trim();
     const models = [...new Set([
       configured,
-      'gemini-3.6-flash',
-      'gemini-3.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-3.5-flash'
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash'
     ].filter(Boolean))];
 
     let lastStatus = 503;
@@ -87,7 +123,7 @@ export default async function handler(req, res) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         if (attempt) await sleep(700 + Math.floor(Math.random() * 500));
         try {
-          const { response, data } = await callGemini({ apiKey, model, message, history });
+          const { response, data } = await callGemini({ apiKey, model, message, history, attachments });
           const apiMessage = data?.error?.message || '';
           lastStatus = response.status;
           lastMessage = apiMessage;
@@ -114,7 +150,7 @@ export default async function handler(req, res) {
       return send(res, 429, { error: 'Das kostenlose Gemini-Limit ist gerade erreicht. Bitte warte kurz und versuche es erneut.' });
     }
     return send(res, 503, {
-      error: 'Gemini ist gerade stark ausgelastet. Yildiz AI hat mehrere aktuelle Modelle versucht. Bitte probiere es in ein bis zwei Minuten erneut.',
+      error: 'Gemini ist gerade stark ausgelastet. Bitte versuche es gleich noch einmal.',
       technical: lastMessage || undefined
     });
   } catch (error) {

@@ -151,41 +151,25 @@ create or replace function public.app_change_password(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, private, extensions
+set search_path = public, private
 as $$
 declare
   v_id uuid;
   v_hash text;
 begin
   v_id := private.session_user_id(p_token);
-  if v_id is null then
-    return jsonb_build_object('error', 'Nicht angemeldet oder Sitzung abgelaufen.');
-  end if;
-
+  if v_id is null then return jsonb_build_object('error', 'Nicht angemeldet.'); end if;
   if length(coalesce(p_new_password, '')) < 8 then
     return jsonb_build_object('error', 'Das neue Passwort braucht mindestens 8 Zeichen.');
   end if;
-
-  select password_hash into v_hash
-  from public.app_users
-  where id = v_id and active = true;
-
-  if v_hash is null or extensions.crypt(coalesce(p_current_password, ''), v_hash) <> v_hash then
+  select password_hash into v_hash from public.app_users where id = v_id;
+  if crypt(coalesce(p_current_password, ''), v_hash) <> v_hash then
     return jsonb_build_object('error', 'Das aktuelle Passwort ist falsch.');
   end if;
-
   update public.app_users
-  set password_hash = extensions.crypt(p_new_password, extensions.gen_salt('bf', 12)),
-      must_change_password = false
+  set password_hash = crypt(p_new_password, gen_salt('bf', 12)), must_change_password = false
   where id = v_id;
-
-  delete from public.app_sessions
-  where user_id = v_id
-    and token_hash <> encode(
-      extensions.digest(convert_to(coalesce(p_token, ''), 'UTF8'), 'sha256'),
-      'hex'
-    );
-
+  delete from public.app_sessions where user_id = v_id and token_hash <> encode(digest(p_token, 'sha256'), 'hex');
   return jsonb_build_object('ok', true);
 end;
 $$;

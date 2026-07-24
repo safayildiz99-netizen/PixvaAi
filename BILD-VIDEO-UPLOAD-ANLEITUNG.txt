@@ -1,0 +1,18 @@
+Yildiz AI – Bild-, Video-Upload & KI-Bilderstellung
+
+Neu in diesem Paket:
+1. Chat kann jetzt Bilder und Videos hochladen
+2. Bilder können im Chat an Gemini mitgesendet werden
+3. Videos werden lokal als Anhang/Vorschau hinzugefügt
+4. Im Bereich "Motive & Editor" gibt es jetzt KI-Bilderstellung
+5. Bild-Upload und Video-Upload funktionieren auch im Gastmodus
+
+Wichtige Hinweise:
+- Für Text- und Bildanalyse im Chat wird weiter GEMINI_API_KEY in Vercel benötigt.
+- Die Bildgenerierung nutzt eine kostenlose öffentliche Bild-API (Pollinations) und braucht keinen extra Key.
+- Videodateien werden in dieser Version lokal hochgeladen und in der Oberfläche angezeigt. Eine vollständige KI-Videoanalyse ist noch nicht eingebaut.
+
+So updaten:
+- Diesen Projektstand auf GitHub hochladen oder die bisherigen Dateien ersetzen.
+- In Vercel neu deployen.
+- Falls du schon ein Projekt hast: einfach Dateien austauschen und neu deployen.
