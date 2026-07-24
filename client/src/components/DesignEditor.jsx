@@ -12,6 +12,46 @@ const formats = {
   story: { label: '9:16 · 1080 × 1920', canvas: [450, 800], export: [1080, 1920] }
 };
 
+function hashText(value) {
+  let hash = 2166136261;
+  for (const char of String(value || 'Yildiz AI')) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash >>> 0);
+}
+
+function xmlEscape(value) {
+  return String(value || '').replace(/[<>&"']/g, (char) => ({ '<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;', "'":'&apos;' }[char]));
+}
+
+function makeLocalMotif(prompt, width, height) {
+  const palettes = [
+    ['#071018','#63c7ff','#ffd400'], ['#10152b','#7c5cff','#41e2ba'],
+    ['#21100d','#ff7a4d','#ffd166'], ['#071e1b','#2dd4bf','#d9f99d'],
+    ['#161616','#f5f5f5','#ffcc00']
+  ];
+  const seed = hashText(prompt);
+  const [dark, primary, accent] = palettes[seed % palettes.length];
+  const words = String(prompt || 'Dein individuelles Motiv').trim().split(/\s+/).slice(0, 7).join(' ');
+  const circles = Array.from({ length: 8 }, (_, index) => {
+    const x = (seed * (index + 3) * 17) % width;
+    const y = (seed * (index + 5) * 29) % height;
+    const r = Math.max(35, ((seed >> (index % 16)) % Math.floor(Math.min(width, height) / 3)));
+    const fill = index % 2 ? primary : accent;
+    return `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${0.08 + (index % 3) * 0.05}"/>`;
+  }).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${dark}"/><stop offset="1" stop-color="#02070b"/></linearGradient><filter id="blur"><feGaussianBlur stdDeviation="24"/></filter></defs>
+    <rect width="100%" height="100%" fill="url(#g)"/>${circles}
+    <path d="M0 ${height*0.72} C ${width*0.28} ${height*0.57}, ${width*0.58} ${height*0.92}, ${width} ${height*0.68} L ${width} ${height} L0 ${height}Z" fill="${primary}" opacity=".18"/>
+    <rect x="${width*0.07}" y="${height*0.08}" width="${width*0.86}" height="${height*0.84}" rx="${Math.min(width,height)*0.04}" fill="none" stroke="${accent}" opacity=".55" stroke-width="${Math.max(3,width/220)}"/>
+    <text x="${width*0.09}" y="${height*0.78}" fill="#fff" font-family="Arial, sans-serif" font-size="${Math.max(34,width/15)}" font-weight="800">YILDIZ AI</text>
+    <text x="${width*0.09}" y="${height*0.84}" fill="${accent}" font-family="Arial, sans-serif" font-size="${Math.max(18,width/32)}">${xmlEscape(words)}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 function makeTitle(text, width) {
   return new FabricText(text, {
     left: width / 2,
@@ -31,7 +71,7 @@ function addStarterTemplate(canvas, width, height, mode) {
   const accent = new Rect({ left: 0, top: height * 0.2, width, height: height * 0.035, fill: '#f7c948', selectable: false });
   const title = makeTitle(mode === 'image' ? 'DEIN MOTIV' : 'ANGEBOTE DER WOCHE', width);
   title.set({ fill: '#ffffff', top: height * 0.065 });
-  const subtitle = new FabricText(mode === 'image' ? 'KI-BILD · INDIVIDUELL BEARBEITBAR' : 'WERBETECHNIK & BESCHRIFTUNG', {
+  const subtitle = new FabricText(mode === 'image' ? 'LOKALES MOTIV · INDIVIDUELL BEARBEITBAR' : 'WERBETECHNIK & BESCHRIFTUNG', {
     left: width / 2, top: height * 0.145, originX: 'center', fontFamily: 'Arial',
     fontSize: Math.max(12, width / 40), fill: '#d7d7d7', charSpacing: 120
   });
@@ -68,10 +108,8 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved }) {
   const [projectName, setProjectName] = useState(project?.name || (mode === 'image' ? 'Neues Bilddesign' : 'Neuer Angebotsflyer'));
   const [background, setBackground] = useState('#f4f0e8');
   const [status, setStatus] = useState('');
-  const [aiPrompt, setAiPrompt] = useState('Professionelles Werbetechnik-Motiv, hochwertige Leuchtreklame an moderner Fassade, realistische Fotografie');
-  const [aiUrl, setAiUrl] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [imageModel, setImageModel] = useState('flux');
+  const [aiPrompt, setAiPrompt] = useState('Modernes Werbetechnik-Motiv mit hellblauen und gelben Kontrasten');
+  const [localMotifUrl, setLocalMotifUrl] = useState('');
 
   const format = useMemo(() => formats[formatKey], [formatKey]);
 
@@ -209,18 +247,10 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved }) {
     }
   }
 
-  async function generateImage() {
-    setAiLoading(true); setStatus('Bild wird erzeugt …');
-    try {
-      const result = await api('/api/ai/image', {
-        method: 'POST', body: JSON.stringify({ prompt: aiPrompt, model: imageModel, size: `${format.export[0]}x${format.export[1]}` })
-      });
-      setAiUrl(result.url); setStatus('KI-Bild fertig');
-    } catch (error) {
-      setStatus(error.message);
-    } finally {
-      setAiLoading(false);
-    }
+  function generateLocalMotif() {
+    const url = makeLocalMotif(aiPrompt, format.export[0], format.export[1]);
+    setLocalMotifUrl(url);
+    setStatus('Lokales Motiv erstellt – ohne API, Guthaben oder Zahlungsdienst.');
   }
 
   return (
@@ -243,11 +273,11 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved }) {
         <label>Hintergrund<input className="color-input" type="color" value={background} onChange={(e) => setBackgroundColor(e.target.value)} /></label>
 
         <div className="panel-section ai-panel">
-          <h3><WandSparkles size={18} /> KI-Bild</h3>
+          <h3><WandSparkles size={18} /> Lokales Motiv</h3>
+          <p className="panel-note">Erstellt sofort einen grafischen Hintergrund direkt im Browser. Für echte Produktfotos kannst du oben ein eigenes Bild oder Logo hochladen.</p>
           <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={5} />
-          <label>Modell<select value={imageModel} onChange={(e) => setImageModel(e.target.value)}><option value="flux">Flux</option><option value="zimage">Z-Image</option><option value="gptimage">GPT Image</option><option value="seedream5">Seedream</option></select></label>
-          <button className="primary-btn" onClick={generateImage} disabled={aiLoading}><Sparkles size={17} />{aiLoading ? 'Generiert …' : 'Bild generieren'}</button>
-          {aiUrl && <div className="ai-result"><img src={aiUrl} alt="KI Ergebnis" /><button onClick={() => addImageUrl(aiUrl)}><ImagePlus size={16} />In Design einfügen</button></div>}
+          <button className="primary-btn" onClick={generateLocalMotif}><Sparkles size={17} />Motiv kostenlos erstellen</button>
+          {localMotifUrl && <div className="ai-result"><img src={localMotifUrl} alt="Lokales Motiv" /><button onClick={() => addImageUrl(localMotifUrl)}><ImagePlus size={16} />In Design einfügen</button></div>}
         </div>
       </aside>
 

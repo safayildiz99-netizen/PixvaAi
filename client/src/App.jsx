@@ -15,14 +15,14 @@ import Admin from './components/Admin.jsx';
 const nav = [
   { id:'chat', label:'Chat', icon:Bot },
   { id:'flyer', label:'Angebote & Flyer', icon:LayoutTemplate },
-  { id:'image', label:'Bild-KI & Editor', icon:FileImage },
+  { id:'image', label:'Lokale Motive & Editor', icon:FileImage },
   { id:'video', label:'Video-Studio', icon:Film },
   { id:'website', label:'Website-Builder', icon:Globe2 },
   { id:'projects', label:'Projekte', icon:FolderOpen }
 ];
 
 const titles = {
-  chat:'Yildiz AI Chat', flyer:'Angebote & Flyer', image:'Bild-KI & Editor',
+  chat:'Yildiz AI Chat', flyer:'Angebote & Flyer', image:'Lokale Motive & Editor',
   video:'Video-Studio', website:'Website-Builder', projects:'Projekte', admin:'Admin & Einstellungen'
 };
 

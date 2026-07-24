@@ -39,10 +39,6 @@ export async function validateUser(req) {
   return data.user;
 }
 
-export function pollinationsKey() {
-  return String(process.env.POLLINATIONS_KEY || '').trim();
-}
-
 export async function readJson(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string') {

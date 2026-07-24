@@ -1,69 +1,36 @@
-# Yildiz AI Studio – Vercel + Supabase
+# Yildiz AI – ohne Payment-/Usage-System
 
-Diese Version ist für GitHub, Vercel und Supabase vorbereitet.
+Diese Version entfernt Pollinations und alle externen KI-Guthaben aus dem Projekt.
 
-## 1. Supabase-Datenbank einrichten
+## Was jetzt kostenlos lokal läuft
 
-1. Supabase öffnen.
-2. Links **SQL Editor** anklicken.
-3. **New query** wählen.
-4. Den gesamten Inhalt aus `supabase-setup.sql` einfügen.
-5. Auf **Run** klicken.
+- Allgemeiner KI-Chat direkt im Browser mit WebLLM
+- Kein API-Key
+- Keine Nachrichten-Credits
+- Keine Payment-Required-Antwort
+- Lokale grafische Motive für Flyer und Posts
+- Canva-ähnlicher Editor für Text, Preise, Bilder und Logos
+- Website-Texte mit lokaler Browser-KI
+- Video-Timeline für eigene hochgeladene Clips
+- Supabase-Anmeldung ohne sichtbare E-Mail
+- Admin- und Mitarbeiterkonten
+- Projekte speichern
 
-Start-Login danach:
+## Wichtige technische Grenze
 
-- Benutzername: `admin`
-- Passwort: `SafaStart2026!`
+Der lokale Chat benötigt WebGPU. Auf einem aktuellen Desktop-Browser funktioniert er am besten. Beim ersten Start wird das Modell einmal heruntergeladen und anschließend im Browser-Cache gespeichert.
 
-Das Passwort direkt nach dem ersten Login im Admin-Bereich ändern.
+Fotorealistische Text-zu-Bild- und Text-zu-Video-Modelle wurden entfernt, weil sie auf einem kostenlosen Vercel-Projekt keine eigene GPU haben. Statt einer Zahlungsaufforderung bietet die App lokale Motive, Bild-Upload und einen lokalen Video-Timeline-Editor.
 
-## 2. Dateien zu GitHub hochladen
+## Vercel-Variablen
 
-Den Inhalt dieses Ordners in das GitHub-Repository hochladen. Vorhandene Dateien mit gleichem Namen ersetzen.
-
-Wichtig sind besonders:
-
-- `api/`
-- `client/`
-- `package.json`
-- `vercel.json`
-- `supabase-setup.sql`
-
-Die alten Dateien `render.yaml` und der alte Ordner `server/` werden von Vercel nicht verwendet und können später gelöscht werden.
-
-## 3. Vercel Environment Variables
-
-In Vercel eintragen:
+Nur diese beiden Variablen werden benötigt:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Optional für KI:
+`POLLINATIONS_KEY` kann in Vercel gelöscht werden.
 
-- `POLLINATIONS_KEY`
+## Sicherheit
 
-Für Video am besten einen Pollinations Publishable Key verwenden, der mit `pk_` beginnt.
-
-## 4. Deploy
-
-In Vercel:
-
-- Framework Preset: `Other`
-- Root Directory: `./`
-- Build Command wird aus `vercel.json` übernommen
-- Danach **Deploy**
-
-## Funktionen
-
-- Anmeldung ohne E-Mail
-- Admin- und Mitarbeiterkonten
-- Projekte dauerhaft in Supabase speichern
-- Flyer- und Bildeditor mit verschiebbaren Elementen
-- PNG-Export
-- KI-Chat
-- KI-Bilder
-- KI-Videoclips
-- Video-Timeline mit einzelnen Abschnitten
-- Website-Builder und HTML-Export
-
-Das automatische Zusammenfügen mehrerer MP4-Clips ist auf der kostenlosen Vercel-Version noch nicht aktiviert.
+Die Sitzungskennung für die Anmeldung bleibt bestehen. Sie schützt Admin- und Mitarbeiterkonten und ist kein Bezahl-, Guthaben- oder Usage-System.

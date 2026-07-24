@@ -1,0 +1,14 @@
+YILDIZ AI – OHNE PAYMENT SYSTEM
+
+1. ZIP entpacken.
+2. GitHub > Yildiz-AI > Add file > Upload files.
+3. Gesamten entpackten Inhalt hochladen.
+4. Commit changes.
+5. Vercel automatisch neu deployen lassen.
+6. In Vercel den Eintrag POLLINATIONS_KEY löschen.
+7. Website mit Cmd + Shift + R neu laden.
+8. Chat öffnen und erste Nachricht senden.
+9. Beim ersten Mal warten, bis das lokale Modell vollständig geladen ist.
+
+WICHTIG:
+Die Login-Sitzung bleibt aus Sicherheitsgründen erhalten. Das ist kein Bezahl- oder Token-Guthabensystem.
