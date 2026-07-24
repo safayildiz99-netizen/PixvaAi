@@ -1,0 +1,19 @@
+YILDIZ AI – ADMIN UNLIMITED UPDATE
+
+Was geändert wurde:
+- Admin hat in der App kein internes Text- oder Bildlimit.
+- Admin-Anfragen verbrauchen nicht den eingetragenen POLLINATIONS_KEY.
+- Text und Bilder benutzen für den Admin direkt den kostenlosen öffentlichen Zugang.
+- Mitarbeiter können weiterhin den API-Key verwenden und fallen bei 402/429 auf den kostenlosen Zugang zurück.
+
+Installation:
+1. Diesen Ordner öffnen.
+2. Auf GitHub im Repository Yildiz-AI: Add file → Upload files.
+3. Alle Dateien und Ordner aus diesem Ordner hochladen und vorhandene Dateien ersetzen.
+4. Commit-Nachricht: Admin Unlimited Update
+5. Commit changes.
+6. Vercel erstellt normalerweise automatisch ein neues Deployment. Falls nicht: Deployments → letztes Deployment → … → Redeploy.
+7. Website mit Cmd + Shift + R neu laden.
+
+Wichtig:
+Das Update entfernt das Limit innerhalb deiner App. Es kann keinen externen KI-Anbieter zu unbegrenzter kostenloser Rechenleistung zwingen. Wenn der kostenlose öffentliche Dienst ausfällt oder überlastet ist, kann die Anfrage trotzdem vorübergehend scheitern. Unbegrenzte kostenlose KI-Videos sind nicht enthalten.
