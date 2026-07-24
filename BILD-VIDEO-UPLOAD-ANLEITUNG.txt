@@ -16,3 +16,9 @@ So updaten:
 - Diesen Projektstand auf GitHub hochladen oder die bisherigen Dateien ersetzen.
 - In Vercel neu deployen.
 - Falls du schon ein Projekt hast: einfach Dateien austauschen und neu deployen.
+
+
+PASSWORTFUNKTION FÜR MITARBEITER
+- Angemeldete Mitarbeiter sehen links den Menüpunkt „Mein Konto“.
+- Dort können sie ihr eigenes Passwort ändern.
+- Einmalig MITARBEITER-PASSWORT-FIX.txt im Supabase SQL Editor ausführen.
