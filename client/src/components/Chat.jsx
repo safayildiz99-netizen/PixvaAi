@@ -329,7 +329,7 @@ export default function Chat({ onOpenVideoProject }) {
   const [chatSearch, setChatSearch] = useState('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('Gemini läuft serverseitig in Chrome, Opera, Safari und Edge. Bild-, Video- und Datei-Uploads funktionieren auch per Drag & Drop.');
+  const [status, setStatus] = useState('Gemini beantwortet Fragen. OpenAI erstellt echte Bilder und Sora-Videos mit Ton. Uploads funktionieren per Drag & Drop.');
   const [attachments, setAttachments] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const imageInputRef = useRef(null);
@@ -521,82 +521,88 @@ export default function Chat({ onOpenVideoProject }) {
   }
 
   async function generateImageMessage(clean) {
-    setStatus('Yildiz AI erstellt dein Bild …');
-    let result = null;
-    try {
-      result = await api('/api/ai/image', {
-        method: 'POST',
-        body: JSON.stringify({ prompt: clean, aspect: 'post', style: 'realistic' })
-      });
-    } catch (error) {
-      console.warn('Server image route failed, using direct browser fallback', error);
-    }
-
-    let imageSource = result?.imageDataUrl || result?.imageUrl || '';
-    let provider = result?.provider || '';
-    if (!imageSource) {
-      imageSource = makeDirectImageUrl(clean, 'post');
-      provider = 'kostenloser Browser-Bilddienst';
-    }
-
+    setStatus('OpenAI erstellt dein Bild …');
+    const result = await api('/api/ai/image', {
+      method: 'POST',
+      body: JSON.stringify({ prompt: clean, aspect: 'post', style: 'realistic', quality: 'low' })
+    });
+    const imageSource = result?.imageDataUrl || result?.imageUrl || '';
+    if (!imageSource) throw new Error('OpenAI hat keine Bilddatei geliefert.');
     await preloadImage(imageSource);
     setMessages((old) => [...old, {
       role: 'assistant',
-      content: 'Hier ist dein Bild. Du kannst es direkt öffnen, speichern oder in ein Video übernehmen.',
-      attachments: [{ kind: 'image', name: 'yildiz-ai-bild.png', previewUrl: imageSource, data: result?.imageDataUrl || '' }]
+      content: 'Hier ist dein mit OpenAI erstelltes Bild. Du kannst es speichern oder für ein Sora-Video verwenden.',
+      attachments: [{ kind: 'image', name: 'yildiz-ai-openai.png', previewUrl: imageSource, data: result?.imageDataUrl || '' }]
     }]);
-    setStatus(`Bild erstellt${provider ? ` · ${provider}` : ''}`);
+    setStatus(`Bild erstellt · ${result.provider || 'OpenAI'}`);
+  }
+
+  async function waitForSoraVideo(jobId) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 12 * 60 * 1000) {
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+      const job = await api(`/api/ai/video?action=status&id=${encodeURIComponent(jobId)}`);
+      const progress = Number(job?.progress || 0);
+      setStatus(job?.status === 'queued' ? 'Sora: Auftrag wartet …' : `Sora erstellt dein Video … ${progress ? `${Math.round(progress)} %` : ''}`);
+      if (job?.status === 'completed') return job;
+      if (job?.status === 'failed') throw new Error(job?.error?.message || 'Sora konnte das Video nicht erstellen.');
+    }
+    throw new Error('Sora braucht länger als erwartet. Der Auftrag läuft möglicherweise noch; versuche es später erneut.');
+  }
+
+  async function downloadSoraVideo(jobId) {
+    const response = await fetch(`/api/ai/video?action=content&id=${encodeURIComponent(jobId)}`);
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.error || 'Das fertige Sora-Video konnte nicht geladen werden.');
+    }
+    const blob = await response.blob();
+    return { blob, url: URL.createObjectURL(blob) };
   }
 
   async function generateVideoMessage(clean, sourceImages = []) {
-    setStatus('Yildiz AI erstellt zuerst Szenenbilder und rendert dann das Video mit Musik …');
-    const images = sourceImages.filter(Boolean).slice(0, 6);
-    const scenePrompts = [
-      `${clean}. Scene 1: strong opening shot, clearly visible real subjects and real environment, cinematic, photorealistic, vertical video frame, no text.`,
-      `${clean}. Scene 2: main action from a different camera angle, clearly visible subjects, dynamic movement, photorealistic, vertical video frame, no text.`,
-      `${clean}. Scene 3: detailed close-up or medium shot, realistic lighting, coherent characters and environment, vertical video frame, no text.`,
-      `${clean}. Scene 4: strong final hero shot, visually rich background, cinematic and photorealistic, vertical video frame, no text.`
-    ];
+    const referenceImage = sourceImages.find((value) => String(value || '').startsWith('data:image/')) || '';
+    setStatus('Sora-Videoauftrag wird gestartet …');
+    const created = await api('/api/ai/video', {
+      method: 'POST',
+      body: JSON.stringify({
+        prompt: clean,
+        aspect: 'story',
+        size: '720x1280',
+        seconds: '8',
+        model: 'sora-2',
+        referenceImage
+      })
+    });
+    if (!created?.id) throw new Error('OpenAI hat keine Video-ID geliefert.');
 
-    if (!images.length) {
-      for (let index = 0; index < scenePrompts.length; index += 1) {
-        setStatus(`Yildiz AI erstellt Szenenbild ${index + 1} von ${scenePrompts.length} …`);
-        let result = null;
-        try {
-          result = await api('/api/ai/image', {
-            method: 'POST',
-            body: JSON.stringify({ prompt: scenePrompts[index], aspect: 'story', style: 'realistic' })
-          });
-        } catch (error) {
-          console.warn('Server scene image failed, using direct fallback', error);
-        }
-        const imageSource = result?.imageDataUrl || result?.imageUrl || makeDirectImageUrl(scenePrompts[index], 'story');
-        await preloadImage(imageSource);
-        images.push(imageSource);
-      }
-    }
+    const completed = ['completed', 'failed'].includes(created.status) ? created : await waitForSoraVideo(created.id);
+    if (completed.status !== 'completed') throw new Error(completed?.error?.message || 'Sora konnte das Video nicht erstellen.');
+    setStatus('Sora-Video fertig. MP4 wird geladen …');
+    const video = await downloadSoraVideo(created.id);
+    const duration = Number(completed.seconds || created.seconds || 8);
 
-    const editableScenes = images.map((imageUrl, index) => ({
+    const editableScene = {
       id: crypto.randomUUID(),
-      title: index === 0 ? 'STARKE ERÖFFNUNG' : index === images.length - 1 ? 'JETZT ENTDECKEN' : `SZENE ${index + 1}`,
-      prompt: scenePrompts[index] || clean,
-      duration: 3,
-      imageUrl,
-      videoUrl: '',
-      fileName: `szene-${index + 1}.png`,
-      mediaType: 'image',
-      status: 'Aus dem Chat erzeugt',
+      title: 'SORA VIDEO',
+      prompt: clean,
+      duration,
+      imageUrl: '',
+      videoUrl: video.url,
+      fileName: 'sora-video.mp4',
+      mediaType: 'video',
+      status: 'Mit OpenAI Sora erstellt',
       transition: 'fade',
-      animation: index % 2 ? 'pan-right' : 'zoom',
+      animation: 'none',
       textPosition: 'bottom',
       textColor: '#ffffff',
       accentColor: '#ffd400',
-      overlayOpacity: 0.72,
+      overlayOpacity: 0.25,
       fontScale: 1,
       fontFamily: 'Arial',
       fontWeight: 800,
       textAlign: 'left',
-      showText: true,
+      showText: false,
       trimStart: 0,
       mediaScale: 1,
       mediaX: 0,
@@ -605,28 +611,26 @@ export default function Chat({ onOpenVideoProject }) {
       mediaOpacity: 1,
       textX: 7,
       textY: 76
-    }));
-
-    const videoProject = {
-      name: String(clean || 'Yildiz AI Video').slice(0, 64),
-      type: 'video',
-      data: { scenes: editableScenes, format: 'story', musicStyle: 'dynamic', musicVolume: .55 }
     };
 
-    setStatus('Bilder fertig. Video wird jetzt im Browser mit Übergängen und Musik gerendert …');
-    const video = await renderGeneratedVideo(images, clean);
+    const videoProject = {
+      name: String(clean || 'Sora Video').slice(0, 64),
+      type: 'video',
+      data: { scenes: [editableScene], format: 'story', musicStyle: 'none', musicVolume: 0 }
+    };
+
     setMessages((old) => [...old, {
       role: 'assistant',
-      content: `Hier ist dein Video. Die ${editableScenes.length} Szenen wurden zusätzlich als bearbeitbares Video-Projekt gespeichert.`,
+      content: 'Hier ist dein echtes Sora-Video mit synchronisiertem Ton. Du kannst den Clip im Video-Studio zuschneiden, positionieren, mit Text ergänzen und mit weiteren Szenen kombinieren.',
       attachments: [{
         kind: 'video',
-        name: `yildiz-ai-video.${video.ext}`,
+        name: 'yildiz-ai-sora.mp4',
         previewUrl: video.url,
         blob: video.blob,
         projectData: videoProject
       }]
     }]);
-    setStatus(`Video erstellt · ${video.ext.toUpperCase()} · Im Video-Studio weiter bearbeitbar`);
+    setStatus('Sora-Video erstellt · MP4 · mit Ton');
   }
 
   async function sendMessage(text = input) {
@@ -717,7 +721,7 @@ export default function Chat({ onOpenVideoProject }) {
         <p className="chat-save-note">Chats werden automatisch in diesem Browser gespeichert. Mit „Chat speichern“ kannst du zusätzlich eine TXT-Datei herunterladen.</p>
       </aside>
       <section className="chat-shell">
-      <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI mit Medienanalyse</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
+      <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI · Gemini + OpenAI + Sora</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
       <div className="chat-messages">
         {messages.map((message, index) => (
           <article className={`message ${message.role}`} key={`${message.role}-${index}`}>

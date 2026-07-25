@@ -1,0 +1,25 @@
+YILDIZ AI – OPENAI + SORA INSTALLATION
+
+In Vercel muss vorhanden sein:
+OPENAI_API_KEY = dein OpenAI Secret Key
+
+Optional:
+OPENAI_IMAGE_MODEL = gpt-image-2
+OPENAI_VIDEO_MODEL = sora-2
+
+Bestehende Variablen bleiben:
+GEMINI_API_KEY
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+
+Danach GitHub-Dateien hochladen und Vercel neu deployen.
+
+Funktionen:
+- Chat/Analyse: Gemini
+- Bilder: OpenAI GPT Image, Qualität low zum günstigen Testen
+- Videos: OpenAI Sora 2, 720x1280, 8 Sekunden, synchronisierter Ton
+- Ein hochgeladenes oder vorher generiertes Bild kann als Sora-Referenz verwendet werden.
+- Das fertige Sora-MP4 kann im Yildiz Video-Studio als Clip weiterbearbeitet werden.
+
+Hinweis:
+Sora rendert asynchron und kann mehrere Minuten benötigen. Der Browser-Tab muss beim aktuellen Polling geöffnet bleiben.
