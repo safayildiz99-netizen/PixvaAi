@@ -26,5 +26,8 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 @media(max-width:760px){.video-global-controls{grid-template-columns:1fr}.render-panel{align-items:stretch;flex-direction:column}.render-actions{justify-content:stretch}.render-actions button{flex:1}.scene-settings{flex-wrap:wrap}.scene-settings label{width:100%}.account-page{padding:14px}}
 
 
-/* Direkte Bild- und Videogenerierung im Chat */
-.generated-media{margin-top:12px;display:grid;gap:10px;max-width:680px}.generated-media>img,.generated-media>video{width:100%;max-height:620px;object-fit:contain;background:#050b10;border:1px solid #315e7c;border-radius:16px}.generated-media>a{width:max-content;display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#06111a;background:linear-gradient(135deg,#63c7ff,#ffd400);border-radius:999px;padding:9px 14px;font-weight:800}.video-result{max-width:760px}.generated-scene-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.generated-scene-strip img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;border:1px solid #27445a}@media(max-width:760px){.generated-scene-strip{grid-template-columns:1fr}.generated-media{max-width:100%}}
+.dropzone{transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+.dropzone.drag-active{border-color:#63c7ff;box-shadow:0 0 0 3px rgba(99,199,255,.18);background:#123146}
+.drop-hint{padding:0 0 8px 2px;color:#8eb5cc;font-size:.78rem}
+.attachment-card.file,.composer-file{display:grid;place-items:center;min-height:120px;background:linear-gradient(135deg,rgba(17,40,56,.85),rgba(8,19,29,.92));border-radius:10px;color:#cde7f8}
+.composer-file{width:88px;height:66px}
