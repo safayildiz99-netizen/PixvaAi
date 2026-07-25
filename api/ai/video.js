@@ -90,7 +90,7 @@ async function createVideo(req, res, apiKey) {
 
   const model = String(process.env.OPENAI_VIDEO_MODEL || body?.model || 'sora-2').trim();
   const size = allowedSize(model, String(body?.size || ''), body?.aspect);
-  const seconds = ['4', '8', '12', '16', '20'].includes(String(body?.seconds)) ? String(body.seconds) : '8';
+  const seconds = ['4', '8', '12'].includes(String(body?.seconds)) ? String(body.seconds) : '8';
   const target = parseSize(size);
 
   const form = new FormData();

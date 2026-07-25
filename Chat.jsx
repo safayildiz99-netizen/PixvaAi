@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { ArrowUp, Bot, Camera, Cloud, FileText, ImagePlus, Paperclip, User, Video, WandSparkles, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, Bot, Camera, Cloud, Download, Edit3, FileText, ImagePlus, MessageSquarePlus, Paperclip, Search, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
 import { api } from '../api.js';
 
 const quickPrompts = [
@@ -66,6 +66,80 @@ function looksLikeVideoPrompt(text) {
   const value = String(text || '').toLowerCase();
   return /(erstell|erstelle|generier|generiere|mach|render|produzier|create|generate)/.test(value) &&
     /(video|film|clip|reel|animation|trailer|short)/.test(value) || /video dazu|mach .* video/.test(value);
+}
+
+function inferImageStyle(text) {
+  const value = String(text || '').toLowerCase();
+  if (/(werbebild|werbung|anzeige|kampagne|flyer|poster|social.?media|instagram.?post|banner|angebot)/.test(value)) return 'poster';
+  if (/(produktfoto|produktbild|product shot|e.?commerce|freisteller|verpackung)/.test(value)) return 'product';
+  if (/(studio|portrait|porträt|headshot)/.test(value)) return 'studio';
+  return 'realistic';
+}
+
+function wantsImageReferenceForVideo(text) {
+  const value = String(text || '').toLowerCase();
+  return /(aus (diesem|dem|meinem|letzten) bild|dieses bild|das bild|daraus|bild zu video|image to video|animiere .*bild|verwende .*bild|nutze .*bild|mit dem bild)/.test(value);
+}
+
+function makeDirectImageUrl(prompt, aspect = 'post') {
+  const sizes = {
+    square: [1024, 1024],
+    post: [1024, 1280],
+    story: [1024, 1792],
+    landscape: [1280, 720]
+  };
+  const [width, height] = sizes[aspect] || sizes.post;
+  const finalPrompt = [
+    'photorealistic, realistic photography, natural believable lighting, high detail, premium commercial quality',
+    'not a painting, not an illustration, not cartoon, no text overlay',
+    String(prompt || '').trim()
+  ].join(', ');
+  const seed = Math.floor(Math.random() * 1_000_000_000);
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=${width}&height=${height}&model=flux&nologo=true&enhance=true&safe=true&seed=${seed}`;
+}
+
+function preloadImage(url, timeoutMs = 35000) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const timer = setTimeout(() => reject(new Error('Bilddienst hat zu lange gebraucht.')), timeoutMs);
+    image.onload = () => { clearTimeout(timer); resolve(url); };
+    image.onerror = () => { clearTimeout(timer); reject(new Error('Bild konnte nicht geladen werden.')); };
+    image.src = url;
+  });
+}
+
+async function prepareSoraReferenceImage(dataUrl, targetWidth = 720, targetHeight = 1280) {
+  if (!String(dataUrl || '').startsWith('data:image/')) return '';
+
+  const image = await new Promise((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error('Das Referenzbild konnte nicht für Sora vorbereitet werden.'));
+    element.src = dataUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Das Referenzbild konnte nicht verarbeitet werden.');
+
+  // Sora verlangt, dass das Referenzbild exakt dieselbe Breite und Höhe
+  // wie das angeforderte Video besitzt. Das Bild wird mittig zugeschnitten.
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const scale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  const drawX = (targetWidth - drawWidth) / 2;
+  const drawY = (targetHeight - drawHeight) / 2;
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+  // JPEG hält die Anfrage deutlich kleiner als das ursprüngliche PNG.
+  return canvas.toDataURL('image/jpeg', 0.9);
 }
 
 function bestRecorderMime() {
@@ -211,17 +285,98 @@ async function renderGeneratedVideo(imageUrls, prompt) {
 
 function fileMessageAttachment(item) {
   if (item.kind === 'image') return { kind: 'image', name: item.name, previewUrl: item.previewUrl || item.data, data: item.data, size: item.size };
-  if (item.kind === 'video') return { kind: 'video', name: item.name, previewUrl: item.previewUrl, size: item.size };
-  return { kind: 'file', name: item.name, size: item.size };
+  if (item.kind === 'video') return { kind: 'video', name: item.name, previewUrl: item.previewUrl, size: item.size, blob: item.blob };
+  return { kind: 'file', name: item.name, size: item.size, blob: item.blob };
 }
 
-export default function Chat() {
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien per Drag & Drop hochladen.' }
-  ]);
+
+const CHAT_DB = 'yildiz-ai-chat-history-v1';
+const CHAT_STORE = 'sessions';
+const WELCOME_MESSAGE = { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien per Drag & Drop hochladen.' };
+
+function makeChatSession() {
+  return {
+    id: crypto.randomUUID(),
+    title: 'Neuer Chat',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [WELCOME_MESSAGE]
+  };
+}
+
+function openChatDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CHAT_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CHAT_STORE)) db.createObjectStore(CHAT_STORE, { keyPath: 'key' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readSavedChats() {
+  const db = await openChatDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CHAT_STORE, 'readonly');
+    const request = tx.objectStore(CHAT_STORE).get('all');
+    request.onsuccess = () => resolve(Array.isArray(request.result?.value) ? request.result.value : []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function cleanForStorage(sessions) {
+  return sessions.map((session) => ({
+    ...session,
+    messages: (session.messages || []).map((message) => ({
+      ...message,
+      attachments: Array.isArray(message.attachments)
+        ? message.attachments.map((item) => ({
+            ...item,
+            previewUrl: String(item.previewUrl || '').startsWith('blob:') ? '' : item.previewUrl
+          }))
+        : undefined
+    }))
+  }));
+}
+
+async function writeSavedChats(sessions) {
+  const db = await openChatDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CHAT_STORE, 'readwrite');
+    tx.objectStore(CHAT_STORE).put({ key: 'all', value: cleanForStorage(sessions) });
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function hydrateMessages(messages) {
+  const hydrated = (messages || []).map((message) => ({
+    ...message,
+    attachments: Array.isArray(message.attachments)
+      ? message.attachments.map((item) => ({
+          ...item,
+          previewUrl: item.previewUrl || (item.blob instanceof Blob ? URL.createObjectURL(item.blob) : item.data || '')
+        }))
+      : undefined
+  }));
+  return hydrated.filter((message, index, all) => {
+    if (!index) return true;
+    const previous = all[index - 1];
+    return !(message.role === previous.role && String(message.content || '').trim() === String(previous.content || '').trim());
+  });
+}
+
+export default function Chat({ onOpenVideoProject }) {
+  const [messages, setMessages] = useState([WELCOME_MESSAGE]);
+  const [chatSessions, setChatSessions] = useState([]);
+  const [activeChatId, setActiveChatId] = useState('');
+  const [historyReady, setHistoryReady] = useState(false);
+  const [chatSearch, setChatSearch] = useState('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('Gemini läuft serverseitig in Chrome, Opera, Safari und Edge. Bild-, Video- und Datei-Uploads funktionieren auch per Drag & Drop.');
+  const [status, setStatus] = useState('Gemini beantwortet Fragen. OpenAI erstellt echte Bilder und Sora-Videos mit Ton. Uploads funktionieren per Drag & Drop.');
   const [attachments, setAttachments] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const imageInputRef = useRef(null);
@@ -229,15 +384,109 @@ export default function Chat() {
   const cameraImageRef = useRef(null);
   const cameraVideoRef = useRef(null);
   const anyFileRef = useRef(null);
+  const lastSendRef = useRef({ text: '', at: 0 });
+  const sendingRef = useRef(false);
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
+  const filteredSessions = useMemo(() => {
+    const query = chatSearch.trim().toLowerCase();
+    return chatSessions
+      .filter((session) => !query || String(session.title || '').toLowerCase().includes(query))
+      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  }, [chatSessions, chatSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    readSavedChats().then((saved) => {
+      if (cancelled) return;
+      const sessions = saved.length ? saved : [makeChatSession()];
+      const first = sessions[0];
+      setChatSessions(sessions);
+      setActiveChatId(first.id);
+      setMessages(hydrateMessages(first.messages));
+      setHistoryReady(true);
+    }).catch(() => {
+      const first = makeChatSession();
+      setChatSessions([first]);
+      setActiveChatId(first.id);
+      setMessages(first.messages);
+      setHistoryReady(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!historyReady || !activeChatId) return;
+    setChatSessions((old) => old.map((session) => session.id === activeChatId
+      ? { ...session, messages, updatedAt: Date.now() }
+      : session));
+  }, [messages, activeChatId, historyReady]);
+
+  useEffect(() => {
+    if (!historyReady || !chatSessions.length) return;
+    const timer = setTimeout(() => {
+      writeSavedChats(chatSessions).catch(() => setStatus('Chats konnten im Browser nicht gespeichert werden.'));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [chatSessions, historyReady]);
+
+  function newChat() {
+    sendingRef.current = false;
+    const next = makeChatSession();
+    setChatSessions((old) => [next, ...old]);
+    setActiveChatId(next.id);
+    setMessages(next.messages);
+    setAttachments([]);
+    setInput('');
+    setStatus('Neuer Chat geöffnet.');
+  }
+
+  function openChat(session) {
+    setActiveChatId(session.id);
+    setMessages(hydrateMessages(session.messages));
+    setAttachments([]);
+    setInput('');
+  }
+
+  function deleteChat(event, id) {
+    event.stopPropagation();
+    setChatSessions((old) => {
+      const remaining = old.filter((session) => session.id !== id);
+      if (id === activeChatId) {
+        const next = remaining[0] || makeChatSession();
+        if (!remaining.length) remaining.push(next);
+        setActiveChatId(next.id);
+        setMessages(hydrateMessages(next.messages));
+      }
+      return remaining;
+    });
+  }
 
   function removeAttachment(id) {
     setAttachments((old) => old.filter((item) => item.id !== id));
   }
 
+  function exportCurrentChat() {
+    const session = chatSessions.find((item) => item.id === activeChatId);
+    const lines = (messages || []).map((message) => {
+      const speaker = message.role === 'assistant' ? 'Yildiz AI' : 'Du';
+      const attachmentNames = Array.isArray(message.attachments) && message.attachments.length
+        ? `\nAnhänge: ${message.attachments.map((item) => item.name || item.kind).join(', ')}`
+        : '';
+      return `${speaker}: ${message.content || ''}${attachmentNames}`;
+    });
+    const blob = new Blob([`Yildiz AI Chat\n${session?.title || 'Chat'}\n\n${lines.join('\n\n')}`], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${String(session?.title || 'yildiz-ai-chat').replace(/[^a-z0-9äöüß_-]+/gi, '-')}.txt`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Chat als TXT gespeichert.');
+  }
+
   function addGenericFile(file) {
     setAttachments((old) => [...old, {
-      id: crypto.randomUUID(), kind: 'file', name: file.name, size: file.size, mimeType: file.type || 'application/octet-stream'
+      id: crypto.randomUUID(), kind: 'file', name: file.name, size: file.size, mimeType: file.type || 'application/octet-stream', blob: file
     }].slice(-4));
     setStatus(`Datei „${file.name}“ hinzugefügt.`);
   }
@@ -252,7 +501,7 @@ export default function Chat() {
       reader.onload = () => {
         setAttachments((old) => [...old, {
           id: crypto.randomUUID(), kind: 'image', name: file.name || 'foto.jpg', size: file.size,
-          mimeType: file.type || 'image/jpeg', previewUrl: reader.result, data: reader.result
+          mimeType: file.type || 'image/jpeg', previewUrl: reader.result, data: reader.result, blob: file
         }].slice(-4));
         resolve();
       };
@@ -266,7 +515,7 @@ export default function Chat() {
     const id = crypto.randomUUID();
     setAttachments((old) => [...old, {
       id, kind: 'video', name: file.name || 'video.mp4', size: file.size,
-      mimeType: file.type || 'video/mp4', previewUrl, frames: [], extracting: true
+      mimeType: file.type || 'video/mp4', previewUrl, frames: [], extracting: true, blob: file
     }].slice(-4));
     setStatus('Yildiz AI liest vier Vorschaubilder aus dem Video …');
     try {
@@ -318,53 +567,141 @@ export default function Chat() {
     event.target.value = '';
   }
 
-  async function generateImageMessage(clean, history, userMessage) {
-    setStatus('Yildiz AI erstellt dein Bild …');
+  async function generateImageMessage(clean) {
+    setStatus('OpenAI erstellt dein Bild …');
     const result = await api('/api/ai/image', {
       method: 'POST',
-      body: JSON.stringify({ prompt: clean, aspect: 'post', style: 'realistic' })
+      body: JSON.stringify({
+        prompt: clean,
+        aspect: 'post',
+        style: inferImageStyle(clean),
+        quality: 'medium'
+      })
     });
+    const imageSource = result?.imageDataUrl || result?.imageUrl || '';
+    if (!imageSource) throw new Error('OpenAI hat keine Bilddatei geliefert.');
+    await preloadImage(imageSource);
     setMessages((old) => [...old, {
       role: 'assistant',
-      content: result.fallback ? 'Ich habe ein Ersatzmotiv erstellt, weil der externe Bilddienst gerade nicht erreichbar war.' : 'Hier ist dein Bild. Du kannst es direkt öffnen oder herunterladen.',
-      attachments: [{ kind: 'image', name: 'yildiz-ai-bild.png', previewUrl: result.imageDataUrl, data: result.imageDataUrl }]
+      content: 'Hier ist dein mit OpenAI GPT Image 2 erstelltes Bild in mittlerer Qualität. Du kannst es speichern oder ausdrücklich als Referenz für ein Sora-Video verwenden.',
+      attachments: [{ kind: 'image', name: 'yildiz-ai-openai.png', previewUrl: imageSource, data: result?.imageDataUrl || '' }]
     }]);
-    setStatus(`Bild erstellt${result.provider ? ` · ${result.provider}` : ''}`);
+    setStatus(`Bild erstellt · ${result.provider || 'OpenAI'}`);
   }
 
-  async function generateVideoMessage(clean) {
-    setStatus('Yildiz AI erstellt zuerst Szenenbilder und rendert dann das Video mit Musik …');
-    const scenePrompts = [
-      `${clean}. Szene 1: starker Einstieg, klare Hauptszene, filmisch, hochwertig, realistisch.`,
-      `${clean}. Szene 2: Hauptmoment, dynamische Perspektive, Bewegung, hochwertig, realistisch.`,
-      `${clean}. Szene 3: Abschluss, heroischer Shot, klarer Fokus, hochwertig, realistisch.`
-    ];
-    const images = [];
-    for (let index = 0; index < scenePrompts.length; index += 1) {
-      setStatus(`Yildiz AI erstellt Szenenbild ${index + 1} von ${scenePrompts.length} …`);
-      const result = await api('/api/ai/image', {
-        method: 'POST',
-        body: JSON.stringify({ prompt: scenePrompts[index], aspect: 'story', style: 'realistic' })
-      });
-      images.push(result.imageDataUrl);
+  async function waitForSoraVideo(jobId) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 12 * 60 * 1000) {
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+      const job = await api(`/api/ai/video?action=status&id=${encodeURIComponent(jobId)}`);
+      const progress = Number(job?.progress || 0);
+      setStatus(job?.status === 'queued' ? 'Sora: Auftrag wartet …' : `Sora erstellt dein Video … ${progress ? `${Math.round(progress)} %` : ''}`);
+      if (job?.status === 'completed') return job;
+      if (job?.status === 'failed') throw new Error(job?.error?.message || 'Sora konnte das Video nicht erstellen.');
     }
-    setStatus('Bilder fertig. Video wird jetzt im Browser mit Übergängen und Musik gerendert …');
-    const video = await renderGeneratedVideo(images, clean);
+    throw new Error('Sora braucht länger als erwartet. Der Auftrag läuft möglicherweise noch; versuche es später erneut.');
+  }
+
+  async function downloadSoraVideo(jobId) {
+    const response = await fetch(`/api/ai/video?action=content&id=${encodeURIComponent(jobId)}`);
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.error || 'Das fertige Sora-Video konnte nicht geladen werden.');
+    }
+    const blob = await response.blob();
+    return { blob, url: URL.createObjectURL(blob) };
+  }
+
+  async function generateVideoMessage(clean, sourceImages = []) {
+    const rawReferenceImage = sourceImages.find((value) => String(value || '').startsWith('data:image/')) || '';
+    setStatus(rawReferenceImage ? 'Referenzbild wird für Sora angepasst …' : 'Sora-Videoauftrag wird gestartet …');
+    const referenceImage = rawReferenceImage
+      ? await prepareSoraReferenceImage(rawReferenceImage, 720, 1280)
+      : '';
+
+    setStatus('Sora-Videoauftrag wird gestartet …');
+    const created = await api('/api/ai/video', {
+      method: 'POST',
+      body: JSON.stringify({
+        prompt: clean,
+        aspect: 'story',
+        size: '720x1280',
+        seconds: '8',
+        model: 'sora-2',
+        referenceImage
+      })
+    });
+    if (!created?.id) throw new Error('OpenAI hat keine Video-ID geliefert.');
+
+    const completed = ['completed', 'failed'].includes(created.status) ? created : await waitForSoraVideo(created.id);
+    if (completed.status !== 'completed') throw new Error(completed?.error?.message || 'Sora konnte das Video nicht erstellen.');
+    setStatus('Sora-Video fertig. MP4 wird geladen …');
+    const video = await downloadSoraVideo(created.id);
+    const duration = Number(completed.seconds || created.seconds || 8);
+
+    const editableScene = {
+      id: crypto.randomUUID(),
+      title: 'SORA VIDEO',
+      prompt: clean,
+      duration,
+      imageUrl: '',
+      videoUrl: video.url,
+      fileName: 'sora-video.mp4',
+      mediaType: 'video',
+      status: 'Mit OpenAI Sora erstellt',
+      transition: 'fade',
+      animation: 'none',
+      textPosition: 'bottom',
+      textColor: '#ffffff',
+      accentColor: '#ffd400',
+      overlayOpacity: 0.25,
+      fontScale: 1,
+      fontFamily: 'Arial',
+      fontWeight: 800,
+      textAlign: 'left',
+      showText: false,
+      trimStart: 0,
+      mediaScale: 1,
+      mediaX: 0,
+      mediaY: 0,
+      mediaRotation: 0,
+      mediaOpacity: 1,
+      textX: 7,
+      textY: 76
+    };
+
+    const videoProject = {
+      name: String(clean || 'Sora Video').slice(0, 64),
+      type: 'video',
+      data: { scenes: [editableScene], format: 'story', musicStyle: 'none', musicVolume: 0 }
+    };
+
     setMessages((old) => [...old, {
       role: 'assistant',
-      content: `Hier ist dein Video mit automatisch erzeugten Szenenbildern, Bewegung und Hintergrundmusik. Format: ${video.ext.toUpperCase()}.`,
-      attachments: [{ kind: 'video', name: `yildiz-ai-video.${video.ext}`, previewUrl: video.url }]
+      content: 'Hier ist dein echtes Sora-Video mit synchronisiertem Ton. Du kannst den Clip im Video-Studio zuschneiden, positionieren, mit Text ergänzen und mit weiteren Szenen kombinieren.',
+      attachments: [{
+        kind: 'video',
+        name: 'yildiz-ai-sora.mp4',
+        previewUrl: video.url,
+        blob: video.blob,
+        projectData: videoProject
+      }]
     }]);
-    setStatus(`Video erstellt · ${video.ext.toUpperCase()} · Musik automatisch hinzugefügt`);
+    setStatus('Sora-Video erstellt · MP4 · mit Ton');
   }
 
   async function sendMessage(text = input) {
     const clean = String(text || '').trim();
+    if (sendingRef.current) return;
+    const now = Date.now();
+    if (clean && lastSendRef.current.text === clean && now - lastSendRef.current.at < 5000) return;
     if ((!clean && !attachments.length) || loading) return;
     if (attachments.some((item) => item.extracting)) {
       setStatus('Bitte kurz warten, bis die Videoframes vorbereitet sind.');
       return;
     }
+    sendingRef.current = true;
+    lastSendRef.current = { text: clean, at: now };
 
     const history = messages;
     const outgoingAttachments = attachments.map(({ id, previewUrl, extracting, ...rest }) => rest);
@@ -374,16 +711,37 @@ export default function Chat() {
       attachments: attachments.map(fileMessageAttachment)
     };
 
+    if (clean) {
+      setChatSessions((old) => old.map((session) => session.id === activeChatId && session.title === 'Neuer Chat'
+        ? { ...session, title: clean.replace(/\s+/g, ' ').slice(0, 42), updatedAt: Date.now() }
+        : session));
+    }
     setMessages((old) => [...old, userMessage]);
     setInput('');
     setAttachments([]);
     setLoading(true);
 
     try {
-      if (clean && !outgoingAttachments.length && looksLikeVideoPrompt(clean)) {
-        await generateVideoMessage(clean);
+      if (clean && looksLikeVideoPrompt(clean)) {
+        const uploadedImages = attachments
+          .filter((item) => item.kind === 'image')
+          .map((item) => item.previewUrl || item.data)
+          .filter(Boolean);
+
+        // Ein normales Text-zu-Video darf nicht automatisch das letzte Chat-Bild
+        // als Inpaint-Referenz mitsenden. Das verursachte den Größenfehler.
+        let videoReferenceImages = uploadedImages;
+        if (!uploadedImages.length && wantsImageReferenceForVideo(clean)) {
+          videoReferenceImages = [...messages].reverse()
+            .flatMap((message) => Array.isArray(message.attachments) ? message.attachments : [])
+            .filter((item) => item.kind === 'image')
+            .map((item) => item.previewUrl || item.data)
+            .filter(Boolean)
+            .slice(0, 1);
+        }
+        await generateVideoMessage(clean, videoReferenceImages);
       } else if (clean && !outgoingAttachments.length && looksLikeImagePrompt(clean)) {
-        await generateImageMessage(clean, history, userMessage);
+        await generateImageMessage(clean);
       } else {
         setStatus('Yildiz AI denkt …');
         const result = await api('/api/ai/chat', {
@@ -397,6 +755,7 @@ export default function Chat() {
       setMessages((old) => [...old, { role: 'assistant', content: error.message }]);
       setStatus('Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
     } finally {
+      sendingRef.current = false;
       setLoading(false);
     }
   }
@@ -408,8 +767,24 @@ export default function Chat() {
   }
 
   return (
-    <section className="chat-shell">
-      <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI mit Medienanalyse</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
+    <section className="chat-workspace-pro">
+      <aside className="chat-history-panel">
+        <button className="new-chat-button" onClick={newChat}><MessageSquarePlus size={18}/>Neuer Chat</button>
+        <button className="chat-export-button" onClick={exportCurrentChat}><Download size={16}/>Aktuellen Chat speichern</button>
+        <label className="chat-search"><Search size={15}/><input value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Chats suchen" /></label>
+        <div className="chat-history-list">
+          {filteredSessions.map((session) => (
+            <button key={session.id} className={`chat-history-item ${session.id === activeChatId ? 'active' : ''}`} onClick={() => openChat(session)}>
+              <span>{session.title || 'Neuer Chat'}</span>
+              <small>{new Date(session.updatedAt || session.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</small>
+              <i onClick={(event) => deleteChat(event, session.id)} title="Chat löschen"><Trash2 size={14}/></i>
+            </button>
+          ))}
+        </div>
+        <p className="chat-save-note">Chats werden automatisch in diesem Browser gespeichert. Mit „Chat speichern“ kannst du zusätzlich eine TXT-Datei herunterladen.</p>
+      </aside>
+      <section className="chat-shell">
+      <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI · Gemini + OpenAI + Sora</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
       <div className="chat-messages">
         {messages.map((message, index) => (
           <article className={`message ${message.role}`} key={`${message.role}-${index}`}>
@@ -424,6 +799,7 @@ export default function Chat() {
                     <div className="attachment-card video" key={`${item.name}-${i}`}>
                       {item.previewUrl ? <video src={item.previewUrl} controls playsInline /> : <div className="video-placeholder"><Video size={24}/></div>}
                       <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
+                      {item.projectData?.data?.scenes?.length > 0 && <button className="edit-video-project-btn" onClick={() => onOpenVideoProject?.(item.projectData)}><Edit3 size={15}/>Im Video-Studio bearbeiten</button>}
                     </div>
                   ) : (
                     <div className="attachment-card file" key={`${item.name}-${i}`}>
@@ -476,6 +852,7 @@ export default function Chat() {
         }} />
         <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !hasPayload}><ArrowUp size={20} /></button>
       </div>
+      </section>
     </section>
   );
 }

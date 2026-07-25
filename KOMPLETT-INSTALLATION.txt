@@ -1,0 +1,60 @@
+YILDIZ AI – KOMPLETTE OPENAI + SORA VERSION
+============================================
+
+Diese ZIP enthält den vollständigen Projektstand. Du brauchst keine ältere Patch-ZIP zusätzlich.
+
+ENTHALTEN
+- Bestehender Yildiz-AI-Chat mit Gemini
+- OpenAI GPT Image 2 für Bildgenerierung
+- Werbebild-/Poster-Erkennung mit besserem Werbe-Prompt
+- Bildqualität standardmäßig MEDIUM
+- OpenAI Sora 2 für echte MP4-Videos mit Ton
+- Fix für: "Inpaint image must match the requested width and height"
+- Ein normales Text-zu-Video verwendet nicht mehr automatisch das letzte Bild
+- Bild-zu-Video passt das Referenzbild auf 720 x 1280 an
+- Voll bearbeitbarer Design-Editor aus Stabil V6
+- Video-Studio und "Im Video-Studio bearbeiten"
+
+VERCEL-VARIABLEN
+Pflicht:
+OPENAI_API_KEY
+GEMINI_API_KEY
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+
+Optional:
+OPENAI_IMAGE_MODEL = gpt-image-2
+OPENAI_IMAGE_QUALITY = medium
+OPENAI_VIDEO_MODEL = sora-2
+GEMINI_MODEL = dein bisheriges Gemini-Modell
+
+WICHTIG
+- OPENAI_API_KEY niemals in GitHub oder in eine VITE_-Variable schreiben.
+- Keine SQL-Datei ist für dieses Update notwendig.
+
+GITHUB
+1. ZIP entpacken.
+2. Den INHALT des Ordners in die Hauptseite deines GitHub-Repositories hochladen.
+3. Vorhandene Dateien ersetzen.
+4. Nicht den äußeren Ordner als zusätzlichen Unterordner hochladen.
+5. Commit-Nachricht:
+
+Yildiz AI Komplett OpenAI Sora Bildqualitaet Video Fix
+
+DANACH
+1. In Vercel auf das neue Deployment warten.
+2. Es muss "Ready" und "Production" anzeigen.
+3. Website öffnen.
+4. Mac: Cmd + Shift + R
+5. Windows: Ctrl + F5
+6. Für den Test einen neuen Chat starten.
+
+TEST BILD
+Erstelle mir ein fotorealistisches Werbebild für eine moderne KI namens Yildiz AI.
+
+TEST VIDEO OHNE BILD
+Erstelle mir ein vertikales Werbevideo über Yildiz AI mit moderner Technologie, dynamischer Kamerafahrt und professionellem Ton.
+
+TEST BILD-ZU-VIDEO
+Zuerst ein Bild hochladen und dann schreiben:
+Animiere dieses Bild als vertikales Werbevideo mit langsamer Kamerafahrt.

@@ -1,143 +1,114 @@
 import { readJson, send } from '../_lib.js';
 
-const aspectMap = {
-  square: '1:1',
-  post: '4:5',
-  story: '9:16',
-  landscape: '16:9'
+const sizeMap = {
+  square: '1024x1024',
+  post: '1024x1536',
+  story: '1024x1536',
+  landscape: '1536x1024'
 };
 
-const publicSizes = {
-  square: { width: 1024, height: 1024 },
-  post: { width: 1024, height: 1280 },
-  story: { width: 1024, height: 1792 },
-  landscape: { width: 1280, height: 720 }
-};
+function isAdvertisingPrompt(value) {
+  return /(werbebild|werbung|anzeige|kampagne|flyer|poster|social.?media|instagram.?post|banner|angebot|promotion|advertis)/i.test(value);
+}
+
+function isYildizPrompt(value) {
+  return /yildiz\s*ai/i.test(value);
+}
 
 function buildPrompt(prompt, style) {
   const clean = String(prompt || '').trim();
-  const shared = 'photorealistic, realistic photography, natural materials, believable lighting, high detail, sharp focus, premium advertising quality, not a painting, not an illustration, not cartoon, no fake plastic look';
-  const styles = {
-    realistic: `${shared}, natural editorial composition`,
-    product: `${shared}, professional studio product photography, commercial catalog quality, clean controlled shadows`,
-    poster: `${shared}, cinematic advertising composition, strong visual hierarchy, clear negative space for later typography`,
-    studio: `${shared}, premium studio lighting, elegant backdrop, realistic reflections and shadows`
+  const common = [
+    'photorealistic',
+    'realistic photography',
+    'natural believable lighting',
+    'high detail',
+    'premium commercial quality',
+    'professional art direction',
+    'clean visual hierarchy',
+    'sharp coherent details',
+    'not a painting',
+    'not an illustration',
+    'not cartoon'
+  ].join(', ');
+
+  const stylePrompts = {
+    realistic: `${common}, natural editorial composition, one clear focal point`,
+    product: `${common}, professional product photography, clean studio setup, controlled realistic shadows, accurate packaging and materials`,
+    poster: `${common}, finished premium advertising poster rather than a plain source photo, cinematic commercial composition, intentional layout, useful negative space, strong headline area, balanced typography, clear call-to-action area`,
+    studio: `${common}, premium studio lighting, elegant backdrop, realistic reflections and shadows`
   };
-  return `${styles[style] || styles.realistic}. ${clean}`.trim();
+
+  const instructions = [stylePrompts[style] || stylePrompts.realistic];
+
+  if (isAdvertisingPrompt(clean)) {
+    instructions.push(
+      'Create a complete ready-to-use advertising visual, not merely a generic photograph',
+      'Use a polished agency-quality layout with clear hierarchy, generous margins, readable large text, and no tiny gibberish text',
+      'Do not show error messages, broken interfaces, random code, watermarks, or placeholder text',
+      'Keep the design modern, minimal, premium, and immediately understandable as an advertisement'
+    );
+  } else {
+    instructions.push('Do not add text unless the user explicitly requests it');
+  }
+
+  if (isYildizPrompt(clean) && isAdvertisingPrompt(clean)) {
+    instructions.push(
+      'Brand: Yildiz AI, spelled exactly "Yildiz AI"',
+      'Use a deep navy/black premium background with electric blue and warm yellow accents',
+      'Include the exact main headline "Yildiz AI"',
+      'Include the exact subheadline "Die moderne KI für Bilder, Videos und kreative Projekte"',
+      'Include the exact call to action "Jetzt entdecken"',
+      'Show an elegant modern workspace and a believable futuristic AI interface, without copying an existing company interface',
+      'All German text must be correctly spelled and clearly readable'
+    );
+  }
+
+  instructions.push(`User request: ${clean}`);
+  return instructions.join('. ');
 }
 
-function findImageBlock(value, seen = new Set()) {
-  if (!value || typeof value !== 'object' || seen.has(value)) return null;
-  seen.add(value);
-
-  if (typeof value.data === 'string' && value.data.length > 100) {
-    const mime = value.mime_type || value.mimeType || value.media_type || '';
-    const type = value.type || value.kind || '';
-    if (/image/i.test(mime) || /image/i.test(type)) {
-      return { data: value.data, mimeType: mime || 'image/png' };
-    }
-  }
-
-  if (value.output_image) {
-    const found = findImageBlock(value.output_image, seen);
-    if (found) return found;
-  }
-
-  for (const child of Object.values(value)) {
-    const found = findImageBlock(child, seen);
-    if (found) return found;
-  }
-  return null;
+function openAIErrorMessage(status, data) {
+  const raw = data?.error?.message || data?.message || '';
+  if (status === 401) return 'Der OpenAI API-Key ist ungültig.';
+  if (status === 403) return 'OpenAI hat die Bildanfrage nicht freigegeben. Prüfe Projekt, Verifizierung und Modellzugriff.';
+  if (status === 429) return 'Das OpenAI-Limit oder Guthaben ist erreicht. Prüfe Billing und Limits.';
+  return raw || `OpenAI-Bildgenerierung fehlgeschlagen (${status}).`;
 }
 
-async function tryGemini({ apiKey, prompt, aspect }) {
-  if (!apiKey) return null;
-  const models = [
-    process.env.GEMINI_IMAGE_MODEL,
-    'gemini-3.1-flash-image',
-    'gemini-3.1-flash-lite-image',
-    'gemini-2.5-flash-image'
-  ].filter(Boolean);
+async function generateWithModel({ apiKey, model, prompt, size, quality }) {
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      size,
+      quality,
+      output_format: 'png',
+      n: 1
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return { ok: false, response, data };
 
-  for (const model of [...new Set(models)]) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 25000);
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify({
-          model,
-          input: [{ type: 'text', text: prompt }],
-          response_format: {
-            type: 'image',
-            mime_type: 'image/png',
-            aspect_ratio: aspectMap[aspect] || '4:5',
-            image_size: '1K'
-          }
-        })
-      });
-      clearTimeout(timeout);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) continue;
-      const image = findImageBlock(data);
-      if (image) {
-        return {
-          imageDataUrl: `data:${image.mimeType};base64,${image.data}`,
-          provider: model
-        };
+  const item = data?.data?.[0] || {};
+  if (item.b64_json) {
+    return {
+      ok: true,
+      result: {
+        imageDataUrl: `data:image/png;base64,${item.b64_json}`,
+        provider: model,
+        revisedPrompt: item.revised_prompt || ''
       }
-    } catch {
-      // The public fallback below keeps image generation usable.
-    }
+    };
   }
-  return null;
-}
-
-async function tryPublicImage(prompt, aspect) {
-  const size = publicSizes[aspect] || publicSizes.post;
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${size.width}&height=${size.height}&model=flux&nologo=true&enhance=true&safe=true&seed=${Math.floor(Math.random() * 1000000)}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 18000);
-  const response = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Yildiz-AI-Studio/3.0' } });
-  clearTimeout(timeout);
-  if (!response.ok) return null;
-  const contentType = response.headers.get('content-type') || 'image/jpeg';
-  if (!contentType.toLowerCase().startsWith('image/')) return null;
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return {
-    imageDataUrl: `data:${contentType};base64,${buffer.toString('base64')}`,
-    provider: 'public-image-fallback'
-  };
-}
-
-function escapeXml(value) {
-  return String(value || '').replace(/[<>&"']/g, (char) => ({
-    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;'
-  }[char]));
-}
-
-function localFallback(prompt, aspect) {
-  const size = publicSizes[aspect] || publicSizes.post;
-  const title = escapeXml(String(prompt || 'Yildiz AI').split(/\s+/).slice(0, 8).join(' '));
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">
-    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071018"/><stop offset=".55" stop-color="#123650"/><stop offset="1" stop-color="#ffd400"/></linearGradient><filter id="b"><feGaussianBlur stdDeviation="35"/></filter></defs>
-    <rect width="100%" height="100%" fill="url(#g)"/>
-    <circle cx="${size.width * .2}" cy="${size.height * .22}" r="${Math.min(size.width, size.height) * .22}" fill="#63c7ff" opacity=".28" filter="url(#b)"/>
-    <circle cx="${size.width * .78}" cy="${size.height * .72}" r="${Math.min(size.width, size.height) * .25}" fill="#ffd400" opacity=".2" filter="url(#b)"/>
-    <rect x="${size.width * .07}" y="${size.height * .08}" width="${size.width * .86}" height="${size.height * .84}" rx="48" fill="none" stroke="#ffffff" opacity=".35" stroke-width="4"/>
-    <text x="${size.width * .09}" y="${size.height * .75}" font-family="Arial,sans-serif" font-size="${Math.max(42, size.width / 15)}" font-weight="800" fill="#fff">YILDIZ AI</text>
-    <text x="${size.width * .09}" y="${size.height * .82}" font-family="Arial,sans-serif" font-size="${Math.max(22, size.width / 34)}" fill="#ffd400">${title}</text>
-  </svg>`;
-  return {
-    imageDataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
-    provider: 'local-svg-fallback',
-    fallback: true
-  };
+  if (item.url) {
+    return { ok: true, result: { imageUrl: item.url, provider: model, revisedPrompt: item.revised_prompt || '' } };
+  }
+  return { ok: false, response: { status: 502 }, data: { error: { message: 'OpenAI hat keine Bilddatei geliefert.' } } };
 }
 
 export default async function handler(req, res) {
@@ -145,27 +116,34 @@ export default async function handler(req, res) {
 
   try {
     const body = await readJson(req);
-    const prompt = String(body?.prompt || '').trim().slice(0, 1200);
-    const aspect = String(body?.aspect || 'post');
-    const style = String(body?.style || 'realistic');
+    const prompt = String(body?.prompt || '').trim().slice(0, 3000);
+    const aspect = Object.hasOwn(sizeMap, body?.aspect) ? String(body.aspect) : 'post';
+    const style = String(body?.style || (isAdvertisingPrompt(prompt) ? 'poster' : 'realistic'));
+    const requestedQuality = String(body?.quality || process.env.OPENAI_IMAGE_QUALITY || 'medium');
+    const quality = ['low', 'medium', 'high', 'auto'].includes(requestedQuality) ? requestedQuality : 'medium';
+    const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
+
     if (!prompt) return send(res, 400, { error: 'Bitte gib einen Bild-Prompt ein.' });
+    if (!apiKey) return send(res, 500, { error: 'OPENAI_API_KEY fehlt in Vercel.' });
 
+    const configured = String(process.env.OPENAI_IMAGE_MODEL || '').trim();
+    const models = [...new Set([configured, 'gpt-image-2', 'gpt-image-1.5', 'gpt-image-1'].filter(Boolean))];
     const finalPrompt = buildPrompt(prompt, style);
-    const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+    let lastStatus = 500;
+    let lastData = {};
 
-    const gemini = await tryGemini({ apiKey, prompt: finalPrompt, aspect });
-    if (gemini) return send(res, 200, gemini);
-
-    try {
-      const publicImage = await tryPublicImage(finalPrompt, aspect);
-      if (publicImage) return send(res, 200, publicImage);
-    } catch {
-      // Always return a usable local fallback below.
+    for (const model of models) {
+      const attempt = await generateWithModel({ apiKey, model, prompt: finalPrompt, size: sizeMap[aspect], quality });
+      if (attempt.ok) return send(res, 200, { ...attempt.result, quality, style });
+      lastStatus = attempt.response?.status || 500;
+      lastData = attempt.data || {};
+      if ([401, 403, 429].includes(lastStatus)) break;
+      if (![400, 404].includes(lastStatus)) break;
     }
 
-    return send(res, 200, localFallback(prompt, aspect));
+    return send(res, lastStatus, { error: openAIErrorMessage(lastStatus, lastData) });
   } catch (error) {
-    console.error('image generation failed', error);
-    return send(res, 200, localFallback('Bildgenerierung vorübergehend nicht erreichbar', 'post'));
+    console.error('OpenAI image generation failed', error);
+    return send(res, 500, { error: error?.message || 'Die OpenAI-Bildgenerierung ist fehlgeschlagen.' });
   }
 }

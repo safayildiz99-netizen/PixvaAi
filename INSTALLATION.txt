@@ -1,32 +1,33 @@
-YILDIZ AI – BILDQUALITÄT + SORA VIDEO-FIX
+YILDIZ AI CREATOR STUDIO V2 – INSTALLATION
 
-Dieser Patch behebt zwei getrennte Probleme:
-1. Werbebilder werden nicht mehr als bloßes generisches Foto angefordert. Werbe-/Flyer-/Poster-Prompts bekommen automatisch einen vollständigen Werbeaufbau und standardmäßig mittlere Qualität.
-2. Ein normales Text-zu-Video verwendet nicht mehr automatisch das zuletzt erzeugte Bild. Dadurch verschwindet der Fehler "Inpaint image must match the requested width and height".
-3. Wenn ausdrücklich ein Bild-zu-Video gewünscht ist, wird das Bild im Browser exakt auf 720x1280 vorbereitet. Der Server prüft die Maße zusätzlich und lässt eine falsche Referenz lieber weg, statt die Videogenerierung abzubrechen.
+Diese ZIP ist ein Patch. Lade die Dateien nicht in den GitHub-Hauptordner.
 
-IN GITHUB GENAU DIESE DATEIEN ERSETZEN:
+Richtige Pfade:
+- client/package.json
+- client/src/components/Chat.jsx
+- client/src/components/DesignEditor.jsx
+- client/src/components/VideoStudio.jsx
+- client/src/styles.css
+- client/public/templates/ (alle vier Bilder)
 
-1. api/ai/image.js
-2. api/ai/video.js
-3. client/src/components/Chat.jsx
+Einfachste Methode:
+1. ZIP entpacken.
+2. In GitHub jeden passenden Ordner öffnen.
+3. Die Datei dort mit Add file → Upload files ersetzen.
+4. Commit-Nachricht: Creator Studio V2
+5. Vercel abwarten, bis Ready + Production erscheint.
+6. yildiz-ai.vercel.app mit Cmd+Shift+R neu laden.
 
-Commit-Nachricht:
-Yildiz AI Bildqualität und Sora Fix
+Neu:
+- Chatliste links, Neuer Chat, automatische Speicherung, Chat als TXT exportieren.
+- Editierbare Vorlagen im Stil der bereitgestellten Marktangebote.
+- Produktbilder per Drag & Drop in einzelne Produktplätze einsetzen.
+- Text als editierbares Fabric-IText; Doppelklick zum Schreiben.
+- Cmd/Ctrl+C, V, X, D, Z, Y, A; Pfeiltasten zum Verschieben; Löschen-Taste.
+- Schrift, Größe, Farbe und Fett direkt in der oberen Werkzeugleiste.
+- Bildbearbeitung, Hintergrund entfernen, Ebenen, Sperren, Spiegeln, Position, Größe, Deckkraft.
+- Video-Vorlagen, linke Werkzeugbereiche, Schriftfamilie, Gewicht und Ausrichtung.
+- Szenen mit Cmd/Ctrl+C, V, D kopieren/duplizieren.
 
-Danach in Vercel auf das neue Deployment warten, bis Ready + Production angezeigt wird.
-Website neu laden:
-Mac: Cmd + Shift + R
-Windows: Ctrl + F5
-
-KEINE SQL-DATEI NOTWENDIG.
-
-TEST BILD:
-Erstelle mir ein fotorealistisches Werbebild für eine moderne KI namens Yildiz AI.
-
-TEST VIDEO OHNE REFERENZBILD:
-Erstelle mir ein vertikales Werbevideo über Yildiz AI mit moderner Technologie, dynamischer Kamerafahrt und professionellem Ton.
-
-TEST VIDEO MIT REFERENZBILD:
-Bild hochladen und schreiben:
-Animiere dieses Bild als vertikales Werbevideo mit langsamer Kamerafahrt.
+Hinweis:
+Diese Version ist deutlich umfangreicher und Canva-/Photoshop-ähnlich aufgebaut. Eine vollständige 1:1-Kopie aller Funktionen von Photoshop oder Canva wäre ein eigenes sehr großes Softwareprojekt.

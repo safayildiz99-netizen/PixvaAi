@@ -1,9 +1,9 @@
 {
   "name": "yildiz-ai-studio",
-  "version": "3.0.0",
+  "version": "6.1.0",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI Medien-Studio Pro mit Gemini, Bildgenerierung, Video-Renderer, Uploads und ZIP/PDF/PNG-Export",
+  "description": "Yildiz AI Komplettversion mit Gemini, GPT Image 2, Sora 2, bearbeitbarem Design-Editor und Video-Studio",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "vercel-build": "npm run build"
