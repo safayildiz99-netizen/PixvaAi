@@ -1,0 +1,27 @@
+Yildiz AI – Direkte Bild- und Videogenerierung im Chat
+
+Dieses Update behebt genau den Fehler aus dem Screenshot:
+Die Chat-KI antwortete bisher nur mit Text wie „Ich kann keine Bilder erstellen“.
+Jetzt erkennt Yildiz AI automatisch Bild- und Videoaufträge.
+
+Neu:
+- „Erstelle ein Bild …“ erzeugt direkt ein Bild im Chat.
+- „Erstelle ein Video …“ erzeugt 3 Szenenbilder, Übergänge und Hintergrundmusik.
+- Bild und Video können direkt abgespielt/geöffnet und heruntergeladen werden.
+- Hochgeladene Bilder und Videos bleiben analysierbar.
+- Gemini-Bilderstellung nutzt den offiziellen generateContent-Endpunkt.
+- Bei Ausfall wird automatisch ein öffentlicher beziehungsweise lokaler Fallback versucht.
+
+Installation:
+1. ZIP entpacken.
+2. Alle Dateien aus dem Ordner in GitHub Yildiz-AI hochladen und ersetzen.
+3. Commit-Nachricht: Chat Bild und Video Generierung Fix
+4. Vercel baut automatisch neu. Falls nicht: Deployments > ... > Redeploy.
+5. Website mit Cmd + Shift + R neu laden.
+
+Vercel-Variablen:
+GEMINI_API_KEY
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+
+Keine neue Supabase-SQL-Datei notwendig.
