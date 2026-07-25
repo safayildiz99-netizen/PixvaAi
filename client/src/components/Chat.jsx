@@ -68,6 +68,19 @@ function looksLikeVideoPrompt(text) {
     /(video|film|clip|reel|animation|trailer|short)/.test(value) || /video dazu|mach .* video/.test(value);
 }
 
+function inferImageStyle(text) {
+  const value = String(text || '').toLowerCase();
+  if (/(werbebild|werbung|anzeige|kampagne|flyer|poster|social.?media|instagram.?post|banner|angebot)/.test(value)) return 'poster';
+  if (/(produktfoto|produktbild|product shot|e.?commerce|freisteller|verpackung)/.test(value)) return 'product';
+  if (/(studio|portrait|porträt|headshot)/.test(value)) return 'studio';
+  return 'realistic';
+}
+
+function wantsImageReferenceForVideo(text) {
+  const value = String(text || '').toLowerCase();
+  return /(aus (diesem|dem|meinem|letzten) bild|dieses bild|das bild|daraus|bild zu video|image to video|animiere .*bild|verwende .*bild|nutze .*bild|mit dem bild)/.test(value);
+}
+
 function makeDirectImageUrl(prompt, aspect = 'post') {
   const sizes = {
     square: [1024, 1024],
@@ -93,6 +106,40 @@ function preloadImage(url, timeoutMs = 35000) {
     image.onerror = () => { clearTimeout(timer); reject(new Error('Bild konnte nicht geladen werden.')); };
     image.src = url;
   });
+}
+
+async function prepareSoraReferenceImage(dataUrl, targetWidth = 720, targetHeight = 1280) {
+  if (!String(dataUrl || '').startsWith('data:image/')) return '';
+
+  const image = await new Promise((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error('Das Referenzbild konnte nicht für Sora vorbereitet werden.'));
+    element.src = dataUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Das Referenzbild konnte nicht verarbeitet werden.');
+
+  // Sora verlangt, dass das Referenzbild exakt dieselbe Breite und Höhe
+  // wie das angeforderte Video besitzt. Das Bild wird mittig zugeschnitten.
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const scale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  const drawX = (targetWidth - drawWidth) / 2;
+  const drawY = (targetHeight - drawHeight) / 2;
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+  // JPEG hält die Anfrage deutlich kleiner als das ursprüngliche PNG.
+  return canvas.toDataURL('image/jpeg', 0.9);
 }
 
 function bestRecorderMime() {
@@ -524,14 +571,19 @@ export default function Chat({ onOpenVideoProject }) {
     setStatus('OpenAI erstellt dein Bild …');
     const result = await api('/api/ai/image', {
       method: 'POST',
-      body: JSON.stringify({ prompt: clean, aspect: 'post', style: 'realistic', quality: 'low' })
+      body: JSON.stringify({
+        prompt: clean,
+        aspect: 'post',
+        style: inferImageStyle(clean),
+        quality: 'medium'
+      })
     });
     const imageSource = result?.imageDataUrl || result?.imageUrl || '';
     if (!imageSource) throw new Error('OpenAI hat keine Bilddatei geliefert.');
     await preloadImage(imageSource);
     setMessages((old) => [...old, {
       role: 'assistant',
-      content: 'Hier ist dein mit OpenAI erstelltes Bild. Du kannst es speichern oder für ein Sora-Video verwenden.',
+      content: 'Hier ist dein mit OpenAI GPT Image 2 erstelltes Bild in mittlerer Qualität. Du kannst es speichern oder ausdrücklich als Referenz für ein Sora-Video verwenden.',
       attachments: [{ kind: 'image', name: 'yildiz-ai-openai.png', previewUrl: imageSource, data: result?.imageDataUrl || '' }]
     }]);
     setStatus(`Bild erstellt · ${result.provider || 'OpenAI'}`);
@@ -561,7 +613,12 @@ export default function Chat({ onOpenVideoProject }) {
   }
 
   async function generateVideoMessage(clean, sourceImages = []) {
-    const referenceImage = sourceImages.find((value) => String(value || '').startsWith('data:image/')) || '';
+    const rawReferenceImage = sourceImages.find((value) => String(value || '').startsWith('data:image/')) || '';
+    setStatus(rawReferenceImage ? 'Referenzbild wird für Sora angepasst …' : 'Sora-Videoauftrag wird gestartet …');
+    const referenceImage = rawReferenceImage
+      ? await prepareSoraReferenceImage(rawReferenceImage, 720, 1280)
+      : '';
+
     setStatus('Sora-Videoauftrag wird gestartet …');
     const created = await api('/api/ai/video', {
       method: 'POST',
@@ -670,13 +727,19 @@ export default function Chat({ onOpenVideoProject }) {
           .filter((item) => item.kind === 'image')
           .map((item) => item.previewUrl || item.data)
           .filter(Boolean);
-        const recentGeneratedImages = [...messages].reverse()
-          .flatMap((message) => Array.isArray(message.attachments) ? message.attachments : [])
-          .filter((item) => item.kind === 'image')
-          .map((item) => item.previewUrl || item.data)
-          .filter(Boolean)
-          .slice(0, 4);
-        await generateVideoMessage(clean, uploadedImages.length ? uploadedImages : recentGeneratedImages);
+
+        // Ein normales Text-zu-Video darf nicht automatisch das letzte Chat-Bild
+        // als Inpaint-Referenz mitsenden. Das verursachte den Größenfehler.
+        let videoReferenceImages = uploadedImages;
+        if (!uploadedImages.length && wantsImageReferenceForVideo(clean)) {
+          videoReferenceImages = [...messages].reverse()
+            .flatMap((message) => Array.isArray(message.attachments) ? message.attachments : [])
+            .filter((item) => item.kind === 'image')
+            .map((item) => item.previewUrl || item.data)
+            .filter(Boolean)
+            .slice(0, 1);
+        }
+        await generateVideoMessage(clean, videoReferenceImages);
       } else if (clean && !outgoingAttachments.length && looksLikeImagePrompt(clean)) {
         await generateImageMessage(clean);
       } else {

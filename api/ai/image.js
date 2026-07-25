@@ -7,6 +7,14 @@ const sizeMap = {
   landscape: '1536x1024'
 };
 
+function isAdvertisingPrompt(value) {
+  return /(werbebild|werbung|anzeige|kampagne|flyer|poster|social.?media|instagram.?post|banner|angebot|promotion|advertis)/i.test(value);
+}
+
+function isYildizPrompt(value) {
+  return /yildiz\s*ai/i.test(value);
+}
+
 function buildPrompt(prompt, style) {
   const clean = String(prompt || '').trim();
   const common = [
@@ -15,18 +23,48 @@ function buildPrompt(prompt, style) {
     'natural believable lighting',
     'high detail',
     'premium commercial quality',
+    'professional art direction',
+    'clean visual hierarchy',
+    'sharp coherent details',
     'not a painting',
     'not an illustration',
-    'not cartoon',
-    'no text unless explicitly requested'
+    'not cartoon'
   ].join(', ');
+
   const stylePrompts = {
-    realistic: `${common}, natural editorial composition`,
-    product: `${common}, professional product photography, clean studio setup, controlled shadows`,
-    poster: `${common}, cinematic advertising composition, clear focal point and useful negative space`,
+    realistic: `${common}, natural editorial composition, one clear focal point`,
+    product: `${common}, professional product photography, clean studio setup, controlled realistic shadows, accurate packaging and materials`,
+    poster: `${common}, finished premium advertising poster rather than a plain source photo, cinematic commercial composition, intentional layout, useful negative space, strong headline area, balanced typography, clear call-to-action area`,
     studio: `${common}, premium studio lighting, elegant backdrop, realistic reflections and shadows`
   };
-  return `${stylePrompts[style] || stylePrompts.realistic}. ${clean}`;
+
+  const instructions = [stylePrompts[style] || stylePrompts.realistic];
+
+  if (isAdvertisingPrompt(clean)) {
+    instructions.push(
+      'Create a complete ready-to-use advertising visual, not merely a generic photograph',
+      'Use a polished agency-quality layout with clear hierarchy, generous margins, readable large text, and no tiny gibberish text',
+      'Do not show error messages, broken interfaces, random code, watermarks, or placeholder text',
+      'Keep the design modern, minimal, premium, and immediately understandable as an advertisement'
+    );
+  } else {
+    instructions.push('Do not add text unless the user explicitly requests it');
+  }
+
+  if (isYildizPrompt(clean) && isAdvertisingPrompt(clean)) {
+    instructions.push(
+      'Brand: Yildiz AI, spelled exactly "Yildiz AI"',
+      'Use a deep navy/black premium background with electric blue and warm yellow accents',
+      'Include the exact main headline "Yildiz AI"',
+      'Include the exact subheadline "Die moderne KI für Bilder, Videos und kreative Projekte"',
+      'Include the exact call to action "Jetzt entdecken"',
+      'Show an elegant modern workspace and a believable futuristic AI interface, without copying an existing company interface',
+      'All German text must be correctly spelled and clearly readable'
+    );
+  }
+
+  instructions.push(`User request: ${clean}`);
+  return instructions.join('. ');
 }
 
 function openAIErrorMessage(status, data) {
@@ -80,22 +118,23 @@ export default async function handler(req, res) {
     const body = await readJson(req);
     const prompt = String(body?.prompt || '').trim().slice(0, 3000);
     const aspect = Object.hasOwn(sizeMap, body?.aspect) ? String(body.aspect) : 'post';
-    const style = String(body?.style || 'realistic');
-    const quality = ['low', 'medium', 'high', 'auto'].includes(body?.quality) ? body.quality : 'low';
+    const style = String(body?.style || (isAdvertisingPrompt(prompt) ? 'poster' : 'realistic'));
+    const requestedQuality = String(body?.quality || process.env.OPENAI_IMAGE_QUALITY || 'medium');
+    const quality = ['low', 'medium', 'high', 'auto'].includes(requestedQuality) ? requestedQuality : 'medium';
     const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
 
     if (!prompt) return send(res, 400, { error: 'Bitte gib einen Bild-Prompt ein.' });
     if (!apiKey) return send(res, 500, { error: 'OPENAI_API_KEY fehlt in Vercel.' });
 
     const configured = String(process.env.OPENAI_IMAGE_MODEL || '').trim();
-    const models = [...new Set([configured, 'gpt-image-2', 'gpt-image-1', 'gpt-image-1-mini'].filter(Boolean))];
+    const models = [...new Set([configured, 'gpt-image-2', 'gpt-image-1.5', 'gpt-image-1'].filter(Boolean))];
     const finalPrompt = buildPrompt(prompt, style);
     let lastStatus = 500;
     let lastData = {};
 
     for (const model of models) {
       const attempt = await generateWithModel({ apiKey, model, prompt: finalPrompt, size: sizeMap[aspect], quality });
-      if (attempt.ok) return send(res, 200, attempt.result);
+      if (attempt.ok) return send(res, 200, { ...attempt.result, quality, style });
       lastStatus = attempt.response?.status || 500;
       lastData = attempt.data || {};
       if ([401, 403, 429].includes(lastStatus)) break;
