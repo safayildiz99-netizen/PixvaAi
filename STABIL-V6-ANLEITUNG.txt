@@ -1,0 +1,17 @@
+Yildiz AI Stabil V6 – Voll editierbare Vorlagen und bearbeitbare Chat-Videos
+
+Diese Dateien ersetzen:
+client/src/App.jsx
+client/src/components/Chat.jsx
+client/src/components/DesignEditor.jsx
+client/src/components/VideoStudio.jsx
+client/src/styles.css
+
+Wichtig:
+- Im Flyereditor den Modus „Voll bearbeitbar (empfohlen)“ verwenden.
+- Die Original-JPG-Variante ist nur ein flaches Bild und kann technisch nicht in alle ursprünglichen Ebenen zerlegt werden.
+- In der neuen Fresh- und Atlas-Vorlage sind Logo, Kopfbild, Texte, Produktbilder, Preise, Karten und Wellen als getrennte Objekte angelegt.
+- Ein im Chat erzeugtes Video zeigt jetzt „Im Video-Studio bearbeiten“. Dort lassen sich Szenen, Bilder, Texte, Musik, Dauer, Übergänge, Zoom und Position ändern.
+
+Commit-Nachricht:
+Yildiz AI Stabil V6 Voll Editierbar
