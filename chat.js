@@ -28,7 +28,7 @@ function normalizeAttachments(input) {
   return input
     .slice(0, 4)
     .map((item) => ({
-      kind: item?.kind === 'video' ? 'video' : 'image',
+      kind: item?.kind === 'video' ? 'video' : item?.kind === 'file' ? 'file' : 'image',
       name: String(item?.name || '').slice(0, 120),
       mimeType: String(item?.mimeType || '').slice(0, 80),
       data: String(item?.data || ''),
@@ -42,6 +42,7 @@ function createUserParts(message, attachments) {
   const parts = [];
   const videoAttachments = attachments.filter((item) => item.kind === 'video');
   const imageAttachments = attachments.filter((item) => item.kind === 'image');
+  const fileAttachments = attachments.filter((item) => item.kind === 'file');
 
   let intro = String(message || '').trim();
   if (videoAttachments.length) {
@@ -51,6 +52,13 @@ function createUserParts(message, attachments) {
       return `- ${item.name || 'Video'} (${item.mimeType || 'video/*'}, ${sizeMb}; ${frameInfo})`;
     }).join('\n');
     intro += `\n\nVideo-Anhänge:\n${videoInfo}\nAnalysiere die angehängten Vorschaubilder als Stichprobe und erwähne, dass sie nicht jeden Moment des Videos zeigen.`;
+  }
+  if (fileAttachments.length) {
+    const fileInfo = fileAttachments.map((item) => {
+      const sizeMb = item.size ? `${(item.size / 1024 / 1024).toFixed(1)} MB` : 'unbekannte Größe';
+      return `- ${item.name || 'Datei'} (${item.mimeType || 'Datei'}, ${sizeMb})`;
+    }).join('\n');
+    intro += `\n\nWeitere Datei-Anhänge:\n${fileInfo}\nWenn der Inhalt nicht direkt lesbar ist, erkläre ehrlich die Grenze und hilf trotzdem bestmöglich.`;
   }
   parts.push({ text: intro || 'Bitte hilf mir mit diesem Anhang.' });
 

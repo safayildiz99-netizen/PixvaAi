@@ -1,0 +1,21 @@
+Yildiz AI – Sofort-Fix für Chat-Bild/Video, Drag & Drop und Kamera-Upload
+
+Neu in dieser Version:
+- Chat erkennt jetzt Bild-Befehle direkt und erzeugt das Bild sofort im Chat.
+- Chat erkennt jetzt Video-Befehle direkt und erzeugt automatisch ein Video aus 3 Szenenbildern mit Hintergrundmusik.
+- Drag & Drop: Bilder, Videos und Dateien können direkt in das Chatfeld gezogen werden.
+- Foto machen / Video aufnehmen: direkte Kamera-Buttons für Handy und unterstützte Browser.
+- Datei-Upload: nicht nur Auswahl von Bild/Video, sondern auch normale Dateien.
+- Kein Umweg mehr über Textantworten wie „ich kann keine Bilder generieren“.
+
+Einbau:
+1. ZIP entpacken.
+2. Alle Dateien in dein GitHub-Repository hochladen und vorhandene Dateien ersetzen.
+3. Commit machen.
+4. 1–3 Minuten warten, bis Vercel neu deployed hat.
+5. Seite mit Strg+F5 oder Cmd+Shift+R hart neu laden.
+
+Wichtig:
+- Die Vercel-Variable GEMINI_API_KEY muss gesetzt bleiben.
+- Für Login/Funktionen bleibt Supabase wie bisher aktiv.
+- Video wird direkt im Browser gerendert. In Opera/Chrome klappt das am besten.
