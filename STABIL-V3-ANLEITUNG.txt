@@ -1,0 +1,37 @@
+YILDIZ AI – STABIL V3 FIX
+
+Dieser Patch behebt die sichtbaren Probleme aus den Screenshots:
+
+1. Flyer-/Bildeditor ist nicht mehr in drei schmale Spalten gequetscht.
+   Werkzeuge und Eigenschaften stehen links untereinander.
+   Die Arbeitsfläche bleibt groß und gerade rechts.
+
+2. Die Angebotsraster wurden neu aufgebaut.
+   Produktkarten, Preise, Texte und Bildplätze bleiben innerhalb der Karte.
+   Die schrägen Farbbalken, die Elemente überdeckt haben, wurden entfernt.
+
+3. Beim Wechsel des Formats werden vorhandene Elemente mit skaliert und neu positioniert.
+
+4. Die Bildgenerierung versucht zuerst Gemini über den offiziellen Bild-Endpunkt.
+   Falls die Vercel-Funktion den öffentlichen Ersatzdienst nicht erreichen kann,
+   darf der Browser das Bild direkt laden, statt sofort eine Fehlermeldung zu zeigen.
+
+5. Chat akzeptiert jetzt sowohl imageDataUrl als auch imageUrl.
+   Sehr schnelle doppelte Klicks senden dieselbe Nachricht nicht mehr doppelt.
+
+DATEIEN RICHTIG ERSETZEN
+
+api/ai/image.js
+client/src/components/Chat.jsx
+client/src/components/DesignEditor.jsx
+client/src/styles.css
+
+Nicht in den GitHub-Hauptordner legen.
+
+Commit-Nachricht:
+Yildiz AI Stabil V3 Fix
+
+Danach Vercel abwarten, bis das neueste Deployment Ready und Production ist.
+Dann https://yildiz-ai.vercel.app öffnen und Cmd + Shift + R drücken.
+
+Keine SQL-Datei erforderlich.

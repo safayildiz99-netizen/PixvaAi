@@ -305,6 +305,7 @@ export default function Chat() {
   const cameraImageRef = useRef(null);
   const cameraVideoRef = useRef(null);
   const anyFileRef = useRef(null);
+  const lastSendRef = useRef({ text: '', at: 0 });
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
   const filteredSessions = useMemo(() => {
     const query = chatSearch.trim().toLowerCase();
@@ -491,10 +492,12 @@ export default function Chat() {
       method: 'POST',
       body: JSON.stringify({ prompt: clean, aspect: 'post', style: 'realistic' })
     });
+    const imageSource = result?.imageDataUrl || result?.imageUrl;
+    if (!imageSource) throw new Error('Der Bilddienst hat keine Bilddatei geliefert.');
     setMessages((old) => [...old, {
       role: 'assistant',
-      content: result.fallback ? 'Ich habe ein Ersatzmotiv erstellt, weil der externe Bilddienst gerade nicht erreichbar war.' : 'Hier ist dein Bild. Du kannst es direkt öffnen oder herunterladen.',
-      attachments: [{ kind: 'image', name: 'yildiz-ai-bild.png', previewUrl: result.imageDataUrl, data: result.imageDataUrl }]
+      content: result.remote ? 'Hier ist dein Bild. Es wird direkt vom kostenlosen Bilddienst geladen.' : 'Hier ist dein Bild. Du kannst es direkt öffnen oder herunterladen.',
+      attachments: [{ kind: 'image', name: 'yildiz-ai-bild.png', previewUrl: imageSource, data: result.imageDataUrl || '' }]
     }]);
     setStatus(`Bild erstellt${result.provider ? ` · ${result.provider}` : ''}`);
   }
@@ -515,10 +518,11 @@ export default function Chat() {
           method: 'POST',
           body: JSON.stringify({ prompt: scenePrompts[index], aspect: 'story', style: 'realistic' })
         });
-        if (!result?.imageDataUrl || result?.fallback) {
-          throw new Error('Ein echtes Szenenbild konnte nicht erzeugt werden. Das Video wurde abgebrochen, damit kein Farb-/Text-Platzhalter exportiert wird.');
+        const imageSource = result?.imageDataUrl || result?.imageUrl;
+        if (!imageSource || result?.fallback) {
+          throw new Error('Ein echtes Szenenbild konnte nicht erzeugt werden. Lade alternativ eigene Bilder hoch und schreibe danach „Erstelle daraus ein Video“.');
         }
-        images.push(result.imageDataUrl);
+        images.push(imageSource);
       }
     }
     setStatus('Bilder fertig. Video wird jetzt im Browser mit Übergängen und Musik gerendert …');
@@ -533,6 +537,9 @@ export default function Chat() {
 
   async function sendMessage(text = input) {
     const clean = String(text || '').trim();
+    const now = Date.now();
+    if (clean && lastSendRef.current.text === clean && now - lastSendRef.current.at < 1200) return;
+    lastSendRef.current = { text: clean, at: now };
     if ((!clean && !attachments.length) || loading) return;
     if (attachments.some((item) => item.extracting)) {
       setStatus('Bitte kurz warten, bis die Videoframes vorbereitet sind.');

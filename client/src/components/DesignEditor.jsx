@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import {
-  ActiveSelection, Canvas, Circle, FabricImage, FabricText, Group, IText, Rect, filters
+  ActiveSelection, Canvas, Circle, FabricImage, FabricText, Group, IText, Rect, Textbox, filters
 } from 'fabric';
 import {
   AlignCenter, ArrowDownToLine, ArrowUpToLine, Bold, Copy, Download, Eye, EyeOff,
@@ -98,44 +98,104 @@ function addCreativeTemplate(canvas, width, height) {
 
 function addProductCard(canvas, x, y, cardW, cardH, index, accent) {
   const slotId = `product-slot:${index}`;
-  const card = new Rect({ left: x, top: y, width: cardW, height: cardH, fill: '#ffffff', rx: 16, ry: 16, stroke: '#dedede', strokeWidth: 1, selectable: false, dataRole: `card:${index}`, displayName: `Produktkarte ${index}` });
-  const title = makeText('PRODUKTNAME', { left: x + cardW * .06, top: y + cardH * .05, fontSize: Math.max(14, cardW / 10), fill: '#111111', dataRole: `product-title:${index}`, displayName: `Produktname ${index}` });
-  const slot = new Rect({ left: x + cardW * .06, top: y + cardH * .2, width: cardW * .88, height: cardH * .55, fill: '#f7f7f7', stroke: '#b8b8b8', strokeDashArray: [7, 6], rx: 12, ry: 12, dataRole: slotId, displayName: `Produktbild ${index}` });
-  const hint = makeText('BILD HIER\nABLEGEN', { left: x + cardW / 2, top: y + cardH * .47, originX: 'center', originY: 'center', textAlign: 'center', fontSize: Math.max(11, cardW / 14), fill: '#9a9a9a', selectable: false, dataRole: `product-slot-label:${index}`, displayName: `Bildhinweis ${index}` });
-  const badge = new Rect({ left: x + cardW * .58, top: y + cardH * .78, width: cardW * .36, height: cardH * .14, fill: accent, rx: 6, ry: 6, dataRole: `price-bg:${index}`, displayName: `Preisfläche ${index}` });
-  const price = makeText('4,99 €', { left: x + cardW * .76, top: y + cardH * .85, originX: 'center', originY: 'center', fontSize: Math.max(15, cardW / 8), fontWeight: 900, fill: '#ffffff', dataRole: `price:${index}`, displayName: `Preis ${index}` });
+  const inner = cardW * .06;
+  const card = new Rect({
+    left: x, top: y, width: cardW, height: cardH,
+    fill: '#ffffff', rx: 14, ry: 14, stroke: '#d7d7d7', strokeWidth: 1,
+    selectable: false, dataRole: `card:${index}`, displayName: `Produktkarte ${index}`
+  });
+  const title = new Textbox('PRODUKTNAME', {
+    left: x + inner, top: y + cardH * .045, width: cardW - inner * 2,
+    fontFamily: 'Arial', fontWeight: 700, fontSize: Math.max(12, cardW / 12),
+    lineHeight: 1.04, fill: '#111111', dataRole: `product-title:${index}`,
+    displayName: `Produktname ${index}`
+  });
+  const slot = new Rect({
+    left: x + inner, top: y + cardH * .22, width: cardW - inner * 2, height: cardH * .49,
+    fill: '#f8f8f8', stroke: '#bfc3c7', strokeDashArray: [6, 5], rx: 10, ry: 10,
+    dataRole: slotId, displayName: `Produktbild ${index}`
+  });
+  const hint = makeText('BILD HIER\nABLEGEN', {
+    left: x + cardW / 2, top: y + cardH * .465, originX: 'center', originY: 'center',
+    textAlign: 'center', fontSize: Math.max(10, cardW / 16), fill: '#9a9a9a',
+    selectable: false, evented: false, dataRole: `product-slot-label:${index}`,
+    displayName: `Bildhinweis ${index}`
+  });
+  const badgeW = cardW * .42;
+  const badgeH = cardH * .14;
+  const badgeX = x + cardW - inner - badgeW;
+  const badgeY = y + cardH - inner - badgeH;
+  const badge = new Rect({
+    left: badgeX, top: badgeY, width: badgeW, height: badgeH,
+    fill: accent, rx: 6, ry: 6, dataRole: `price-bg:${index}`,
+    displayName: `Preisfläche ${index}`
+  });
+  const price = makeText('4,99 €', {
+    left: badgeX + badgeW / 2, top: badgeY + badgeH / 2,
+    originX: 'center', originY: 'center', fontSize: Math.max(13, cardW / 10),
+    fontWeight: 900, fill: '#ffffff', dataRole: `price:${index}`,
+    displayName: `Preis ${index}`
+  });
   canvas.add(card, title, slot, hint, badge, price);
 }
 
 function addAtlasGridTemplate(canvas, width, height) {
   canvas.clear();
-  canvas.backgroundColor = '#f4f2e9';
-  const hero = new Rect({ left: 0, top: 0, width, height: height * .27, fill: '#223e2e', dataRole: 'hero-slot', displayName: 'Kopfbild' });
-  const heroText = makeText('FRISCHE ANGEBOTE', { left: width * .055, top: height * .07, fontSize: width / 13, fill: '#ffffff', displayName: 'Kopfzeile' });
-  const address = makeText('Musterstraße 12 · 70173 Stuttgart', { left: width * .055, top: height * .2, fontSize: width / 30, fill: '#d9f3de', displayName: 'Adresse' });
-  const waveRed = new Rect({ left: 0, top: height * .25, width, height: height * .15, fill: '#df1f2d', angle: -4, selectable: false, dataRole: 'template-bg' });
-  const waveBlue = new Rect({ left: 0, top: height * .79, width, height: height * .28, fill: '#3564ad', angle: 3, selectable: false, dataRole: 'template-bg' });
-  canvas.add(hero, heroText, address, waveRed, waveBlue);
-  const cols = 3; const rows = 3; const gap = width * .025; const cardW = (width - gap * 4) / cols; const cardH = height * .205; const startY = height * .34;
+  canvas.backgroundColor = '#f3f1e8';
+  const headerH = height * .18;
+  const footerH = height * .075;
+  const header = new Rect({ left: 0, top: 0, width, height: headerH, fill: '#224b35', selectable: false, dataRole: 'template-bg', displayName: 'Kopfbereich' });
+  const accent = new Rect({ left: 0, top: headerH, width, height: height * .035, fill: '#e32636', selectable: false, dataRole: 'template-bg', displayName: 'Akzentlinie' });
+  const footer = new Rect({ left: 0, top: height - footerH, width, height: footerH, fill: '#3564ad', selectable: false, dataRole: 'template-bg', displayName: 'Fußbereich' });
+  const heroText = makeText('FRISCHE ANGEBOTE', { left: width * .055, top: height * .045, fontSize: width / 14, fill: '#ffffff', displayName: 'Kopfzeile' });
+  const address = makeText('Musterstraße 12 · 70173 Stuttgart', { left: width * .055, top: height * .125, fontSize: width / 32, fill: '#d9f3de', displayName: 'Adresse' });
+  canvas.add(header, accent, footer, heroText, address);
+
+  const cols = 3;
+  const rows = 3;
+  const gapX = width * .022;
+  const gapY = height * .018;
+  const startY = headerH + height * .065;
+  const usableH = height - startY - footerH - height * .025;
+  const cardW = (width - gapX * 4) / cols;
+  const cardH = (usableH - gapY * (rows - 1)) / rows;
   let index = 1;
-  for (let row = 0; row < rows; row += 1) for (let col = 0; col < cols; col += 1) {
-    addProductCard(canvas, gap + col * (cardW + gap), startY + row * (cardH + gap * .75), cardW, cardH, index, '#ff5a24'); index += 1;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      addProductCard(canvas, gapX + col * (cardW + gapX), startY + row * (cardH + gapY), cardW, cardH, index, '#ff5a24');
+      index += 1;
+    }
   }
   canvas.renderAll();
 }
 
 function addFreshGridTemplate(canvas, width, height) {
   canvas.clear();
-  canvas.backgroundColor = '#1e7a3f';
-  const hero = new Rect({ left: 0, top: 0, width, height: height * .31, fill: '#252525', dataRole: 'hero-slot', displayName: 'Kopfbild' });
-  const logo = makeText('THE\nFRESH\nMARKET', { left: width * .07, top: height * .04, fontSize: width / 16, textAlign: 'center', fill: '#ffffff', backgroundColor: '#4c913f', displayName: 'Logo' });
-  const headline = makeText('ANGEBOT DER WOCHE', { left: width * .42, top: height * .1, fontSize: width / 15, fill: '#ffffff', displayName: 'Kopfzeile' });
-  const ribbon = new Rect({ left: -width * .06, top: height * .28, width: width * 1.15, height: height * .1, fill: '#e52b38', angle: 4, selectable: false, dataRole: 'template-bg' });
-  canvas.add(hero, logo, headline, ribbon);
-  const cols = 3; const rows = 3; const gap = width * .025; const cardW = (width - gap * 4) / cols; const cardH = height * .19; const startY = height * .39;
+  canvas.backgroundColor = '#237a43';
+  const headerH = height * .2;
+  const footerH = height * .055;
+  const header = new Rect({ left: 0, top: 0, width, height: headerH, fill: '#252525', selectable: false, dataRole: 'template-bg', displayName: 'Kopfbereich' });
+  const accent = new Rect({ left: 0, top: headerH, width, height: height * .035, fill: '#e52b38', selectable: false, dataRole: 'template-bg', displayName: 'Akzentlinie' });
+  const footer = new Rect({ left: 0, top: height - footerH, width, height: footerH, fill: '#165f34', selectable: false, dataRole: 'template-bg', displayName: 'Fußbereich' });
+  const logoBox = new Rect({ left: width * .045, top: height * .025, width: width * .22, height: height * .145, fill: '#4c913f', rx: 12, ry: 12, displayName: 'Logo-Hintergrund' });
+  const logo = makeText('THE\nFRESH\nMARKET', { left: width * .155, top: height * .097, originX: 'center', originY: 'center', fontSize: width / 21, textAlign: 'center', fill: '#ffffff', displayName: 'Logo' });
+  const headline = makeText('ANGEBOT DER WOCHE', { left: width * .32, top: height * .073, fontSize: width / 18, fill: '#ffffff', displayName: 'Kopfzeile' });
+  canvas.add(header, accent, footer, logoBox, logo, headline);
+
+  const cols = 3;
+  const rows = 3;
+  const gapX = width * .022;
+  const gapY = height * .018;
+  const startY = headerH + height * .065;
+  const usableH = height - startY - footerH - height * .02;
+  const cardW = (width - gapX * 4) / cols;
+  const cardH = (usableH - gapY * (rows - 1)) / rows;
   let index = 1;
-  for (let row = 0; row < rows; row += 1) for (let col = 0; col < cols; col += 1) {
-    addProductCard(canvas, gap + col * (cardW + gap), startY + row * (cardH + gap * .75), cardW, cardH, index, '#ff5a24'); index += 1;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      addProductCard(canvas, gapX + col * (cardW + gapX), startY + row * (cardH + gapY), cardW, cardH, index, '#ff5a24');
+      index += 1;
+    }
   }
   canvas.renderAll();
 }
@@ -190,6 +250,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const restoringRef = useRef(false);
   const productInputRef = useRef(null);
   const clipboardRef = useRef(null);
+  const lastCanvasSizeRef = useRef(null);
 
   const [formatKey, setFormatKey] = useState(project?.data?.format || 'post');
   const [projectId, setProjectId] = useState(project?.id || '');
@@ -312,6 +373,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       selectionColor: 'rgba(99,199,255,.16)'
     });
     fabricRef.current = canvas;
+    lastCanvasSizeRef.current = [format.canvas[0], format.canvas[1]];
 
     const onSelection = () => syncSelected(canvas.getActiveObject());
     const onChanged = () => { syncSelected(canvas.getActiveObject()); snapshot(); };
@@ -357,8 +419,29 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   useEffect(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    canvas.setDimensions({ width: format.canvas[0], height: format.canvas[1] });
+    const [nextWidth, nextHeight] = format.canvas;
+    const previous = lastCanvasSizeRef.current || [canvas.width, canvas.height];
+    const [previousWidth, previousHeight] = previous;
+
+    if (previousWidth && previousHeight && (previousWidth !== nextWidth || previousHeight !== nextHeight)) {
+      const scaleX = nextWidth / previousWidth;
+      const scaleY = nextHeight / previousHeight;
+      const uniformScale = Math.min(scaleX, scaleY);
+      canvas.getObjects().forEach((object) => {
+        object.set({
+          left: Number(object.left || 0) * scaleX,
+          top: Number(object.top || 0) * scaleY,
+          scaleX: Number(object.scaleX || 1) * uniformScale,
+          scaleY: Number(object.scaleY || 1) * uniformScale
+        });
+        object.setCoords();
+      });
+    }
+
+    canvas.setDimensions({ width: nextWidth, height: nextHeight });
+    lastCanvasSizeRef.current = [nextWidth, nextHeight];
     canvas.requestRenderAll();
+    snapshot();
   }, [format]);
 
   function addText() {
@@ -701,7 +784,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         method: 'POST',
         body: JSON.stringify({ prompt: aiPrompt, aspect: formatKey, style: imageStyle })
       });
-      setLocalMotifUrl(result.imageDataUrl);
+      const imageSource = result?.imageDataUrl || result?.imageUrl;
+      if (!imageSource) throw new Error('Der Bilddienst hat keine Bilddatei geliefert.');
+      setLocalMotifUrl(imageSource);
       setStatus(`KI-Bild erstellt · ${result.provider || 'Bildmodell'}`);
     } catch (error) {
       setStatus(error.message);

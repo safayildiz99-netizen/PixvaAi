@@ -16,73 +16,62 @@ const publicSizes = {
 
 function buildPrompt(prompt, style) {
   const clean = String(prompt || '').trim();
-  const shared = 'photorealistic, realistic photography, natural materials, believable lighting, high detail, sharp focus, premium advertising quality, not a painting, not an illustration, not cartoon, no fake plastic look, no text overlay unless explicitly requested';
+  const base = [
+    'photorealistic',
+    'realistic photography',
+    'natural believable lighting',
+    'real materials and textures',
+    'sharp subject',
+    'high detail',
+    'premium commercial quality',
+    'not a painting',
+    'not an illustration',
+    'not cartoon',
+    'no fake plastic look',
+    'no text overlay unless explicitly requested'
+  ].join(', ');
   const styles = {
-    realistic: `${shared}, natural editorial composition`,
-    product: `${shared}, professional studio product photography, commercial catalog quality, clean controlled shadows`,
-    poster: `${shared}, cinematic advertising composition, strong visual hierarchy, clear negative space for later typography`,
-    studio: `${shared}, premium studio lighting, elegant backdrop, realistic reflections and shadows`
+    realistic: `${base}, natural editorial composition`,
+    product: `${base}, professional product photography, clean studio setup, controlled shadows, advertising catalog quality`,
+    poster: `${base}, cinematic advertising composition, strong visual hierarchy, useful negative space for later typography`,
+    studio: `${base}, premium studio lighting, elegant backdrop, realistic reflections and shadows`
   };
   return `${styles[style] || styles.realistic}. ${clean}`.trim();
 }
 
-function findImageBlock(value, seen = new Set()) {
-  if (!value || typeof value !== 'object' || seen.has(value)) return null;
-  seen.add(value);
-
-  const inline = value.inlineData || value.inline_data;
-  if (inline?.data) {
-    return {
-      data: inline.data,
-      mimeType: inline.mimeType || inline.mime_type || 'image/png'
-    };
-  }
-
-  if (typeof value.data === 'string' && value.data.length > 500) {
-    const mime = value.mimeType || value.mime_type || value.media_type || value.mime || '';
-    const type = value.type || value.kind || '';
-    if (/image/i.test(mime) || /image/i.test(type)) {
-      return { data: value.data, mimeType: mime || 'image/png' };
+function extractImage(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  for (const part of parts) {
+    const inline = part?.inlineData || part?.inline_data;
+    if (inline?.data) {
+      return {
+        data: inline.data,
+        mimeType: inline.mimeType || inline.mime_type || 'image/png'
+      };
     }
   }
 
-  for (const child of Object.values(value)) {
-    const found = findImageBlock(child, seen);
-    if (found) return found;
+  const visited = new Set();
+  function walk(value) {
+    if (!value || typeof value !== 'object' || visited.has(value)) return null;
+    visited.add(value);
+    const inline = value.inlineData || value.inline_data;
+    if (inline?.data) {
+      return {
+        data: inline.data,
+        mimeType: inline.mimeType || inline.mime_type || 'image/png'
+      };
+    }
+    for (const child of Object.values(value)) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
   }
-  return null;
+  return walk(data);
 }
 
-async function callInteractions({ apiKey, model, prompt, aspect }) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55000);
-  try {
-    const response = await fetch('https://generativelanguage.googleapis.com/v1/interactions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({
-        model,
-        input: [{ type: 'text', text: prompt }],
-        response_format: {
-          type: 'image',
-          mime_type: 'image/png',
-          aspect_ratio: aspectMap[aspect] || '4:5',
-          image_size: '1K'
-        }
-      })
-    });
-    const data = await response.json().catch(() => ({}));
-    return { response, data };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function callGenerateContent({ apiKey, model, prompt, aspect }) {
+async function requestGeminiImage({ apiKey, model, prompt, aspect }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 55000);
   try {
@@ -117,7 +106,7 @@ async function callGenerateContent({ apiKey, model, prompt, aspect }) {
 }
 
 async function tryGemini({ apiKey, prompt, aspect }) {
-  if (!apiKey) return { image: null, errors: ['GEMINI_API_KEY fehlt.'] };
+  if (!apiKey) return null;
 
   const models = [...new Set([
     String(process.env.GEMINI_IMAGE_MODEL || '').trim(),
@@ -125,90 +114,95 @@ async function tryGemini({ apiKey, prompt, aspect }) {
     'gemini-3.1-flash-lite-image',
     'gemini-2.5-flash-image'
   ].filter(Boolean))];
-  const errors = [];
 
   for (const model of models) {
-    for (const caller of [callInteractions, callGenerateContent]) {
-      try {
-        const { response, data } = await caller({ apiKey, model, prompt, aspect });
-        if (!response.ok) {
-          errors.push(`${model}/${caller.name}: ${response.status} ${data?.error?.message || 'keine Bildausgabe'}`);
-          continue;
-        }
-        const found = findImageBlock(data);
-        if (!found) {
-          errors.push(`${model}/${caller.name}: Antwort enthielt kein Bild.`);
-          continue;
-        }
-        return {
-          image: {
-            imageDataUrl: `data:${found.mimeType};base64,${found.data}`,
-            provider: model,
-            fallback: false
-          },
-          errors
-        };
-      } catch (error) {
-        errors.push(`${model}/${caller.name}: ${error?.name === 'AbortError' ? 'Zeitüberschreitung' : error?.message || 'Fehler'}`);
+    try {
+      const { response, data } = await requestGeminiImage({ apiKey, model, prompt, aspect });
+      if (!response.ok) {
+        console.warn('Gemini image model failed', model, response.status, data?.error?.message || '');
+        continue;
       }
+      const image = extractImage(data);
+      if (!image) continue;
+      return {
+        imageDataUrl: `data:${image.mimeType};base64,${image.data}`,
+        provider: model,
+        fallback: false
+      };
+    } catch (error) {
+      console.warn('Gemini image request failed', model, error?.message || error);
     }
   }
-  return { image: null, errors };
+  return null;
 }
 
-async function tryPublicImage(prompt, aspect) {
+function makePublicImageUrl(prompt, aspect) {
   const size = publicSizes[aspect] || publicSizes.post;
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${size.width}&height=${size.height}&model=flux&nologo=true&enhance=true&safe=true&seed=${Math.floor(Math.random() * 1000000)}`;
+  const seed = Math.floor(Math.random() * 1_000_000_000);
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${size.width}&height=${size.height}&model=flux&nologo=true&enhance=true&safe=true&seed=${seed}`;
+}
+
+async function tryPublicProxy(url) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 35000);
+  const timeout = setTimeout(() => controller.abort(), 28000);
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Yildiz-AI-Studio/5.0' }
+      headers: { 'User-Agent': 'Yildiz-AI-Studio/6.0' }
     });
     if (!response.ok) return null;
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.toLowerCase().startsWith('image/')) return null;
     const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length < 1000) return null;
     return {
       imageDataUrl: `data:${contentType};base64,${buffer.toString('base64')}`,
-      provider: 'public-image-fallback',
+      provider: 'public-image-proxy',
       fallback: false
     };
+  } catch (error) {
+    console.warn('Public image proxy failed', error?.message || error);
+    return null;
   } finally {
     clearTimeout(timeout);
   }
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return send(res, 405, { error: 'Nur POST-Anfragen sind erlaubt.' });
+  if (req.method !== 'POST') {
+    return send(res, 405, { error: 'Nur POST-Anfragen sind erlaubt.' });
+  }
 
   try {
     const body = await readJson(req);
     const prompt = String(body?.prompt || '').trim().slice(0, 1800);
-    const aspect = String(body?.aspect || 'post');
+    const aspect = Object.hasOwn(aspectMap, body?.aspect) ? String(body.aspect) : 'post';
     const style = String(body?.style || 'realistic');
+
     if (!prompt) return send(res, 400, { error: 'Bitte gib einen Bild-Prompt ein.' });
 
     const finalPrompt = buildPrompt(prompt, style);
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-    const result = await tryGemini({ apiKey, prompt: finalPrompt, aspect });
-    if (result.image) return send(res, 200, result.image);
 
-    try {
-      const publicImage = await tryPublicImage(finalPrompt, aspect);
-      if (publicImage) return send(res, 200, publicImage);
-    } catch (error) {
-      result.errors.push(`Öffentliche Ersatz-API: ${error?.message || 'nicht erreichbar'}`);
-    }
+    const geminiImage = await tryGemini({ apiKey, prompt: finalPrompt, aspect });
+    if (geminiImage) return send(res, 200, geminiImage);
 
-    console.error('Image generation failed:', result.errors);
-    return send(res, 503, {
-      error: 'Es konnte momentan kein echtes Bild erzeugt werden. Yildiz AI erstellt absichtlich kein Farb-/Text-Ersatzbild. Bitte versuche es später erneut oder lade ein eigenes Bild hoch.',
-      technical: result.errors.slice(-5)
+    const publicUrl = makePublicImageUrl(finalPrompt, aspect);
+    const proxiedImage = await tryPublicProxy(publicUrl);
+    if (proxiedImage) return send(res, 200, proxiedImage);
+
+    // Let the browser load the public image directly. This avoids a hard error when
+    // the Vercel function cannot reach the public image host although the browser can.
+    return send(res, 200, {
+      imageUrl: publicUrl,
+      provider: 'public-image-direct',
+      fallback: false,
+      remote: true
     });
   } catch (error) {
-    console.error('image generation failed', error);
-    return send(res, 500, { error: error?.message || 'Die Bildgenerierung ist fehlgeschlagen.' });
+    console.error('Image generation failed', error);
+    return send(res, 500, {
+      error: 'Die Bildgenerierung konnte nicht gestartet werden. Bitte prüfe den Gemini-Key oder versuche es erneut.'
+    });
   }
 }
