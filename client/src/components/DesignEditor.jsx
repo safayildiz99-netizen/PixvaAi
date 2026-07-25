@@ -170,25 +170,25 @@ async function addReferenceTemplate(canvas, type, width, height) {
 function addWaveBackground(canvas, width, height, palette = 'atlas') {
   if (palette === 'fresh') {
     canvas.backgroundColor = '#2b7b43';
-    const dark = new Rect({ left: 0, top: 0, width, height: height * .27, fill: '#292929', selectable: false, evented: false, dataRole: 'template-bg' });
+    const dark = new Rect({ left: 0, top: 0, width, height: height * .34, fill: '#292929', dataRole: 'template-bg:dark', displayName: 'Dunkler Kopfbereich' });
     const redWave = new FabricPath(
-      `M 0 ${height*.29} C ${width*.25} ${height*.26}, ${width*.62} ${height*.28}, ${width} ${height*.39} L ${width} ${height*.49} C ${width*.7} ${height*.42}, ${width*.3} ${height*.36}, 0 ${height*.42} Z`,
-      { fill: '#e52b38', selectable: false, evented: false, dataRole: 'template-bg', displayName: 'Roter Pinselstrich' }
+      `M 0 ${height*.315} C ${width*.22} ${height*.25}, ${width*.58} ${height*.28}, ${width} ${height*.38} L ${width} ${height*.455} C ${width*.72} ${height*.405}, ${width*.36} ${height*.36}, 0 ${height*.425} Z`,
+      { fill: '#e52b38', dataRole: 'template-bg:red-wave', displayName: 'Roter Pinselstrich' }
     );
     const greenWave = new FabricPath(
-      `M 0 ${height*.43} C ${width*.32} ${height*.35}, ${width*.68} ${height*.4}, ${width} ${height*.47} L ${width} ${height} L 0 ${height} Z`,
-      { fill: '#247640', selectable: false, evented: false, dataRole: 'template-bg', displayName: 'Grüner Pinselstrich' }
+      `M 0 ${height*.40} C ${width*.28} ${height*.34}, ${width*.64} ${height*.37}, ${width} ${height*.445} L ${width} ${height} L 0 ${height} Z`,
+      { fill: '#247640', dataRole: 'template-bg:green-wave', displayName: 'Grüner Pinselstrich' }
     );
     canvas.add(dark, redWave, greenWave);
   } else {
     canvas.backgroundColor = '#f2efe5';
     const redWave = new FabricPath(
       `M 0 ${height*.31} C ${width*.24} ${height*.24}, ${width*.68} ${height*.27}, ${width} ${height*.38} L ${width} ${height*.67} C ${width*.72} ${height*.6}, ${width*.32} ${height*.58}, 0 ${height*.66} Z`,
-      { fill: '#e61e2b', selectable: false, evented: false, dataRole: 'template-bg', displayName: 'Roter Pinselstrich' }
+      { fill: '#e61e2b', dataRole: 'template-bg:red-wave', displayName: 'Roter Pinselstrich' }
     );
     const blueWave = new FabricPath(
       `M 0 ${height*.67} C ${width*.28} ${height*.58}, ${width*.68} ${height*.65}, ${width} ${height*.73} L ${width} ${height} L 0 ${height} Z`,
-      { fill: '#3564ad', selectable: false, evented: false, dataRole: 'template-bg', displayName: 'Blauer Pinselstrich' }
+      { fill: '#3564ad', dataRole: 'template-bg:blue-wave', displayName: 'Blauer Pinselstrich' }
     );
     canvas.add(redWave, blueWave);
   }
@@ -200,7 +200,7 @@ function addProductCard(canvas, x, y, cardW, cardH, index, accent) {
   const card = new Rect({
     left: x, top: y, width: cardW, height: cardH,
     fill: '#ffffff', rx: 14, ry: 14, stroke: '#d7d7d7', strokeWidth: 1,
-    selectable: false, dataRole: `card:${index}`, displayName: `Produktkarte ${index}`
+    dataRole: `card:${index}`, displayName: `Produktkarte ${index}`
   });
   const title = new Textbox('PRODUKTNAME', {
     left: x + inner, top: y + cardH * .045, width: cardW - inner * 2,
@@ -216,7 +216,7 @@ function addProductCard(canvas, x, y, cardW, cardH, index, accent) {
   const hint = makeText('BILD HIER\nABLEGEN', {
     left: x + cardW / 2, top: y + cardH * .465, originX: 'center', originY: 'center',
     textAlign: 'center', fontSize: Math.max(10, cardW / 16), fill: '#9a9a9a',
-    selectable: false, evented: false, dataRole: `product-slot-label:${index}`,
+    dataRole: `product-slot-label:${index}`,
     displayName: `Bildhinweis ${index}`
   });
   const badgeW = cardW * .42;
@@ -240,55 +240,55 @@ function addProductCard(canvas, x, y, cardW, cardH, index, accent) {
 function addAtlasGridTemplate(canvas, width, height) {
   canvas.clear();
   addWaveBackground(canvas, width, height, 'atlas');
-  const headerH = height * .20;
-  const footerH = height * .06;
-  const heroText = makeText('FRISCHE ANGEBOTE', { left: width * .055, top: height * .035, fontSize: width / 14, fill: '#234a35', displayName: 'Kopfzeile' });
-  const address = makeText('Musterstraße 12 · 70173 Stuttgart', { left: width * .055, top: height * .115, fontSize: width / 32, fill: '#234a35', displayName: 'Adresse' });
-  canvas.add(heroText, address);
+  const heroSlot = new Rect({ left: width * .39, top: height * .025, width: width * .56, height: height * .25, fill: '#efe9dc', stroke: '#c6bfb1', strokeDashArray: [8,6], dataRole: 'hero-slot:1', displayName: 'Kopfbild' });
+  const heroHint = makeText('KOPFBILD', { left: width * .67, top: height * .15, originX: 'center', originY: 'center', fontSize: width / 26, fill: '#8f887c', dataRole: 'hero-slot-label:1', displayName: 'Kopfbild-Hinweis' });
+  const logoPanel = new Rect({ left: width * .045, top: height * .025, width: width * .28, height: height * .17, fill: '#ffffff', stroke: '#d7d0c5', dataRole: 'logo-panel', displayName: 'Logo-Fläche' });
+  const logoSlot = new Rect({ left: width * .075, top: height * .05, width: width * .22, height: height * .105, fill: '#f7f4ed', stroke: '#3564ad', strokeDashArray: [6,5], dataRole: 'logo-slot:1', displayName: 'Logo-Platzhalter' });
+  const logoHint = makeText('LOGO', { left: width * .185, top: height * .102, originX: 'center', originY: 'center', fontSize: width / 28, fill: '#3564ad', dataRole: 'logo-slot-label:1', displayName: 'Logo-Hinweis' });
+  const heroText = makeText('FRISCHE ANGEBOTE', { left: width * .055, top: height * .21, fontSize: width / 17, fill: '#234a35', displayName: 'Kopfzeile' });
+  const address = makeText('Musterstraße 12 · 70173 Stuttgart', { left: width * .055, top: height * .275, fontSize: width / 34, fill: '#234a35', displayName: 'Adresse' });
+  canvas.add(heroSlot, heroHint, logoPanel, logoSlot, logoHint, heroText, address);
 
-  const cols = 3;
-  const rows = 3;
-  const gapX = width * .022;
-  const gapY = height * .018;
-  const startY = height * .365;
-  const usableH = height - startY - footerH - height * .025;
+  const cols = 3, rows = 3;
+  const gapX = width * .022, gapY = height * .015;
+  const startY = height * .39;
+  const usableH = height - startY - height * .06;
   const cardW = (width - gapX * 4) / cols;
   const cardH = (usableH - gapY * (rows - 1)) / rows;
   let index = 1;
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      addProductCard(canvas, gapX + col * (cardW + gapX), startY + row * (cardH + gapY), cardW, cardH, index, '#ff5a24');
-      index += 1;
-    }
+  for (let row = 0; row < rows; row += 1) for (let col = 0; col < cols; col += 1) {
+    addProductCard(canvas, gapX + col * (cardW + gapX), startY + row * (cardH + gapY), cardW, cardH, index++, '#ff5a24');
   }
+  canvas.add(makeText('Copyright · Dein Markt', { left: width * .67, top: height * .965, fontSize: width / 45, fill: '#ffffff', displayName: 'Copyright' }));
   canvas.renderAll();
 }
 
 function addFreshGridTemplate(canvas, width, height) {
   canvas.clear();
   addWaveBackground(canvas, width, height, 'fresh');
-  const headerH = height * .24;
-  const footerH = height * .045;
-  const logoBox = new Rect({ left: width * .045, top: height * .025, width: width * .22, height: height * .15, fill: '#4c913f', rx: 12, ry: 12, displayName: 'Logo-Hintergrund' });
-  const logo = makeText('THE\nFRESH\nMARKET', { left: width * .155, top: height * .10, originX: 'center', originY: 'center', fontSize: width / 21, textAlign: 'center', fill: '#ffffff', displayName: 'Logo' });
-  const headline = makeText('ANGEBOT DER WOCHE', { left: width * .32, top: height * .075, fontSize: width / 18, fill: '#ffffff', displayName: 'Kopfzeile' });
-  canvas.add(logoBox, logo, headline);
 
-  const cols = 3;
-  const rows = 3;
-  const gapX = width * .022;
-  const gapY = height * .018;
-  const startY = height * .365;
-  const usableH = height - startY - footerH - height * .02;
+  const heroSlot = new Rect({ left: width * .34, top: height * .015, width: width * .63, height: height * .29, fill: '#333333', stroke: '#7a7a7a', strokeDashArray: [8,6], dataRole: 'hero-slot:1', displayName: 'Fleisch-Kopfbild' });
+  const heroHint = makeText('KOPFBILD HIER ABLEGEN', { left: width * .655, top: height * .16, originX: 'center', originY: 'center', fontSize: width / 30, fill: '#d5d5d5', dataRole: 'hero-slot-label:1', displayName: 'Kopfbild-Hinweis' });
+  const logoPanel = new Rect({ left: width * .04, top: height * .015, width: width * .29, height: height * .18, fill: '#ffffff', stroke: '#e3e3e3', dataRole: 'logo-panel', displayName: 'Weiße Logo-Fläche' });
+  const logoSlot = new Rect({ left: width * .075, top: height * .04, width: width * .22, height: height * .115, fill: '#f6f6f6', stroke: '#4c913f', strokeDashArray: [6,5], dataRole: 'logo-slot:1', displayName: 'Logo-Platzhalter' });
+  const logoHint = makeText('DEIN LOGO', { left: width * .185, top: height * .098, originX: 'center', originY: 'center', fontSize: width / 28, fill: '#4c913f', dataRole: 'logo-slot-label:1', displayName: 'Logo-Hinweis' });
+  const address = new Textbox('langwiesenweg\n30/34', { left: width * .055, top: height * .205, width: width * .26, fontFamily: 'Arial', fontStyle: 'italic', fontWeight: 800, fontSize: width / 24, lineHeight: 1.05, textAlign: 'center', fill: '#4c913f', dataRole: 'address', displayName: 'Adresse' });
+  const music = makeText('music time', { left: width * .08, top: height * .31, fontStyle: 'italic', fontSize: width / 22, fill: '#4c913f', dataRole: 'headline', displayName: 'Aktionszeile' });
+  canvas.add(heroSlot, heroHint, logoPanel, logoSlot, logoHint, address, music);
+
+  const cols = 3, rows = 3;
+  const gapX = width * .018, gapY = height * .012;
+  const startY = height * .405;
+  const usableH = height - startY - height * .055;
   const cardW = (width - gapX * 4) / cols;
   const cardH = (usableH - gapY * (rows - 1)) / rows;
   let index = 1;
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      addProductCard(canvas, gapX + col * (cardW + gapX), startY + row * (cardH + gapY), cardW, cardH, index, '#ff5a24');
-      index += 1;
-    }
+  for (let row = 0; row < rows; row += 1) for (let col = 0; col < cols; col += 1) {
+    addProductCard(canvas, gapX + col * (cardW + gapX), startY + row * (cardH + gapY), cardW, cardH, index++, '#ff5a24');
   }
+  const cart = makeText('🛒', { left: width * .045, top: height * .955, fontSize: width / 25, fill: '#ffffff', displayName: 'Warenkorb-Symbol' });
+  const copyright = makeText('Copyright · Dein Markt', { left: width * .67, top: height * .965, fontSize: width / 45, fill: '#ffffff', displayName: 'Copyright' });
+  canvas.add(cart, copyright);
   canvas.renderAll();
 }
 
@@ -374,6 +374,8 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const historyIndexRef = useRef(-1);
   const restoringRef = useRef(false);
   const productInputRef = useRef(null);
+  const logoInputRef = useRef(null);
+  const heroInputRef = useRef(null);
   const clipboardRef = useRef(null);
   const lastCanvasSizeRef = useRef(null);
   const baseTemplateRef = useRef(null);
@@ -394,7 +396,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const [zoom, setZoom] = useState(82);
   const [dragActive, setDragActive] = useState(false);
   const [adjustments, setAdjustments] = useState({ brightness: 0, contrast: 0, saturation: 0 });
-  const [templateVariant, setTemplateVariant] = useState('reference');
+  const [templateVariant, setTemplateVariant] = useState('editable');
   const [externalExportMode, setExternalExportMode] = useState('edited');
 
   const format = useMemo(() => formats[formatKey], [formatKey]);
@@ -627,43 +629,64 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     return image;
   }
 
-  async function replaceProductImage(fileOrUrl) {
+  async function replaceSlotImage(fileOrUrl, kind = 'product') {
     const canvas = fabricRef.current;
     const active = canvas.getActiveObject();
     const activeRole = String(active?.dataRole || '');
-    const activeId = activeRole.includes(':') ? activeRole.split(':')[1] : '';
-    const slot = activeRole.startsWith('product-slot:')
+    const slotPrefix = `${kind}-slot:`;
+    const imagePrefix = `${kind}-image:`;
+    const labelPrefix = `${kind}-slot-label:`;
+    const activeId = activeRole.includes(':') ? activeRole.split(':')[1] : '1';
+    const slot = activeRole.startsWith(slotPrefix)
       ? active
-      : canvas.getObjects().find((object) => String(object.dataRole || '') === `product-slot:${activeId}`)
-        || canvas.getObjects().find((object) => String(object.dataRole || '').startsWith('product-slot:'));
+      : canvas.getObjects().find((object) => String(object.dataRole || '') === `${slotPrefix}${activeId}`)
+        || canvas.getObjects().find((object) => String(object.dataRole || '').startsWith(slotPrefix));
     const slotId = String(slot?.dataRole || '').split(':')[1] || activeId || '1';
-    const label = canvas.getObjects().find((object) => String(object.dataRole || '') === `product-slot-label:${slotId}`);
-    const existing = activeRole.startsWith('product-image:')
+    const label = canvas.getObjects().find((object) => String(object.dataRole || '') === `${labelPrefix}${slotId}`);
+    const existing = activeRole.startsWith(imagePrefix)
       ? active
-      : canvas.getObjects().find((object) => String(object.dataRole || '') === `product-image:${slotId}`);
+      : canvas.getObjects().find((object) => String(object.dataRole || '') === `${imagePrefix}${slotId}`);
     const url = typeof fileOrUrl === 'string' ? fileOrUrl : await fileToDataUrl(fileOrUrl);
     const image = await createFabricImage(url);
-    const targetWidth = slot ? slot.getScaledWidth() * .92 : existing ? existing.getScaledWidth() : canvas.width * .45;
-    const targetHeight = slot ? slot.getScaledHeight() * .92 : existing ? existing.getScaledHeight() : canvas.height * .35;
-    image.scale(Math.min(targetWidth / image.width, targetHeight / image.height));
+    const targetWidth = slot ? slot.getScaledWidth() * (kind === 'hero' ? 1 : .92) : existing ? existing.getScaledWidth() : canvas.width * .45;
+    const targetHeight = slot ? slot.getScaledHeight() * (kind === 'hero' ? 1 : .92) : existing ? existing.getScaledHeight() : canvas.height * .35;
+    if (kind === 'hero') {
+      image.set({ scaleX: targetWidth / Math.max(1, image.width), scaleY: targetHeight / Math.max(1, image.height) });
+    } else {
+      image.scale(Math.min(targetWidth / Math.max(1, image.width), targetHeight / Math.max(1, image.height)));
+    }
     image.set({
-      left: slot ? slot.left + slot.getScaledWidth() / 2 : existing?.left ?? canvas.width / 2,
-      top: slot ? slot.top + slot.getScaledHeight() / 2 : existing?.top ?? canvas.height / 2,
-      originX: 'center', originY: 'center', dataRole: `product-image:${slotId}`, displayName: `Produktbild ${slotId}`
+      left: slot ? Number(slot.left || 0) + slot.getScaledWidth() / 2 : existing?.left ?? canvas.width / 2,
+      top: slot ? Number(slot.top || 0) + slot.getScaledHeight() / 2 : existing?.top ?? canvas.height / 2,
+      originX: 'center', originY: 'center',
+      dataRole: `${imagePrefix}${slotId}`,
+      displayName: kind === 'logo' ? 'Logo' : kind === 'hero' ? 'Kopfbild' : `Produktbild ${slotId}`
     });
+    const targetIndex = slot ? canvas.getObjects().indexOf(slot) : existing ? canvas.getObjects().indexOf(existing) : canvas.getObjects().length;
     if (slot) canvas.remove(slot);
     if (label) canvas.remove(label);
     if (existing) canvas.remove(existing);
-    canvas.add(image); canvas.setActiveObject(image); canvas.requestRenderAll(); snapshot();
-    setStatus(`Produktbild ${slotId} wurde ersetzt. Cmd/Ctrl+C und Cmd/Ctrl+V funktionieren jetzt.`);
+    if (typeof canvas.insertAt === 'function') canvas.insertAt(Math.max(0, targetIndex), image);
+    else canvas.add(image);
+    canvas.setActiveObject(image);
+    canvas.requestRenderAll();
+    snapshot();
+    setStatus(`${image.displayName} ersetzt. Das Bild kann jetzt frei verschoben, skaliert, gedreht und kopiert werden.`);
   }
+
+  const replaceProductImage = (fileOrUrl) => replaceSlotImage(fileOrUrl, 'product');
+  const replaceLogoImage = (fileOrUrl) => replaceSlotImage(fileOrUrl, 'logo');
+  const replaceHeroImage = (fileOrUrl) => replaceSlotImage(fileOrUrl, 'hero');
 
   async function uploadImage(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const url = await fileToDataUrl(file);
-      await addImageUrl(url, { displayName: file.name });
+      const role = String(fabricRef.current?.getActiveObject()?.dataRole || '');
+      if (role.startsWith('product-slot:') || role.startsWith('product-image:')) await replaceProductImage(file);
+      else if (role.startsWith('logo-slot:') || role.startsWith('logo-image:')) await replaceLogoImage(file);
+      else if (role.startsWith('hero-slot:') || role.startsWith('hero-image:')) await replaceHeroImage(file);
+      else await addImageUrl(await fileToDataUrl(file), { displayName: file.name });
     } catch (error) {
       setStatus(error.message);
     }
@@ -674,6 +697,20 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     const file = event.target.files?.[0];
     if (!file) return;
     try { await replaceProductImage(file); } catch (error) { setStatus(error.message); }
+    event.target.value = '';
+  }
+
+  async function uploadLogo(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try { await replaceLogoImage(file); } catch (error) { setStatus(error.message); }
+    event.target.value = '';
+  }
+
+  async function uploadHero(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try { await replaceHeroImage(file); } catch (error) { setStatus(error.message); }
     event.target.value = '';
   }
 
@@ -1022,7 +1059,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     try {
       const active = fabricRef.current.getActiveObject();
       const activeRole = String(active?.dataRole || '');
-      if (activeRole.startsWith('product-slot:') || activeRole.startsWith('product-image:') || fabricRef.current.getObjects().some((object) => String(object.dataRole || '').startsWith('product-slot:'))) await replaceProductImage(file);
+      if (activeRole.startsWith('product-slot:') || activeRole.startsWith('product-image:')) await replaceProductImage(file);
+      else if (activeRole.startsWith('logo-slot:') || activeRole.startsWith('logo-image:')) await replaceLogoImage(file);
+      else if (activeRole.startsWith('hero-slot:') || activeRole.startsWith('hero-image:')) await replaceHeroImage(file);
       else await addImageUrl(await fileToDataUrl(file), { displayName: file.name });
     } catch (error) {
       setStatus(error.message);
@@ -1035,7 +1074,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         <div className="panel-section">
           <label>Projektname<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
           <label>Format<select value={formatKey} onChange={(event) => setFormatKey(event.target.value)}>{Object.entries(formats).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-          <label>Vorlagenmodus<select value={templateVariant} onChange={(event) => setTemplateVariant(event.target.value)}><option value="reference">Original wie Vorschau</option><option value="editable">Voll bearbeitbar</option></select></label>
+          <label>Vorlagenmodus<select value={templateVariant} onChange={(event) => setTemplateVariant(event.target.value)}><option value="editable">Voll bearbeitbar (empfohlen)</option><option value="reference">Nur Originalbild – nicht alle Ebenen editierbar</option></select></label>
           <div className="template-gallery">
             <button onClick={() => applyTemplate('tea-single')}><img src="/templates/atlas-tee-single.jpg" alt="Einzelangebot"/><span>Einzelangebot</span></button>
             <button onClick={() => applyTemplate('atlas-grid')}><img src="/templates/atlas-grid.jpg" alt="Atlas Raster"/><span>Atlas 3×3</span></button>
@@ -1050,9 +1089,13 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           <button onClick={addText}><Type size={18}/>Text</button>
           <button onClick={addShape}><Square size={18}/>Form</button>
           <button onClick={addPrice}><Plus size={18}/>Preis</button>
-          <label className="tool-upload"><Upload size={18}/>Bild/Logo<input type="file" accept="image/*" onChange={uploadImage}/></label>
+          <label className="tool-upload"><Upload size={18}/>Bild hinzufügen<input type="file" accept="image/*" onChange={uploadImage}/></label>
           <button className="primary-btn" onClick={() => productInputRef.current?.click()}><ImagePlus size={18}/>Produkt ersetzen</button>
           <input ref={productInputRef} type="file" accept="image/*" hidden onChange={uploadProduct}/>
+          <button onClick={() => logoInputRef.current?.click()}><ImagePlus size={18}/>Logo ersetzen</button>
+          <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={uploadLogo}/>
+          <button onClick={() => heroInputRef.current?.click()}><ImagePlus size={18}/>Kopfbild ersetzen</button>
+          <input ref={heroInputRef} type="file" accept="image/*" hidden onChange={uploadHero}/>
           <button onClick={removeImageBackground} disabled={removingBackground}>{removingBackground ? <LoaderCircle className="spin" size={18}/> : <WandSparkles size={18}/>}Hintergrund weg</button>
           <button onClick={duplicateSelected}><Copy size={18}/>Duplizieren</button>
           <button onClick={removeSelected}><Trash2 size={18}/>Löschen</button>

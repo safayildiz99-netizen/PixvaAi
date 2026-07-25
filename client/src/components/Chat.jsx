@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Bot, Camera, Cloud, Download, FileText, ImagePlus, MessageSquarePlus, Paperclip, Search, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
+import { ArrowUp, Bot, Camera, Cloud, Download, Edit3, FileText, ImagePlus, MessageSquarePlus, Paperclip, Search, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
 import { api } from '../api.js';
 
 const quickPrompts = [
@@ -321,7 +321,7 @@ function hydrateMessages(messages) {
   });
 }
 
-export default function Chat() {
+export default function Chat({ onOpenVideoProject }) {
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [chatSessions, setChatSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState('');
@@ -551,15 +551,16 @@ export default function Chat() {
   async function generateVideoMessage(clean, sourceImages = []) {
     setStatus('Yildiz AI erstellt zuerst Szenenbilder und rendert dann das Video mit Musik …');
     const images = sourceImages.filter(Boolean).slice(0, 6);
+    const scenePrompts = [
+      `${clean}. Scene 1: strong opening shot, clearly visible real subjects and real environment, cinematic, photorealistic, vertical video frame, no text.`,
+      `${clean}. Scene 2: main action from a different camera angle, clearly visible subjects, dynamic movement, photorealistic, vertical video frame, no text.`,
+      `${clean}. Scene 3: detailed close-up or medium shot, realistic lighting, coherent characters and environment, vertical video frame, no text.`,
+      `${clean}. Scene 4: strong final hero shot, visually rich background, cinematic and photorealistic, vertical video frame, no text.`
+    ];
+
     if (!images.length) {
-      const scenePrompts = [
-        `${clean}. Scene 1: strong opening shot, clearly visible real subjects and real environment, cinematic, photorealistic, vertical video frame, no text.`,
-        `${clean}. Scene 2: main action from a different camera angle, clearly visible subjects, dynamic movement, photorealistic, vertical video frame, no text.`,
-        `${clean}. Scene 3: detailed close-up or medium shot, realistic lighting, coherent characters and environment, vertical video frame, no text.`,
-        `${clean}. Scene 4: strong final hero shot, visually rich background, cinematic and photorealistic, vertical video frame, no text.`
-      ];
       for (let index = 0; index < scenePrompts.length; index += 1) {
-        setStatus(`Yildiz AI erstellt echtes Szenenbild ${index + 1} von ${scenePrompts.length} …`);
+        setStatus(`Yildiz AI erstellt Szenenbild ${index + 1} von ${scenePrompts.length} …`);
         let result = null;
         try {
           result = await api('/api/ai/image', {
@@ -574,14 +575,58 @@ export default function Chat() {
         images.push(imageSource);
       }
     }
+
+    const editableScenes = images.map((imageUrl, index) => ({
+      id: crypto.randomUUID(),
+      title: index === 0 ? 'STARKE ERÖFFNUNG' : index === images.length - 1 ? 'JETZT ENTDECKEN' : `SZENE ${index + 1}`,
+      prompt: scenePrompts[index] || clean,
+      duration: 3,
+      imageUrl,
+      videoUrl: '',
+      fileName: `szene-${index + 1}.png`,
+      mediaType: 'image',
+      status: 'Aus dem Chat erzeugt',
+      transition: 'fade',
+      animation: index % 2 ? 'pan-right' : 'zoom',
+      textPosition: 'bottom',
+      textColor: '#ffffff',
+      accentColor: '#ffd400',
+      overlayOpacity: 0.72,
+      fontScale: 1,
+      fontFamily: 'Arial',
+      fontWeight: 800,
+      textAlign: 'left',
+      showText: true,
+      trimStart: 0,
+      mediaScale: 1,
+      mediaX: 0,
+      mediaY: 0,
+      mediaRotation: 0,
+      mediaOpacity: 1,
+      textX: 7,
+      textY: 76
+    }));
+
+    const videoProject = {
+      name: String(clean || 'Yildiz AI Video').slice(0, 64),
+      type: 'video',
+      data: { scenes: editableScenes, format: 'story', musicStyle: 'dynamic', musicVolume: .55 }
+    };
+
     setStatus('Bilder fertig. Video wird jetzt im Browser mit Übergängen und Musik gerendert …');
     const video = await renderGeneratedVideo(images, clean);
     setMessages((old) => [...old, {
       role: 'assistant',
-      content: `Hier ist dein Video mit automatisch erzeugten Szenenbildern, Bewegung und Hintergrundmusik. Format: ${video.ext.toUpperCase()}.`,
-      attachments: [{ kind: 'video', name: `yildiz-ai-video.${video.ext}`, previewUrl: video.url, blob: video.blob }]
+      content: `Hier ist dein Video. Die ${editableScenes.length} Szenen wurden zusätzlich als bearbeitbares Video-Projekt gespeichert.`,
+      attachments: [{
+        kind: 'video',
+        name: `yildiz-ai-video.${video.ext}`,
+        previewUrl: video.url,
+        blob: video.blob,
+        projectData: videoProject
+      }]
     }]);
-    setStatus(`Video erstellt · ${video.ext.toUpperCase()} · Musik automatisch hinzugefügt`);
+    setStatus(`Video erstellt · ${video.ext.toUpperCase()} · Im Video-Studio weiter bearbeitbar`);
   }
 
   async function sendMessage(text = input) {
@@ -687,6 +732,7 @@ export default function Chat() {
                     <div className="attachment-card video" key={`${item.name}-${i}`}>
                       {item.previewUrl ? <video src={item.previewUrl} controls playsInline /> : <div className="video-placeholder"><Video size={24}/></div>}
                       <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
+                      {item.projectData?.data?.scenes?.length > 0 && <button className="edit-video-project-btn" onClick={() => onOpenVideoProject?.(item.projectData)}><Edit3 size={15}/>Im Video-Studio bearbeiten</button>}
                     </div>
                   ) : (
                     <div className="attachment-card file" key={`${item.name}-${i}`}>

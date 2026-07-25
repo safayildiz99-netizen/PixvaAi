@@ -35,7 +35,14 @@ function newScene(index) {
     fontWeight: 800,
     textAlign: 'left',
     showText: true,
-    trimStart: 0
+    trimStart: 0,
+    mediaScale: 1,
+    mediaX: 0,
+    mediaY: 0,
+    mediaRotation: 0,
+    mediaOpacity: 1,
+    textX: 7,
+    textY: 76
   };
 }
 
@@ -74,22 +81,30 @@ function loadVideo(url) {
   });
 }
 
-function drawCover(ctx, source, width, height, progress = 0, animation = 'zoom') {
+function drawCover(ctx, source, width, height, progress = 0, animation = 'zoom', scene = {}) {
   const sourceWidth = source.videoWidth || source.naturalWidth || source.width;
   const sourceHeight = source.videoHeight || source.naturalHeight || source.height;
   if (!sourceWidth || !sourceHeight) return;
   const baseScale = Math.max(width / sourceWidth, height / sourceHeight);
-  let zoom = 1;
+  let animationZoom = 1;
   let driftX = 0;
   let driftY = 0;
-  if (animation === 'zoom') zoom = 1 + progress * .09;
-  if (animation === 'zoom-out') zoom = 1.09 - progress * .09;
+  if (animation === 'zoom') animationZoom = 1 + progress * .09;
+  if (animation === 'zoom-out') animationZoom = 1.09 - progress * .09;
   if (animation === 'pan-left') driftX = (0.5 - progress) * width * .12;
   if (animation === 'pan-right') driftX = (progress - 0.5) * width * .12;
   if (animation === 'pan-up') driftY = (0.5 - progress) * height * .1;
-  const drawWidth = sourceWidth * baseScale * zoom;
-  const drawHeight = sourceHeight * baseScale * zoom;
-  ctx.drawImage(source, (width - drawWidth) / 2 + driftX, (height - drawHeight) / 2 + driftY, drawWidth, drawHeight);
+  const manualScale = Math.max(.25, Number(scene.mediaScale || 1));
+  const drawWidth = sourceWidth * baseScale * animationZoom * manualScale;
+  const drawHeight = sourceHeight * baseScale * animationZoom * manualScale;
+  const manualX = Number(scene.mediaX || 0) / 100 * width;
+  const manualY = Number(scene.mediaY || 0) / 100 * height;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, Number(scene.mediaOpacity ?? 1)));
+  ctx.translate(width / 2 + driftX + manualX, height / 2 + driftY + manualY);
+  ctx.rotate(Number(scene.mediaRotation || 0) * Math.PI / 180);
+  ctx.drawImage(source, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  ctx.restore();
 }
 function drawEmpty(ctx, width, height, scene) {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
@@ -123,13 +138,14 @@ function drawOverlay(ctx, width, height, scene, index, localProgress) {
     ctx.fillRect(0, height * .42, width, height * .58);
   }
 
-  const baseY = isTop ? height * .1 : height * .78;
+  const baseY = Math.max(height * .04, Math.min(height * .90, height * (Number(scene.textY ?? (isTop ? 10 : 78)) / 100)));
   const scale = Number(scene.fontScale || 1);
   ctx.fillStyle = scene.accentColor || '#ffd400';
   const family = scene.fontFamily || 'Arial';
   const weight = Number(scene.fontWeight || 800);
   ctx.textAlign = scene.textAlign || 'left';
-  const textX = scene.textAlign === 'center' ? width / 2 : scene.textAlign === 'right' ? width * .93 : width * .07;
+  const manualTextX = Math.max(3, Math.min(97, Number(scene.textX ?? 7))) / 100 * width;
+  const textX = scene.textAlign === 'center' ? manualTextX : scene.textAlign === 'right' ? manualTextX : manualTextX;
   ctx.font = `${weight} ${Math.max(18, width / 36) * scale}px ${family}`;
   ctx.fillText(`0${index + 1}`, textX, baseY);
   ctx.fillStyle = scene.textColor || '#ffffff';
@@ -182,7 +198,7 @@ async function scenePoster(scene, width = 960, height = 540) {
   const ctx = canvas.getContext('2d');
   if (scene.imageUrl) {
     try {
-      drawCover(ctx, await loadImage(scene.imageUrl), width, height, .25);
+      drawCover(ctx, await loadImage(scene.imageUrl), width, height, .25, 'none', scene);
       return canvas.toDataURL('image/jpeg', .88);
     } catch { /* fallback below */ }
   }
@@ -193,7 +209,7 @@ async function scenePoster(scene, width = 960, height = 540) {
         video.onseeked = resolve;
         video.currentTime = Math.min(0.2, Math.max(0, video.duration - .05));
       });
-      drawCover(ctx, video, width, height, 0);
+      drawCover(ctx, video, width, height, 0, 'none', scene);
       return canvas.toDataURL('image/jpeg', .88);
     } catch { /* fallback below */ }
   }
@@ -245,6 +261,8 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
   const [resultExt, setResultExt] = useState('webm');
   const hiddenCanvasRef = useRef(null);
   const sceneClipboardRef = useRef(null);
+  const mediaDragRef = useRef(null);
+  const textDragRef = useRef(null);
   const format = useMemo(() => formats[formatKey] || formats.story, [formatKey]);
   const totalDuration = useMemo(() => scenes.reduce((sum, scene) => sum + Number(scene.duration || 0), 0), [scenes]);
   const selectedScene = useMemo(() => scenes.find((scene) => scene.id === selectedSceneId) || scenes[0], [scenes, selectedSceneId]);
@@ -463,8 +481,8 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
             const localSeconds = (performance.now() - start) / 1000;
             const localProgress = Math.min(1, localSeconds / duration);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (image) drawCover(ctx, image, canvas.width, canvas.height, localProgress, scene.animation);
-            else if (video && video.readyState >= 2) drawCover(ctx, video, canvas.width, canvas.height, localProgress, scene.animation);
+            if (image) drawCover(ctx, image, canvas.width, canvas.height, localProgress, scene.animation, scene);
+            else if (video && video.readyState >= 2) drawCover(ctx, video, canvas.width, canvas.height, localProgress, scene.animation, scene);
             else drawEmpty(ctx, canvas.width, canvas.height, scene);
             drawOverlay(ctx, canvas.width, canvas.height, scene, index, localProgress);
             setProgress(Math.round(((elapsed + Math.min(localSeconds, duration)) / Math.max(1, totalDuration)) * 100));
@@ -563,6 +581,46 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
     setStatus('Komplettes Projekt als ZIP heruntergeladen.');
   }
 
+
+  function startMediaDrag(event) {
+    if (!selectedScene) return;
+    event.preventDefault();
+    mediaDragRef.current = { x: event.clientX, y: event.clientY, startX: Number(selectedScene.mediaX || 0), startY: Number(selectedScene.mediaY || 0) };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveMediaDrag(event) {
+    const drag = mediaDragRef.current;
+    if (!drag || !selectedScene) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    updateScene(selectedScene.id, {
+      mediaX: drag.startX + ((event.clientX - drag.x) / Math.max(1, rect.width)) * 100,
+      mediaY: drag.startY + ((event.clientY - drag.y) / Math.max(1, rect.height)) * 100
+    });
+  }
+
+  function endMediaDrag() { mediaDragRef.current = null; }
+
+  function startTextDrag(event) {
+    if (!selectedScene) return;
+    event.preventDefault();
+    event.stopPropagation();
+    textDragRef.current = { x: event.clientX, y: event.clientY, startX: Number(selectedScene.textX ?? 7), startY: Number(selectedScene.textY ?? 76) };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveTextDrag(event) {
+    const drag = textDragRef.current;
+    if (!drag || !selectedScene) return;
+    const rect = event.currentTarget.parentElement.getBoundingClientRect();
+    updateScene(selectedScene.id, {
+      textX: Math.max(3, Math.min(97, drag.startX + ((event.clientX - drag.x) / Math.max(1, rect.width)) * 100)),
+      textY: Math.max(3, Math.min(92, drag.startY + ((event.clientY - drag.y) / Math.max(1, rect.height)) * 100))
+    });
+  }
+
+  function endTextDrag() { textDragRef.current = null; }
+
   return (
     <section className="video-editor-pro">
       <div className="studio-header">
@@ -587,9 +645,11 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
         </aside>
 
         <div className="video-preview-workspace">
-          <div className={`video-stage-preview format-${formatKey}`} style={{ aspectRatio: `${format.width}/${format.height}` }}>
-            {selectedScene?.videoUrl ? <video src={selectedScene.videoUrl} controls playsInline/> : selectedScene?.imageUrl ? <img src={selectedScene.imageUrl} alt={selectedScene.title}/> : <div className="empty-preview"><FileImage size={42}/>Bild oder Video für diese Szene hochladen</div>}
-            {selectedScene?.showText && <div className={`preview-text-overlay ${selectedScene.textPosition || 'bottom'}`} style={{ color: selectedScene.textColor || '#fff', background: `linear-gradient(${selectedScene.textPosition === 'top' ? '180deg' : '0deg'}, rgba(0,0,0,${selectedScene.overlayOpacity ?? .72}), transparent)`, fontFamily: selectedScene.fontFamily || 'Arial', textAlign: selectedScene.textAlign || 'left' }}><small style={{ color: selectedScene.accentColor || '#ffd400' }}>YILDIZ AI</small><h3 style={{ fontSize: `${1.6 * Number(selectedScene.fontScale || 1)}rem`, fontWeight: selectedScene.fontWeight || 800 }}>{selectedScene.title}</h3><p>{selectedScene.prompt}</p></div>}
+          <div className={`video-stage-preview format-${formatKey}`} style={{ aspectRatio: `${format.width}/${format.height}` }} onPointerDown={startMediaDrag} onPointerMove={moveMediaDrag} onPointerUp={endMediaDrag} onPointerCancel={endMediaDrag}>
+            <div className="video-media-transform" style={{ transform: `translate(calc(-50% + ${Number(selectedScene?.mediaX || 0)}%), calc(-50% + ${Number(selectedScene?.mediaY || 0)}%)) scale(${Number(selectedScene?.mediaScale || 1)}) rotate(${Number(selectedScene?.mediaRotation || 0)}deg)`, opacity: Number(selectedScene?.mediaOpacity ?? 1) }}>
+              {selectedScene?.videoUrl ? <video src={selectedScene.videoUrl} controls playsInline/> : selectedScene?.imageUrl ? <img src={selectedScene.imageUrl} alt={selectedScene.title}/> : <div className="empty-preview"><FileImage size={42}/>Bild oder Video für diese Szene hochladen</div>}
+            </div>
+            {selectedScene?.showText && <div className="preview-text-overlay free-position" onPointerDown={startTextDrag} onPointerMove={moveTextDrag} onPointerUp={endTextDrag} onPointerCancel={endTextDrag} style={{ left: `${Number(selectedScene.textX ?? 7)}%`, top: `${Number(selectedScene.textY ?? 76)}%`, color: selectedScene.textColor || '#fff', background: `linear-gradient(90deg, rgba(0,0,0,${selectedScene.overlayOpacity ?? .72}), transparent)`, fontFamily: selectedScene.fontFamily || 'Arial', textAlign: selectedScene.textAlign || 'left' }}><small style={{ color: selectedScene.accentColor || '#ffd400' }}>YILDIZ AI</small><h3 style={{ fontSize: `${1.6 * Number(selectedScene.fontScale || 1)}rem`, fontWeight: selectedScene.fontWeight || 800 }}>{selectedScene.title}</h3><p>{selectedScene.prompt}</p></div>}
           </div>
           <div className="video-preview-actions">
             <label className="clip-upload"><Upload size={16}/>Bild/Video<input type="file" accept="image/*,video/*" onChange={(event) => selectedScene && uploadMedia(selectedScene, event)}/></label>
@@ -625,6 +685,13 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
             </div>
             <label>Textgröße <span>{Number(selectedScene.fontScale || 1).toFixed(1)}×</span><input type="range" min=".6" max="1.8" step=".1" value={selectedScene.fontScale || 1} onChange={(event) => updateScene(selectedScene.id, { fontScale: Number(event.target.value) })}/></label>
             <label>Overlay <span>{Math.round(Number(selectedScene.overlayOpacity ?? .72) * 100)} %</span><input type="range" min="0" max="1" step=".05" value={selectedScene.overlayOpacity ?? .72} onChange={(event) => updateScene(selectedScene.id, { overlayOpacity: Number(event.target.value) })}/></label>
+            <h4>Bild/Video frei positionieren</h4>
+            <label>Zoom <span>{Number(selectedScene.mediaScale || 1).toFixed(2)}×</span><input type="range" min=".5" max="2.5" step=".05" value={selectedScene.mediaScale || 1} onChange={(event) => updateScene(selectedScene.id, { mediaScale: Number(event.target.value) })}/></label>
+            <div className="inspector-grid"><label>X-Position<input type="number" step="1" value={Math.round(Number(selectedScene.mediaX || 0))} onChange={(event) => updateScene(selectedScene.id, { mediaX: Number(event.target.value) })}/></label><label>Y-Position<input type="number" step="1" value={Math.round(Number(selectedScene.mediaY || 0))} onChange={(event) => updateScene(selectedScene.id, { mediaY: Number(event.target.value) })}/></label></div>
+            <div className="inspector-grid"><label>Drehung<input type="number" step="1" value={Number(selectedScene.mediaRotation || 0)} onChange={(event) => updateScene(selectedScene.id, { mediaRotation: Number(event.target.value) })}/></label><label>Deckkraft<input type="number" min="0" max="1" step=".05" value={Number(selectedScene.mediaOpacity ?? 1)} onChange={(event) => updateScene(selectedScene.id, { mediaOpacity: Number(event.target.value) })}/></label></div>
+            <h4>Text frei positionieren</h4>
+            <div className="inspector-grid"><label>Text X<input type="number" min="0" max="100" value={Math.round(Number(selectedScene.textX ?? 7))} onChange={(event) => updateScene(selectedScene.id, { textX: Number(event.target.value) })}/></label><label>Text Y<input type="number" min="0" max="100" value={Math.round(Number(selectedScene.textY ?? 76))} onChange={(event) => updateScene(selectedScene.id, { textY: Number(event.target.value) })}/></label></div>
+            <p className="panel-note">Du kannst das Bild/Video direkt in der Vorschau ziehen. Den Text ebenfalls direkt anfassen und verschieben.</p>
             {selectedScene.status && <div className="scene-status">{selectedScene.status}</div>}
           </>}
         </aside>
