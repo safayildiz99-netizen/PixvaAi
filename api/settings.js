@@ -5,10 +5,12 @@ export default async function handler(req, res) {
     const user = await validateUser(req);
     if (user.role !== 'admin') return send(res, 403, { error: 'Nur für Admins.' });
     return send(res, 200, {
-      aiMode: 'local-browser',
-      externalProvider: false,
+      aiMode: 'gemini-vercel',
+      imageGeneration: 'gemini-with-free-fallback',
+      videoGeneration: 'browser-renderer-with-images-and-music',
       paymentSystem: false,
-      messageLimit: null
+      messageLimit: null,
+      guestAccess: true
     });
   } catch (error) {
     return send(res, 401, { error: error.message });

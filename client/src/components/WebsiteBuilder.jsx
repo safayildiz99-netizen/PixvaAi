@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Globe2, Save, Sparkles } from 'lucide-react';
+import JSZip from 'jszip';
+import { Download, FileArchive, Globe2, Save, Sparkles } from 'lucide-react';
 import { api, downloadText } from '../api.js';
 
 const defaults = {
@@ -7,7 +8,7 @@ const defaults = {
   intro: 'Leuchtwerbung, Fahrzeugfolierung, Schilder, Druck und Montage aus einer Hand.',
   services: ['Leuchtwerbung', 'Fahrzeugfolierung', 'Schilder & Beschriftung', 'Druck & Montage'],
   cta: 'Jetzt kostenloses Angebot anfragen', phone: '+49 000 000000', address: 'Stuttgart, Deutschland',
-  primary: '#f7c948', dark: '#101010'
+  primary: '#f7c948', dark: '#101010', domain: 'meine-firma.de'
 };
 
 const esc = (value='') => String(value).replace(/[&<>'"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -32,5 +33,19 @@ export default function WebsiteBuilder({ project, onSaved, canSave = true }) {
   async function aiText(){ setAiLoading(true); setStatus('Gemini erstellt Texte …'); try{ const result=await api('/api/ai/chat',{method:'POST',body:JSON.stringify({message:`Schreibe für die Firma ${data.company} einen kurzen starken Slogan und einen Einleitungstext. Antworte exakt in zwei Zeilen: SLOGAN: ... und TEXT: ...`,history:[]})}); const answer=result.answer||''; const sm=answer.match(/SLOGAN:\s*(.*)/i); const tx=answer.match(/TEXT:\s*(.*)/i); setData((o)=>({...o,slogan:sm?.[1]||o.slogan,intro:tx?.[1]||answer})); setStatus('Texte mit Gemini erstellt und übernommen.'); }catch(e){setStatus(e.message)} finally{setAiLoading(false)} }
   async function save(){ if(!canSave){setStatus('Zum dauerhaften Speichern bitte anmelden. HTML-Export funktioniert auch als Gast.');return;} setStatus('Speichern …'); try{ const payload={name:projectName,type:'website',data:{site:data}}; const r=projectId?await api(`/api/projects/${projectId}`,{method:'PUT',body:JSON.stringify(payload)}):await api('/api/projects',{method:'POST',body:JSON.stringify(payload)}); setProjectId(r.project.id); setStatus('Gespeichert'); onSaved?.(r.project);}catch(e){setStatus(e.message)} }
 
-  return <section className="website-builder"><aside className="site-controls"><h2><Globe2 size={21}/> Website-Builder</h2><label>Projektname<input value={projectName} onChange={(e)=>setProjectName(e.target.value)}/></label><label>Firmenname<input value={data.company} onChange={(e)=>update('company',e.target.value)}/></label><label>Slogan<input value={data.slogan} onChange={(e)=>update('slogan',e.target.value)}/></label><label>Einleitung<textarea rows={4} value={data.intro} onChange={(e)=>update('intro',e.target.value)}/></label><label>Leistungen<textarea rows={5} value={data.services.join('\n')} onChange={(e)=>update('services',e.target.value.split('\n').filter(Boolean))}/></label><label>CTA<input value={data.cta} onChange={(e)=>update('cta',e.target.value)}/></label><label>Telefon<input value={data.phone} onChange={(e)=>update('phone',e.target.value)}/></label><label>Adresse<input value={data.address} onChange={(e)=>update('address',e.target.value)}/></label><div className="color-row"><label>Akzent<input type="color" value={data.primary} onChange={(e)=>update('primary',e.target.value)}/></label><label>Dunkel<input type="color" value={data.dark} onChange={(e)=>update('dark',e.target.value)}/></label></div><button onClick={aiText} disabled={aiLoading}><Sparkles size={17}/>{aiLoading?'Gemini schreibt …':'Texte mit Gemini erstellen'}</button><button onClick={save}><Save size={17}/>{canSave?'Speichern':'Anmelden zum Speichern'}</button><button className="primary-btn" onClick={()=>downloadText(`${projectName.replace(/\W+/g,'-')||'website'}.html`,html,'text/html')}><Download size={17}/>HTML exportieren</button>{status&&<div className="status-line">{status}</div>}</aside><div className="site-preview"><div className="browser-bar"><i/><i/><i/><span>Live-Vorschau</span></div><iframe title="Website Vorschau" srcDoc={html}/></div></section>;
+  async function exportZip(){
+    setStatus('Website-ZIP wird erstellt …');
+    const zip=new JSZip();
+    zip.file('index.html',html);
+    zip.file('CNAME',String(data.domain||'').replace(/^https?:\/\//,'').replace(/\/.*$/,'').trim());
+    zip.file('README.txt',`Yildiz AI Website\n\n1. Dateien zu GitHub, Vercel oder einem Webhoster hochladen.\n2. Wunschdomain: ${data.domain||'nicht festgelegt'}\n3. Eine .com/.de-Domain muss bei einem Domainanbieter registriert werden; sie ist normalerweise nicht kostenlos.`);
+    const blob=await zip.generateAsync({type:'blob'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=`${projectName.replace(/\W+/g,'-')||'website'}.zip`;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    setStatus('Website als ZIP exportiert.');
+  }
+
+  return <section className="website-builder"><aside className="site-controls"><h2><Globe2 size={21}/> Website-Builder</h2><label>Projektname<input value={projectName} onChange={(e)=>setProjectName(e.target.value)}/></label><label>Firmenname<input value={data.company} onChange={(e)=>update('company',e.target.value)}/></label><label>Slogan<input value={data.slogan} onChange={(e)=>update('slogan',e.target.value)}/></label><label>Einleitung<textarea rows={4} value={data.intro} onChange={(e)=>update('intro',e.target.value)}/></label><label>Leistungen<textarea rows={5} value={data.services.join('\n')} onChange={(e)=>update('services',e.target.value.split('\n').filter(Boolean))}/></label><label>CTA<input value={data.cta} onChange={(e)=>update('cta',e.target.value)}/></label><label>Telefon<input value={data.phone} onChange={(e)=>update('phone',e.target.value)}/></label><label>Adresse<input value={data.address} onChange={(e)=>update('address',e.target.value)}/></label><label>Wunschdomain<input value={data.domain||''} placeholder="meine-firma.de" onChange={(e)=>update('domain',e.target.value)}/></label><div className="color-row"><label>Akzent<input type="color" value={data.primary} onChange={(e)=>update('primary',e.target.value)}/></label><label>Dunkel<input type="color" value={data.dark} onChange={(e)=>update('dark',e.target.value)}/></label></div><button onClick={aiText} disabled={aiLoading}><Sparkles size={17}/>{aiLoading?'Gemini schreibt …':'Texte mit Gemini erstellen'}</button><button onClick={save}><Save size={17}/>{canSave?'Speichern':'Anmelden zum Speichern'}</button><button onClick={exportZip}><FileArchive size={17}/>Website als ZIP</button><button className="primary-btn" onClick={()=>downloadText(`${projectName.replace(/\W+/g,'-')||'website'}.html`,html,'text/html')}><Download size={17}/>HTML exportieren</button>{status&&<div className="status-line">{status}</div>}</aside><div className="site-preview"><div className="browser-bar"><i/><i/><i/><span>Live-Vorschau</span></div><iframe title="Website Vorschau" srcDoc={html}/></div></section>;
 }

@@ -1,0 +1,26 @@
+BILDGENERIERUNG
+1. Gemini 3.1 Flash Image / Nano Banana 2
+2. Kostenloser öffentlicher Bild-Fallback
+3. Lokales SVG-Ersatzmotiv
+
+VIDEOERSTELLUNG
+- Szenen aus KI-Bildern, eigenen Bildern oder Clips
+- Ken-Burns-Bewegung
+- Überblendungen
+- Titel und Branding
+- automatisch erzeugte Hintergrundmusik oder eigene Musik
+- MP4, wenn Browser unterstützt
+- sonst WebM
+- zusätzlich PDF-Storyboard, PNG-Szenen und Projekt-ZIP
+
+UPLOADS
+- Bilder im Chat
+- Videos im Chat mit automatischer Frame-Stichprobe
+- Bilder/Logos im Editor
+- Bilder/Videos im Video-Studio
+- eigene Musik im Video-Studio
+
+ZIP
+- Designprojekt als ZIP
+- Videoprojekt als ZIP
+- Website als ZIP

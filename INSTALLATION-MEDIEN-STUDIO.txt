@@ -1,0 +1,27 @@
+YILDIZ AI MEDIEN-STUDIO PRO – EINFACHE INSTALLATION
+
+1. ZIP herunterladen und entpacken.
+2. GitHub öffnen → Repository Yildiz-AI.
+3. Add file → Upload files.
+4. ALLE Dateien und Ordner aus dem entpackten Ordner hochladen.
+5. Commit-Nachricht: Yildiz AI Medien Studio Pro
+6. Commit changes anklicken.
+7. Vercel → yildiz-ai → Deployments.
+8. Wenn kein automatisches Deployment startet: neuestes Deployment → ... → Redeploy.
+9. Website öffnen und Cmd + Shift + R drücken.
+
+Vercel Environment Variables müssen vorhanden sein:
+- GEMINI_API_KEY
+- VITE_SUPABASE_URL
+- VITE_SUPABASE_PUBLISHABLE_KEY
+
+TESTEN:
+- Gastmodus öffnen.
+- Chat: Bild oder Video hochladen.
+- Motive & Editor: Prompt eingeben → KI-Bild erstellen.
+- Video-Studio: „Alle Szenenbilder“ → „Video rendern“.
+- Danach MP4/WebM, PDF, PNG oder ZIP herunterladen.
+
+PASSWORT:
+Falls Mitarbeiter ihr Passwort noch nicht ändern können:
+Supabase → SQL Editor → New query → Inhalt von MITARBEITER-PASSWORT-FIX.txt einfügen → Run.

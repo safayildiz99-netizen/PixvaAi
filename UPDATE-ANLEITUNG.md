@@ -1,20 +1,29 @@
-# Update installieren
+# Update-Anleitung: Medien-Studio Pro
 
 1. ZIP entpacken.
-2. GitHub-Repository `Yildiz-AI` öffnen.
-3. `Add file` → `Upload files` anklicken.
+2. GitHub-Repository **Yildiz-AI** öffnen.
+3. **Add file → Upload files**.
 4. Alle Dateien und Ordner aus dem entpackten Ordner hochladen.
 5. Vorhandene Dateien ersetzen.
-6. Commit-Nachricht: `Payment-System entfernt – lokale KI`.
-7. `Commit changes` anklicken.
-8. Vercel veröffentlicht den neuen Commit normalerweise automatisch.
-9. Falls nicht: Vercel → Deployments → neuestes Deployment → `Redeploy`.
-10. Website mit `Cmd + Shift + R` neu laden.
+6. Commit-Nachricht: `Yildiz AI Medien Studio Pro`.
+7. **Commit changes** anklicken.
+8. Vercel neu deployen.
+9. Website mit `Cmd + Shift + R` neu laden.
 
-## Danach in Vercel
+## Vercel
 
-Unter Settings → Environment Variables kann `POLLINATIONS_KEY` vollständig gelöscht werden. Benötigt werden nur die beiden Supabase-Variablen.
+Erforderlich:
 
-## Erster KI-Start
+- `GEMINI_API_KEY`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Beim ersten Senden einer Chat-Nachricht lädt der Browser ein lokales Modell. Das kann je nach Internet und Computer mehrere Minuten dauern. Danach wird das Modell im Browser-Cache verwendet.
+Nicht erforderlich:
+
+- `POLLINATIONS_KEY`
+
+Die öffentliche Bildquelle wird nur als automatischer Fallback verwendet und benötigt keinen in Vercel gespeicherten Schlüssel.
+
+## Supabase
+
+Keine neue SQL-Datei für Medien nötig. Nur falls die Passwortänderung fehlt, einmal `MITARBEITER-PASSWORT-FIX.txt` ausführen.

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import JSZip from 'jszip';
+import { jsPDF } from 'jspdf';
 import { Canvas, Circle, FabricImage, FabricText, Group, Rect } from 'fabric';
 import {
-  Download, ImagePlus, Layers, LoaderCircle, MoveDown, MoveUp, Plus, Save, Sparkles,
+  Download, FileArchive, FileText, ImagePlus, Layers, LoaderCircle, MoveDown, MoveUp, Plus, Save, Sparkles,
   Square, Trash2, Type, Upload, WandSparkles
 } from 'lucide-react';
 import { api } from '../api.js';
@@ -233,6 +235,40 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     anchor.click();
   }
 
+  function currentPngData() {
+    const canvas = fabricRef.current;
+    canvas.discardActiveObject();
+    canvas.renderAll();
+    const multiplier = format.export[0] / canvas.width;
+    return canvas.toDataURL({ format: 'png', multiplier, quality: 1 });
+  }
+
+  function exportPdf() {
+    const data = currentPngData();
+    const orientation = format.export[0] > format.export[1] ? 'landscape' : 'portrait';
+    const doc = new jsPDF({ orientation, unit: 'px', format: [format.export[0], format.export[1]] });
+    doc.addImage(data, 'PNG', 0, 0, format.export[0], format.export[1]);
+    doc.save(`${projectName.replace(/[^a-z0-9äöüß_-]+/gi, '-') || 'design'}.pdf`);
+    setStatus('PDF exportiert.');
+  }
+
+  async function exportZip() {
+    const data = currentPngData();
+    const zip = new JSZip();
+    const safe = projectName.replace(/[^a-z0-9äöüß_-]+/gi, '-') || 'design';
+    zip.file(`${safe}.png`, data.split(',')[1], { base64: true });
+    zip.file('projekt.json', JSON.stringify({ name: projectName, type: mode, format: formatKey, canvas: fabricRef.current.toJSON() }, null, 2));
+    zip.file('README.txt', 'Yildiz AI Designprojekt\nEnthält PNG und bearbeitbare Projektinformationen.');
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${safe}-projekt.zip`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Design als ZIP exportiert.');
+  }
+
   async function saveProject() {
     if (!canSave) { setStatus('Zum dauerhaften Speichern bitte anmelden. PNG-Export funktioniert auch als Gast.'); return; }
     const canvas = fabricRef.current;
@@ -265,7 +301,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         body: JSON.stringify({ prompt: aiPrompt, aspect: formatKey, style: imageStyle })
       });
       setLocalMotifUrl(result.imageDataUrl);
-      setStatus('KI-Bild erstellt. Du kannst es jetzt in dein Design einfügen.');
+      setStatus(result.fallback ? 'Ersatzmotiv erstellt. Du kannst es jetzt in dein Design einfügen.' : `KI-Bild erstellt · ${result.provider || 'Bildmodell'}`);
     } catch (error) {
       setStatus(error.message);
     } finally {
@@ -310,6 +346,8 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           <span>{format.label}</span>
           <div>
             <button onClick={saveProject}><Save size={17} />{canSave?'Speichern':'Anmelden zum Speichern'}</button>
+            <button onClick={exportPdf}><FileText size={17} />PDF</button>
+            <button onClick={exportZip}><FileArchive size={17} />ZIP</button>
             <button className="primary-btn" onClick={exportPng}><Download size={17} />PNG exportieren</button>
           </div>
         </div>

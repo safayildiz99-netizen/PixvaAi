@@ -32,7 +32,8 @@ function normalizeAttachments(input) {
       name: String(item?.name || '').slice(0, 120),
       mimeType: String(item?.mimeType || '').slice(0, 80),
       data: String(item?.data || ''),
-      size: Number(item?.size || 0)
+      size: Number(item?.size || 0),
+      frames: Array.isArray(item?.frames) ? item.frames.slice(0, 4).map((frame) => String(frame || '')) : []
     }))
     .filter((item) => item.name || item.data);
 }
@@ -46,9 +47,10 @@ function createUserParts(message, attachments) {
   if (videoAttachments.length) {
     const videoInfo = videoAttachments.map((item) => {
       const sizeMb = item.size ? `${(item.size / 1024 / 1024).toFixed(1)} MB` : 'unbekannte Größe';
-      return `- ${item.name || 'Video'} (${item.mimeType || 'video/*'}, ${sizeMb})`;
+      const frameInfo = item.frames?.length ? `${item.frames.length} Vorschaubilder wurden angehängt` : 'keine Vorschaubilder verfügbar';
+      return `- ${item.name || 'Video'} (${item.mimeType || 'video/*'}, ${sizeMb}; ${frameInfo})`;
     }).join('\n');
-    intro += `\n\nZusätzliche Datei-Anhänge (kein direkter Frame-Zugriff in dieser Version):\n${videoInfo}`;
+    intro += `\n\nVideo-Anhänge:\n${videoInfo}\nAnalysiere die angehängten Vorschaubilder als Stichprobe und erwähne, dass sie nicht jeden Moment des Videos zeigen.`;
   }
   parts.push({ text: intro || 'Bitte hilf mir mit diesem Anhang.' });
 
@@ -56,6 +58,14 @@ function createUserParts(message, attachments) {
     const match = image.data.match(/^data:(.+?);base64,(.+)$/);
     if (!match) continue;
     parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+  }
+
+  for (const video of videoAttachments) {
+    for (const frame of video.frames || []) {
+      const match = frame.match(/^data:(.+?);base64,(.+)$/);
+      if (!match) continue;
+      parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+    }
   }
   return parts;
 }
@@ -111,9 +121,10 @@ export default async function handler(req, res) {
     const configured = String(process.env.GEMINI_MODEL || '').trim();
     const models = [...new Set([
       configured,
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash'
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash'
     ].filter(Boolean))];
 
     let lastStatus = 503;

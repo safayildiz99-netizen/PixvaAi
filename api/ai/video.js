@@ -1,10 +1,9 @@
-import { send, validateUser } from '../_lib.js';
+import { send } from '../_lib.js';
 
 export default async function handler(req, res) {
-  try {
-    await validateUser(req);
-    return send(res, 410, { error: 'Die externe Video-API wurde entfernt. Verwende den kostenlosen lokalen Timeline-Editor mit eigenen Clips.' });
-  } catch (error) {
-    return send(res, 401, { error: error.message });
-  }
+  if (req.method !== 'POST') return send(res, 405, { error: 'Nur POST-Anfragen sind erlaubt.' });
+  return send(res, 200, {
+    mode: 'browser-renderer',
+    message: 'Das Video wird kostenlos im Browser aus Bildern, Clips, Übergängen und Hintergrundmusik gerendert. Dafür ist kein Video-Guthaben nötig.'
+  });
 }
