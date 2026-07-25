@@ -1,0 +1,31 @@
+YILDIZ AI STABIL V4
+
+Dieser Patch behebt die zwei noch sichtbaren Probleme:
+1. Doppelte Chat-Nachrichten / alter doppelter Verlauf
+2. Abgeschnittene oder aus der Arbeitsfläche gerutschte Elemente
+3. Bildgenerierung mit Server- und Browser-Fallback
+
+Dateien exakt ersetzen:
+- api/ai/image.js
+- client/src/components/Chat.jsx
+- client/src/components/DesignEditor.jsx
+- client/src/styles.css
+
+GitHub:
+1. ZIP entpacken.
+2. Im Repository-Hauptordner die Ordner api und client hochladen.
+3. Bestehende Dateien ersetzen.
+4. Commit: Yildiz AI Stabil V4
+5. Warten, bis Vercel Ready + Production zeigt.
+6. yildiz-ai.vercel.app mit Cmd+Shift+R neu laden.
+
+Neu im Editor:
+- Button "Alles einpassen"
+- Neue Vorlagen bleiben innerhalb der Arbeitsfläche
+- Alte gespeicherte Designs werden beim Öffnen automatisch eingepasst
+- Canvas-Zoom hat jetzt echte Breite/Höhe und schneidet links nichts ab
+
+Neu im Chat:
+- Sofortige Sendesperre verhindert Doppelklick/Doppelsenden
+- Bereits gespeicherte direkt aufeinanderfolgende Duplikate werden ausgeblendet
+- Wenn die Server-Bildroute ausfällt, wird automatisch der Browser-Bilddienst benutzt
