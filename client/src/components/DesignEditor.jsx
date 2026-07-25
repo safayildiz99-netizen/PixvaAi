@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import {
-  ActiveSelection, Canvas, Circle, FabricImage, FabricText, Group, IText, Rect, Textbox, filters
+  ActiveSelection, Canvas, Circle, FabricImage, FabricText, Group, IText, Path as FabricPath, Rect, StaticCanvas, Textbox, filters
 } from 'fabric';
 import {
   AlignCenter, ArrowDownToLine, ArrowUpToLine, Bold, Copy, Download, Eye, EyeOff,
-  FileArchive, FileText, FlipHorizontal2, FlipVertical2, ImagePlus, Layers, LoaderCircle,
+  ExternalLink, FileArchive, FileText, FlipHorizontal2, FlipVertical2, ImagePlus, Layers, LoaderCircle,
   Lock, MoveDown, MoveUp, Plus, Redo2, RotateCcw, Save, Sparkles, Square, Trash2,
   Type, Undo2, Unlock, Upload, WandSparkles, ZoomIn
 } from 'lucide-react';
@@ -104,6 +104,96 @@ function addCreativeTemplate(canvas, width, height) {
 }
 
 
+
+const referenceTemplates = {
+  'tea-single': '/templates/atlas-tee-single.jpg',
+  'atlas-grid': '/templates/atlas-grid.jpg',
+  'fresh-grid': '/templates/fresh-grid.jpg',
+  offer: '/templates/fresh-market-single.jpg'
+};
+
+async function addReferenceTemplate(canvas, type, width, height) {
+  const url = referenceTemplates[type];
+  if (!url) return false;
+  canvas.clear();
+  canvas.backgroundColor = '#ffffff';
+  const image = await FabricImage.fromURL(url, { crossOrigin: 'anonymous' });
+  image.set({
+    left: 0, top: 0, originX: 'left', originY: 'top',
+    scaleX: width / Math.max(1, image.width),
+    scaleY: height / Math.max(1, image.height),
+    selectable: false, evented: false,
+    dataRole: 'template-reference', displayName: 'Original-Vorlage'
+  });
+  canvas.add(image);
+
+  const addInvisibleSlot = (x, y, w, h, index) => {
+    canvas.add(new Rect({
+      left: x, top: y, width: w, height: h,
+      fill: 'rgba(255,255,255,0.001)', stroke: 'rgba(99,199,255,0)', strokeWidth: 1,
+      dataRole: `product-slot:${index}`, displayName: `Produktbild ${index}`
+    }));
+  };
+
+  if (type === 'atlas-grid' || type === 'fresh-grid') {
+    const cols = 3;
+    const rows = 3;
+    const startX = width * .045;
+    const startY = type === 'atlas-grid' ? height * .39 : height * .38;
+    const gapX = width * .022;
+    const gapY = height * .018;
+    const cardW = (width - startX * 2 - gapX * 2) / cols;
+    const cardH = height * .165;
+    let index = 1;
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        addInvisibleSlot(
+          startX + col * (cardW + gapX) + cardW * .08,
+          startY + row * (cardH + gapY) + cardH * .19,
+          cardW * .84,
+          cardH * .53,
+          index
+        );
+        index += 1;
+      }
+    }
+  } else if (type === 'tea-single') {
+    addInvisibleSlot(width * .33, height * .29, width * .38, height * .41, 1);
+  } else if (type === 'offer') {
+    addInvisibleSlot(width * .45, height * .42, width * .43, height * .34, 1);
+  }
+
+  canvas.requestRenderAll();
+  return true;
+}
+
+function addWaveBackground(canvas, width, height, palette = 'atlas') {
+  if (palette === 'fresh') {
+    canvas.backgroundColor = '#2b7b43';
+    const dark = new Rect({ left: 0, top: 0, width, height: height * .27, fill: '#292929', selectable: false, evented: false, dataRole: 'template-bg' });
+    const redWave = new FabricPath(
+      `M 0 ${height*.29} C ${width*.25} ${height*.26}, ${width*.62} ${height*.28}, ${width} ${height*.39} L ${width} ${height*.49} C ${width*.7} ${height*.42}, ${width*.3} ${height*.36}, 0 ${height*.42} Z`,
+      { fill: '#e52b38', selectable: false, evented: false, dataRole: 'template-bg', displayName: 'Roter Pinselstrich' }
+    );
+    const greenWave = new FabricPath(
+      `M 0 ${height*.43} C ${width*.32} ${height*.35}, ${width*.68} ${height*.4}, ${width} ${height*.47} L ${width} ${height} L 0 ${height} Z`,
+      { fill: '#247640', selectable: false, evented: false, dataRole: 'template-bg', displayName: 'Grüner Pinselstrich' }
+    );
+    canvas.add(dark, redWave, greenWave);
+  } else {
+    canvas.backgroundColor = '#f2efe5';
+    const redWave = new FabricPath(
+      `M 0 ${height*.31} C ${width*.24} ${height*.24}, ${width*.68} ${height*.27}, ${width} ${height*.38} L ${width} ${height*.67} C ${width*.72} ${height*.6}, ${width*.32} ${height*.58}, 0 ${height*.66} Z`,
+      { fill: '#e61e2b', selectable: false, evented: false, dataRole: 'template-bg', displayName: 'Roter Pinselstrich' }
+    );
+    const blueWave = new FabricPath(
+      `M 0 ${height*.67} C ${width*.28} ${height*.58}, ${width*.68} ${height*.65}, ${width} ${height*.73} L ${width} ${height} L 0 ${height} Z`,
+      { fill: '#3564ad', selectable: false, evented: false, dataRole: 'template-bg', displayName: 'Blauer Pinselstrich' }
+    );
+    canvas.add(redWave, blueWave);
+  }
+}
+
 function addProductCard(canvas, x, y, cardW, cardH, index, accent) {
   const slotId = `product-slot:${index}`;
   const inner = cardW * .06;
@@ -149,21 +239,18 @@ function addProductCard(canvas, x, y, cardW, cardH, index, accent) {
 
 function addAtlasGridTemplate(canvas, width, height) {
   canvas.clear();
-  canvas.backgroundColor = '#f3f1e8';
-  const headerH = height * .18;
-  const footerH = height * .075;
-  const header = new Rect({ left: 0, top: 0, width, height: headerH, fill: '#224b35', selectable: false, dataRole: 'template-bg', displayName: 'Kopfbereich' });
-  const accent = new Rect({ left: 0, top: headerH, width, height: height * .035, fill: '#e32636', selectable: false, dataRole: 'template-bg', displayName: 'Akzentlinie' });
-  const footer = new Rect({ left: 0, top: height - footerH, width, height: footerH, fill: '#3564ad', selectable: false, dataRole: 'template-bg', displayName: 'Fußbereich' });
-  const heroText = makeText('FRISCHE ANGEBOTE', { left: width * .055, top: height * .045, fontSize: width / 14, fill: '#ffffff', displayName: 'Kopfzeile' });
-  const address = makeText('Musterstraße 12 · 70173 Stuttgart', { left: width * .055, top: height * .125, fontSize: width / 32, fill: '#d9f3de', displayName: 'Adresse' });
-  canvas.add(header, accent, footer, heroText, address);
+  addWaveBackground(canvas, width, height, 'atlas');
+  const headerH = height * .20;
+  const footerH = height * .06;
+  const heroText = makeText('FRISCHE ANGEBOTE', { left: width * .055, top: height * .035, fontSize: width / 14, fill: '#234a35', displayName: 'Kopfzeile' });
+  const address = makeText('Musterstraße 12 · 70173 Stuttgart', { left: width * .055, top: height * .115, fontSize: width / 32, fill: '#234a35', displayName: 'Adresse' });
+  canvas.add(heroText, address);
 
   const cols = 3;
   const rows = 3;
   const gapX = width * .022;
   const gapY = height * .018;
-  const startY = headerH + height * .065;
+  const startY = height * .365;
   const usableH = height - startY - footerH - height * .025;
   const cardW = (width - gapX * 4) / cols;
   const cardH = (usableH - gapY * (rows - 1)) / rows;
@@ -179,22 +266,19 @@ function addAtlasGridTemplate(canvas, width, height) {
 
 function addFreshGridTemplate(canvas, width, height) {
   canvas.clear();
-  canvas.backgroundColor = '#237a43';
-  const headerH = height * .2;
-  const footerH = height * .055;
-  const header = new Rect({ left: 0, top: 0, width, height: headerH, fill: '#252525', selectable: false, dataRole: 'template-bg', displayName: 'Kopfbereich' });
-  const accent = new Rect({ left: 0, top: headerH, width, height: height * .035, fill: '#e52b38', selectable: false, dataRole: 'template-bg', displayName: 'Akzentlinie' });
-  const footer = new Rect({ left: 0, top: height - footerH, width, height: footerH, fill: '#165f34', selectable: false, dataRole: 'template-bg', displayName: 'Fußbereich' });
-  const logoBox = new Rect({ left: width * .045, top: height * .025, width: width * .22, height: height * .145, fill: '#4c913f', rx: 12, ry: 12, displayName: 'Logo-Hintergrund' });
-  const logo = makeText('THE\nFRESH\nMARKET', { left: width * .155, top: height * .097, originX: 'center', originY: 'center', fontSize: width / 21, textAlign: 'center', fill: '#ffffff', displayName: 'Logo' });
-  const headline = makeText('ANGEBOT DER WOCHE', { left: width * .32, top: height * .073, fontSize: width / 18, fill: '#ffffff', displayName: 'Kopfzeile' });
-  canvas.add(header, accent, footer, logoBox, logo, headline);
+  addWaveBackground(canvas, width, height, 'fresh');
+  const headerH = height * .24;
+  const footerH = height * .045;
+  const logoBox = new Rect({ left: width * .045, top: height * .025, width: width * .22, height: height * .15, fill: '#4c913f', rx: 12, ry: 12, displayName: 'Logo-Hintergrund' });
+  const logo = makeText('THE\nFRESH\nMARKET', { left: width * .155, top: height * .10, originX: 'center', originY: 'center', fontSize: width / 21, textAlign: 'center', fill: '#ffffff', displayName: 'Logo' });
+  const headline = makeText('ANGEBOT DER WOCHE', { left: width * .32, top: height * .075, fontSize: width / 18, fill: '#ffffff', displayName: 'Kopfzeile' });
+  canvas.add(logoBox, logo, headline);
 
   const cols = 3;
   const rows = 3;
   const gapX = width * .022;
   const gapY = height * .018;
-  const startY = headerH + height * .065;
+  const startY = height * .365;
   const usableH = height - startY - footerH - height * .02;
   const cardW = (width - gapX * 4) / cols;
   const cardH = (usableH - gapY * (rows - 1)) / rows;
@@ -234,6 +318,8 @@ function getObjectName(object, index) {
 
 function keepObjectInsideCanvas(canvas, object, padding = 4) {
   if (!canvas || !object || object.visible === false) return;
+  const role = String(object.dataRole || '');
+  if (object.selectable === false || role.startsWith('template-') || role.startsWith('card:') || role.startsWith('price-bg:')) return;
   object.setCoords();
   let bounds = object.getBoundingRect();
   const maxWidth = Math.max(10, canvas.width - padding * 2);
@@ -290,6 +376,8 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const productInputRef = useRef(null);
   const clipboardRef = useRef(null);
   const lastCanvasSizeRef = useRef(null);
+  const baseTemplateRef = useRef(null);
+  const currentTemplateRef = useRef(mode === 'flyer' ? 'offer' : 'creative');
 
   const [formatKey, setFormatKey] = useState(project?.data?.format || 'post');
   const [projectId, setProjectId] = useState(project?.id || '');
@@ -306,6 +394,8 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const [zoom, setZoom] = useState(82);
   const [dragActive, setDragActive] = useState(false);
   const [adjustments, setAdjustments] = useState({ brightness: 0, contrast: 0, saturation: 0 });
+  const [templateVariant, setTemplateVariant] = useState('reference');
+  const [externalExportMode, setExternalExportMode] = useState('edited');
 
   const format = useMemo(() => formats[formatKey], [formatKey]);
   const isText = selected instanceof IText || selected instanceof FabricText || ['i-text', 'textbox', 'text'].includes(selected?.type);
@@ -444,7 +534,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       } else {
         mode === 'flyer' ? addOfferTemplate(canvas, canvas.width, canvas.height) : addCreativeTemplate(canvas, canvas.width, canvas.height);
       }
-      normalizeCanvasObjects(canvas);
+      baseTemplateRef.current = canvas.toJSON(customProps);
       historyRef.current = [];
       historyIndexRef.current = -1;
       snapshot();
@@ -480,7 +570,6 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
 
     canvas.setDimensions({ width: nextWidth, height: nextHeight });
     lastCanvasSizeRef.current = [nextWidth, nextHeight];
-    normalizeCanvasObjects(canvas);
     canvas.requestRenderAll();
     snapshot();
   }, [format]);
@@ -747,22 +836,88 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     setStatus('Alle Elemente wurden vollständig in die Arbeitsfläche eingepasst.');
   }
 
-  function applyTemplate(type) {
+  async function applyTemplate(type) {
     const canvas = fabricRef.current;
-    const action = () => {
-      if (type === 'offer') addOfferTemplate(canvas, canvas.width, canvas.height);
-      else if (type === 'atlas-grid') addAtlasGridTemplate(canvas, canvas.width, canvas.height);
-      else if (type === 'fresh-grid') addFreshGridTemplate(canvas, canvas.width, canvas.height);
-      else if (type === 'tea-single') addSingleTeaTemplate(canvas, canvas.width, canvas.height);
-      else if (type === 'creative') addCreativeTemplate(canvas, canvas.width, canvas.height);
-      else { canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.renderAll(); }
+    if (canvas.getObjects().length && !confirm('Aktuelles Design durch die gewählte Vorlage ersetzen?')) return;
+    try {
+      let usedReference = false;
+      if (templateVariant === 'reference' && referenceTemplates[type]) {
+        usedReference = await addReferenceTemplate(canvas, type, canvas.width, canvas.height);
+      }
+      if (!usedReference) {
+        if (type === 'offer') addOfferTemplate(canvas, canvas.width, canvas.height);
+        else if (type === 'atlas-grid') addAtlasGridTemplate(canvas, canvas.width, canvas.height);
+        else if (type === 'fresh-grid') addFreshGridTemplate(canvas, canvas.width, canvas.height);
+        else if (type === 'tea-single') addSingleTeaTemplate(canvas, canvas.width, canvas.height);
+        else if (type === 'creative') addCreativeTemplate(canvas, canvas.width, canvas.height);
+        else { canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.renderAll(); }
+      }
+      currentTemplateRef.current = type;
+      baseTemplateRef.current = canvas.toJSON(customProps);
       setBackground(canvas.backgroundColor || '#ffffff');
-      normalizeCanvasObjects(canvas);
+      canvas.discardActiveObject();
+      syncSelected(null);
       snapshot();
       refreshLayers();
-    };
-    if (canvas.getObjects().length && !confirm('Aktuelles Design durch die gewählte Vorlage ersetzen?')) return;
-    action();
+      setStatus(usedReference
+        ? 'Original-Vorlage geladen. Produktbilder können ersetzt werden. Für vollständig getrennte Ebenen wähle „Voll bearbeitbar“.'
+        : 'Voll bearbeitbare Vorlage geladen.');
+    } catch (error) {
+      setStatus(error.message || 'Vorlage konnte nicht geladen werden.');
+    }
+  }
+
+  async function renderJsonData(json) {
+    if (!json) return currentPngData();
+    const temporaryElement = document.createElement('canvas');
+    const temporaryCanvas = new StaticCanvas(temporaryElement, {
+      width: format.canvas[0], height: format.canvas[1], backgroundColor: '#ffffff'
+    });
+    await temporaryCanvas.loadFromJSON(json);
+    temporaryCanvas.requestRenderAll();
+    const multiplier = format.export[0] / format.canvas[0];
+    const data = temporaryCanvas.toDataURL({ format: 'png', multiplier, quality: 1 });
+    temporaryCanvas.dispose();
+    return data;
+  }
+
+  function downloadDataUrl(data, fileName) {
+    const anchor = document.createElement('a');
+    anchor.href = data;
+    anchor.download = fileName;
+    anchor.click();
+  }
+
+  async function externalPngData() {
+    if (externalExportMode === 'template' && baseTemplateRef.current) {
+      return renderJsonData(baseTemplateRef.current);
+    }
+    return currentPngData();
+  }
+
+  async function openInCanva() {
+    try {
+      const data = await externalPngData();
+      const orientation = format.export[0] > format.export[1] ? 'landscape' : 'portrait';
+      const doc = new jsPDF({ orientation, unit: 'px', format: [format.export[0], format.export[1]] });
+      doc.addImage(data, 'PNG', 0, 0, format.export[0], format.export[1]);
+      doc.save(`${safeName(projectName)}-${externalExportMode === 'template' ? 'vorlage' : 'bearbeitet'}-canva.pdf`);
+      window.open('https://www.canva.com/', '_blank', 'noopener,noreferrer');
+      setStatus('Canva wurde geöffnet und die PDF heruntergeladen. In Canva: Erstellen → Hochladen. Für vollautomatischen Import ist eine Canva-OAuth-Verbindung erforderlich.');
+    } catch (error) {
+      setStatus(error.message || 'Canva-Export ist fehlgeschlagen.');
+    }
+  }
+
+  async function openInPhotoshop() {
+    try {
+      const data = await externalPngData();
+      downloadDataUrl(data, `${safeName(projectName)}-${externalExportMode === 'template' ? 'vorlage' : 'bearbeitet'}-photoshop.png`);
+      window.open('https://photoshop.adobe.com/', '_blank', 'noopener,noreferrer');
+      setStatus('Photoshop im Web wurde geöffnet und die PNG-Datei heruntergeladen. Dort „Datei hochladen“ wählen oder die Datei hineinziehen.');
+    } catch (error) {
+      setStatus(error.message || 'Photoshop-Export ist fehlgeschlagen.');
+    }
   }
 
   function currentPngData() {
@@ -880,6 +1035,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         <div className="panel-section">
           <label>Projektname<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
           <label>Format<select value={formatKey} onChange={(event) => setFormatKey(event.target.value)}>{Object.entries(formats).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
+          <label>Vorlagenmodus<select value={templateVariant} onChange={(event) => setTemplateVariant(event.target.value)}><option value="reference">Original wie Vorschau</option><option value="editable">Voll bearbeitbar</option></select></label>
           <div className="template-gallery">
             <button onClick={() => applyTemplate('tea-single')}><img src="/templates/atlas-tee-single.jpg" alt="Einzelangebot"/><span>Einzelangebot</span></button>
             <button onClick={() => applyTemplate('atlas-grid')}><img src="/templates/atlas-grid.jpg" alt="Atlas Raster"/><span>Atlas 3×3</span></button>
@@ -943,6 +1099,12 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
             <button onClick={exportPdf}><FileText size={17}/>PDF</button>
             <button onClick={exportZip}><FileArchive size={17}/>ZIP</button>
             <button className="primary-btn" onClick={exportPng}><Download size={17}/>PNG</button>
+            <select className="external-mode" value={externalExportMode} onChange={(event) => setExternalExportMode(event.target.value)} title="Was soll extern geöffnet werden?">
+              <option value="edited">Bearbeitetes Design</option>
+              <option value="template">Nur Vorlage</option>
+            </select>
+            <button className="canva-btn" onClick={openInCanva}><ExternalLink size={16}/>Canva</button>
+            <button className="photoshop-btn" onClick={openInPhotoshop}><ExternalLink size={16}/>Photoshop</button>
           </div>
         </div>
         <div
@@ -958,7 +1120,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         </div>
         <div className="canvas-footer-pro">
           <label><ZoomIn size={15}/><input type="range" min="35" max="140" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}/><span>{zoom}%</span></label>
-          <div className="status-line">{status || 'Text anklicken und direkt tippen. Doppelklick öffnet die Texteingabe. Cmd/Ctrl+C, V, Z, D sowie Pfeiltasten funktionieren.'}</div>
+          <div className="status-line">{status || 'Text anklicken und direkt tippen. Cmd/Ctrl+C, V, Z, D sowie Pfeiltasten funktionieren. Canva/Photoshop exportieren das bearbeitete Design oder die reine Vorlage.'}</div>
         </div>
       </div>
 
