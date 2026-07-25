@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { ArrowUp, Bot, Camera, Cloud, FileText, ImagePlus, Paperclip, User, Video, WandSparkles, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, Bot, Camera, Cloud, FileText, ImagePlus, MessageSquarePlus, Paperclip, Search, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
 import { api } from '../api.js';
 
 const quickPrompts = [
@@ -211,14 +211,90 @@ async function renderGeneratedVideo(imageUrls, prompt) {
 
 function fileMessageAttachment(item) {
   if (item.kind === 'image') return { kind: 'image', name: item.name, previewUrl: item.previewUrl || item.data, data: item.data, size: item.size };
-  if (item.kind === 'video') return { kind: 'video', name: item.name, previewUrl: item.previewUrl, size: item.size };
-  return { kind: 'file', name: item.name, size: item.size };
+  if (item.kind === 'video') return { kind: 'video', name: item.name, previewUrl: item.previewUrl, size: item.size, blob: item.blob };
+  return { kind: 'file', name: item.name, size: item.size, blob: item.blob };
+}
+
+
+const CHAT_DB = 'yildiz-ai-chat-history-v1';
+const CHAT_STORE = 'sessions';
+const WELCOME_MESSAGE = { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien per Drag & Drop hochladen.' };
+
+function makeChatSession() {
+  return {
+    id: crypto.randomUUID(),
+    title: 'Neuer Chat',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    messages: [WELCOME_MESSAGE]
+  };
+}
+
+function openChatDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CHAT_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CHAT_STORE)) db.createObjectStore(CHAT_STORE, { keyPath: 'key' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readSavedChats() {
+  const db = await openChatDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CHAT_STORE, 'readonly');
+    const request = tx.objectStore(CHAT_STORE).get('all');
+    request.onsuccess = () => resolve(Array.isArray(request.result?.value) ? request.result.value : []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function cleanForStorage(sessions) {
+  return sessions.map((session) => ({
+    ...session,
+    messages: (session.messages || []).map((message) => ({
+      ...message,
+      attachments: Array.isArray(message.attachments)
+        ? message.attachments.map((item) => ({
+            ...item,
+            previewUrl: String(item.previewUrl || '').startsWith('blob:') ? '' : item.previewUrl
+          }))
+        : undefined
+    }))
+  }));
+}
+
+async function writeSavedChats(sessions) {
+  const db = await openChatDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CHAT_STORE, 'readwrite');
+    tx.objectStore(CHAT_STORE).put({ key: 'all', value: cleanForStorage(sessions) });
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function hydrateMessages(messages) {
+  return (messages || []).map((message) => ({
+    ...message,
+    attachments: Array.isArray(message.attachments)
+      ? message.attachments.map((item) => ({
+          ...item,
+          previewUrl: item.previewUrl || (item.blob instanceof Blob ? URL.createObjectURL(item.blob) : item.data || '')
+        }))
+      : undefined
+  }));
 }
 
 export default function Chat() {
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien per Drag & Drop hochladen.' }
-  ]);
+  const [messages, setMessages] = useState([WELCOME_MESSAGE]);
+  const [chatSessions, setChatSessions] = useState([]);
+  const [activeChatId, setActiveChatId] = useState('');
+  const [historyReady, setHistoryReady] = useState(false);
+  const [chatSearch, setChatSearch] = useState('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('Gemini läuft serverseitig in Chrome, Opera, Safari und Edge. Bild-, Video- und Datei-Uploads funktionieren auch per Drag & Drop.');
@@ -230,6 +306,78 @@ export default function Chat() {
   const cameraVideoRef = useRef(null);
   const anyFileRef = useRef(null);
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
+  const filteredSessions = useMemo(() => {
+    const query = chatSearch.trim().toLowerCase();
+    return chatSessions
+      .filter((session) => !query || String(session.title || '').toLowerCase().includes(query))
+      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+  }, [chatSessions, chatSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+    readSavedChats().then((saved) => {
+      if (cancelled) return;
+      const sessions = saved.length ? saved : [makeChatSession()];
+      const first = sessions[0];
+      setChatSessions(sessions);
+      setActiveChatId(first.id);
+      setMessages(hydrateMessages(first.messages));
+      setHistoryReady(true);
+    }).catch(() => {
+      const first = makeChatSession();
+      setChatSessions([first]);
+      setActiveChatId(first.id);
+      setMessages(first.messages);
+      setHistoryReady(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!historyReady || !activeChatId) return;
+    setChatSessions((old) => old.map((session) => session.id === activeChatId
+      ? { ...session, messages, updatedAt: Date.now() }
+      : session));
+  }, [messages, activeChatId, historyReady]);
+
+  useEffect(() => {
+    if (!historyReady || !chatSessions.length) return;
+    const timer = setTimeout(() => {
+      writeSavedChats(chatSessions).catch(() => setStatus('Chats konnten im Browser nicht gespeichert werden.'));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [chatSessions, historyReady]);
+
+  function newChat() {
+    const next = makeChatSession();
+    setChatSessions((old) => [next, ...old]);
+    setActiveChatId(next.id);
+    setMessages(next.messages);
+    setAttachments([]);
+    setInput('');
+    setStatus('Neuer Chat geöffnet.');
+  }
+
+  function openChat(session) {
+    setActiveChatId(session.id);
+    setMessages(hydrateMessages(session.messages));
+    setAttachments([]);
+    setInput('');
+  }
+
+  function deleteChat(event, id) {
+    event.stopPropagation();
+    setChatSessions((old) => {
+      const remaining = old.filter((session) => session.id !== id);
+      if (id === activeChatId) {
+        const next = remaining[0] || makeChatSession();
+        if (!remaining.length) remaining.push(next);
+        setActiveChatId(next.id);
+        setMessages(hydrateMessages(next.messages));
+      }
+      return remaining;
+    });
+  }
 
   function removeAttachment(id) {
     setAttachments((old) => old.filter((item) => item.id !== id));
@@ -237,7 +385,7 @@ export default function Chat() {
 
   function addGenericFile(file) {
     setAttachments((old) => [...old, {
-      id: crypto.randomUUID(), kind: 'file', name: file.name, size: file.size, mimeType: file.type || 'application/octet-stream'
+      id: crypto.randomUUID(), kind: 'file', name: file.name, size: file.size, mimeType: file.type || 'application/octet-stream', blob: file
     }].slice(-4));
     setStatus(`Datei „${file.name}“ hinzugefügt.`);
   }
@@ -252,7 +400,7 @@ export default function Chat() {
       reader.onload = () => {
         setAttachments((old) => [...old, {
           id: crypto.randomUUID(), kind: 'image', name: file.name || 'foto.jpg', size: file.size,
-          mimeType: file.type || 'image/jpeg', previewUrl: reader.result, data: reader.result
+          mimeType: file.type || 'image/jpeg', previewUrl: reader.result, data: reader.result, blob: file
         }].slice(-4));
         resolve();
       };
@@ -266,7 +414,7 @@ export default function Chat() {
     const id = crypto.randomUUID();
     setAttachments((old) => [...old, {
       id, kind: 'video', name: file.name || 'video.mp4', size: file.size,
-      mimeType: file.type || 'video/mp4', previewUrl, frames: [], extracting: true
+      mimeType: file.type || 'video/mp4', previewUrl, frames: [], extracting: true, blob: file
     }].slice(-4));
     setStatus('Yildiz AI liest vier Vorschaubilder aus dem Video …');
     try {
@@ -359,7 +507,7 @@ export default function Chat() {
     setMessages((old) => [...old, {
       role: 'assistant',
       content: `Hier ist dein Video mit automatisch erzeugten Szenenbildern, Bewegung und Hintergrundmusik. Format: ${video.ext.toUpperCase()}.`,
-      attachments: [{ kind: 'video', name: `yildiz-ai-video.${video.ext}`, previewUrl: video.url }]
+      attachments: [{ kind: 'video', name: `yildiz-ai-video.${video.ext}`, previewUrl: video.url, blob: video.blob }]
     }]);
     setStatus(`Video erstellt · ${video.ext.toUpperCase()} · Musik automatisch hinzugefügt`);
   }
@@ -380,6 +528,11 @@ export default function Chat() {
       attachments: attachments.map(fileMessageAttachment)
     };
 
+    if (clean) {
+      setChatSessions((old) => old.map((session) => session.id === activeChatId && session.title === 'Neuer Chat'
+        ? { ...session, title: clean.replace(/\s+/g, ' ').slice(0, 42), updatedAt: Date.now() }
+        : session));
+    }
     setMessages((old) => [...old, userMessage]);
     setInput('');
     setAttachments([]);
@@ -424,7 +577,8 @@ export default function Chat() {
   }
 
   return (
-    <section className="chat-shell">
+    <section className="chat-workspace-pro">
+      <section className="chat-shell">
       <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI mit Medienanalyse</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
       <div className="chat-messages">
         {messages.map((message, index) => (
@@ -492,6 +646,21 @@ export default function Chat() {
         }} />
         <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !hasPayload}><ArrowUp size={20} /></button>
       </div>
+      </section>
+      <aside className="chat-history-panel">
+        <button className="new-chat-button" onClick={newChat}><MessageSquarePlus size={18}/>Neuer Chat</button>
+        <label className="chat-search"><Search size={15}/><input value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Chats suchen" /></label>
+        <div className="chat-history-list">
+          {filteredSessions.map((session) => (
+            <button key={session.id} className={`chat-history-item ${session.id === activeChatId ? 'active' : ''}`} onClick={() => openChat(session)}>
+              <span>{session.title || 'Neuer Chat'}</span>
+              <small>{new Date(session.updatedAt || session.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</small>
+              <i onClick={(event) => deleteChat(event, session.id)} title="Chat löschen"><Trash2 size={14}/></i>
+            </button>
+          ))}
+        </div>
+        <p className="chat-save-note">Chats werden automatisch in diesem Browser gespeichert. Große Videos bleiben aus Speichergründen nur auf dem Gerät verfügbar.</p>
+      </aside>
     </section>
   );
 }
