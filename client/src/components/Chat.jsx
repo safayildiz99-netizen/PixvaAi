@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Bot, Camera, Cloud, FileText, ImagePlus, MessageSquarePlus, Paperclip, Search, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
+import { ArrowUp, Bot, Camera, Cloud, Download, FileText, ImagePlus, MessageSquarePlus, Paperclip, Search, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
 import { api } from '../api.js';
 
 const quickPrompts = [
@@ -383,6 +383,25 @@ export default function Chat() {
     setAttachments((old) => old.filter((item) => item.id !== id));
   }
 
+  function exportCurrentChat() {
+    const session = chatSessions.find((item) => item.id === activeChatId);
+    const lines = (messages || []).map((message) => {
+      const speaker = message.role === 'assistant' ? 'Yildiz AI' : 'Du';
+      const attachmentNames = Array.isArray(message.attachments) && message.attachments.length
+        ? `\nAnhänge: ${message.attachments.map((item) => item.name || item.kind).join(', ')}`
+        : '';
+      return `${speaker}: ${message.content || ''}${attachmentNames}`;
+    });
+    const blob = new Blob([`Yildiz AI Chat\n${session?.title || 'Chat'}\n\n${lines.join('\n\n')}`], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${String(session?.title || 'yildiz-ai-chat').replace(/[^a-z0-9äöüß_-]+/gi, '-')}.txt`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Chat als TXT gespeichert.');
+  }
+
   function addGenericFile(file) {
     setAttachments((old) => [...old, {
       id: crypto.randomUUID(), kind: 'file', name: file.name, size: file.size, mimeType: file.type || 'application/octet-stream', blob: file
@@ -578,6 +597,21 @@ export default function Chat() {
 
   return (
     <section className="chat-workspace-pro">
+      <aside className="chat-history-panel">
+        <button className="new-chat-button" onClick={newChat}><MessageSquarePlus size={18}/>Neuer Chat</button>
+        <button className="chat-export-button" onClick={exportCurrentChat}><Download size={16}/>Aktuellen Chat speichern</button>
+        <label className="chat-search"><Search size={15}/><input value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Chats suchen" /></label>
+        <div className="chat-history-list">
+          {filteredSessions.map((session) => (
+            <button key={session.id} className={`chat-history-item ${session.id === activeChatId ? 'active' : ''}`} onClick={() => openChat(session)}>
+              <span>{session.title || 'Neuer Chat'}</span>
+              <small>{new Date(session.updatedAt || session.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</small>
+              <i onClick={(event) => deleteChat(event, session.id)} title="Chat löschen"><Trash2 size={14}/></i>
+            </button>
+          ))}
+        </div>
+        <p className="chat-save-note">Chats werden automatisch in diesem Browser gespeichert. Mit „Chat speichern“ kannst du zusätzlich eine TXT-Datei herunterladen.</p>
+      </aside>
       <section className="chat-shell">
       <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI mit Medienanalyse</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
       <div className="chat-messages">
@@ -647,20 +681,6 @@ export default function Chat() {
         <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !hasPayload}><ArrowUp size={20} /></button>
       </div>
       </section>
-      <aside className="chat-history-panel">
-        <button className="new-chat-button" onClick={newChat}><MessageSquarePlus size={18}/>Neuer Chat</button>
-        <label className="chat-search"><Search size={15}/><input value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Chats suchen" /></label>
-        <div className="chat-history-list">
-          {filteredSessions.map((session) => (
-            <button key={session.id} className={`chat-history-item ${session.id === activeChatId ? 'active' : ''}`} onClick={() => openChat(session)}>
-              <span>{session.title || 'Neuer Chat'}</span>
-              <small>{new Date(session.updatedAt || session.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</small>
-              <i onClick={(event) => deleteChat(event, session.id)} title="Chat löschen"><Trash2 size={14}/></i>
-            </button>
-          ))}
-        </div>
-        <p className="chat-save-note">Chats werden automatisch in diesem Browser gespeichert. Große Videos bleiben aus Speichergründen nur auf dem Gerät verfügbar.</p>
-      </aside>
     </section>
   );
 }

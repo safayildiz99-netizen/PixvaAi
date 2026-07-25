@@ -1,11 +1,33 @@
-YILDIZ AI – OPERA + GEMINI + GASTZUGANG
+YILDIZ AI CREATOR STUDIO V2 – INSTALLATION
 
+Diese ZIP ist ein Patch. Lade die Dateien nicht in den GitHub-Hauptordner.
+
+Richtige Pfade:
+- client/package.json
+- client/src/components/Chat.jsx
+- client/src/components/DesignEditor.jsx
+- client/src/components/VideoStudio.jsx
+- client/src/styles.css
+- client/public/templates/ (alle vier Bilder)
+
+Einfachste Methode:
 1. ZIP entpacken.
-2. GitHub > Yildiz-AI > Add file > Upload files.
-3. Alle Inhalte des entpackten Ordners hochladen und ersetzen.
-4. Commit changes.
-5. Vercel deployt automatisch.
-6. Prüfe in Vercel: GEMINI_API_KEY, VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY.
-7. Website mit Cmd+Shift+R neu laden.
+2. In GitHub jeden passenden Ordner öffnen.
+3. Die Datei dort mit Add file → Upload files ersetzen.
+4. Commit-Nachricht: Creator Studio V2
+5. Vercel abwarten, bis Ready + Production erscheint.
+6. yildiz-ai.vercel.app mit Cmd+Shift+R neu laden.
 
-Kein neues Supabase-SQL nötig.
+Neu:
+- Chatliste links, Neuer Chat, automatische Speicherung, Chat als TXT exportieren.
+- Editierbare Vorlagen im Stil der bereitgestellten Marktangebote.
+- Produktbilder per Drag & Drop in einzelne Produktplätze einsetzen.
+- Text als editierbares Fabric-IText; Doppelklick zum Schreiben.
+- Cmd/Ctrl+C, V, X, D, Z, Y, A; Pfeiltasten zum Verschieben; Löschen-Taste.
+- Schrift, Größe, Farbe und Fett direkt in der oberen Werkzeugleiste.
+- Bildbearbeitung, Hintergrund entfernen, Ebenen, Sperren, Spiegeln, Position, Größe, Deckkraft.
+- Video-Vorlagen, linke Werkzeugbereiche, Schriftfamilie, Gewicht und Ausrichtung.
+- Szenen mit Cmd/Ctrl+C, V, D kopieren/duplizieren.
+
+Hinweis:
+Diese Version ist deutlich umfangreicher und Canva-/Photoshop-ähnlich aufgebaut. Eine vollständige 1:1-Kopie aller Funktionen von Photoshop oder Canva wäre ein eigenes sehr großes Softwareprojekt.

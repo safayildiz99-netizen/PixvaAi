@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import {
-  Canvas, Circle, FabricImage, FabricText, Group, Rect, filters
+  ActiveSelection, Canvas, Circle, FabricImage, FabricText, Group, IText, Rect, filters
 } from 'fabric';
 import {
   AlignCenter, ArrowDownToLine, ArrowUpToLine, Bold, Copy, Download, Eye, EyeOff,
@@ -35,7 +35,7 @@ function fileToDataUrl(file) {
 }
 
 function makeText(text, options = {}) {
-  return new FabricText(text, {
+  return new IText(text, {
     fontFamily: 'Arial',
     fontWeight: 700,
     fill: '#111111',
@@ -95,6 +95,65 @@ function addCreativeTemplate(canvas, width, height) {
   canvas.renderAll();
 }
 
+
+function addProductCard(canvas, x, y, cardW, cardH, index, accent) {
+  const slotId = `product-slot:${index}`;
+  const card = new Rect({ left: x, top: y, width: cardW, height: cardH, fill: '#ffffff', rx: 16, ry: 16, stroke: '#dedede', strokeWidth: 1, selectable: false, dataRole: `card:${index}`, displayName: `Produktkarte ${index}` });
+  const title = makeText('PRODUKTNAME', { left: x + cardW * .06, top: y + cardH * .05, fontSize: Math.max(14, cardW / 10), fill: '#111111', dataRole: `product-title:${index}`, displayName: `Produktname ${index}` });
+  const slot = new Rect({ left: x + cardW * .06, top: y + cardH * .2, width: cardW * .88, height: cardH * .55, fill: '#f7f7f7', stroke: '#b8b8b8', strokeDashArray: [7, 6], rx: 12, ry: 12, dataRole: slotId, displayName: `Produktbild ${index}` });
+  const hint = makeText('BILD HIER\nABLEGEN', { left: x + cardW / 2, top: y + cardH * .47, originX: 'center', originY: 'center', textAlign: 'center', fontSize: Math.max(11, cardW / 14), fill: '#9a9a9a', selectable: false, dataRole: `product-slot-label:${index}`, displayName: `Bildhinweis ${index}` });
+  const badge = new Rect({ left: x + cardW * .58, top: y + cardH * .78, width: cardW * .36, height: cardH * .14, fill: accent, rx: 6, ry: 6, dataRole: `price-bg:${index}`, displayName: `Preisfläche ${index}` });
+  const price = makeText('4,99 €', { left: x + cardW * .76, top: y + cardH * .85, originX: 'center', originY: 'center', fontSize: Math.max(15, cardW / 8), fontWeight: 900, fill: '#ffffff', dataRole: `price:${index}`, displayName: `Preis ${index}` });
+  canvas.add(card, title, slot, hint, badge, price);
+}
+
+function addAtlasGridTemplate(canvas, width, height) {
+  canvas.clear();
+  canvas.backgroundColor = '#f4f2e9';
+  const hero = new Rect({ left: 0, top: 0, width, height: height * .27, fill: '#223e2e', dataRole: 'hero-slot', displayName: 'Kopfbild' });
+  const heroText = makeText('FRISCHE ANGEBOTE', { left: width * .055, top: height * .07, fontSize: width / 13, fill: '#ffffff', displayName: 'Kopfzeile' });
+  const address = makeText('Musterstraße 12 · 70173 Stuttgart', { left: width * .055, top: height * .2, fontSize: width / 30, fill: '#d9f3de', displayName: 'Adresse' });
+  const waveRed = new Rect({ left: 0, top: height * .25, width, height: height * .15, fill: '#df1f2d', angle: -4, selectable: false, dataRole: 'template-bg' });
+  const waveBlue = new Rect({ left: 0, top: height * .79, width, height: height * .28, fill: '#3564ad', angle: 3, selectable: false, dataRole: 'template-bg' });
+  canvas.add(hero, heroText, address, waveRed, waveBlue);
+  const cols = 3; const rows = 3; const gap = width * .025; const cardW = (width - gap * 4) / cols; const cardH = height * .205; const startY = height * .34;
+  let index = 1;
+  for (let row = 0; row < rows; row += 1) for (let col = 0; col < cols; col += 1) {
+    addProductCard(canvas, gap + col * (cardW + gap), startY + row * (cardH + gap * .75), cardW, cardH, index, '#ff5a24'); index += 1;
+  }
+  canvas.renderAll();
+}
+
+function addFreshGridTemplate(canvas, width, height) {
+  canvas.clear();
+  canvas.backgroundColor = '#1e7a3f';
+  const hero = new Rect({ left: 0, top: 0, width, height: height * .31, fill: '#252525', dataRole: 'hero-slot', displayName: 'Kopfbild' });
+  const logo = makeText('THE\nFRESH\nMARKET', { left: width * .07, top: height * .04, fontSize: width / 16, textAlign: 'center', fill: '#ffffff', backgroundColor: '#4c913f', displayName: 'Logo' });
+  const headline = makeText('ANGEBOT DER WOCHE', { left: width * .42, top: height * .1, fontSize: width / 15, fill: '#ffffff', displayName: 'Kopfzeile' });
+  const ribbon = new Rect({ left: -width * .06, top: height * .28, width: width * 1.15, height: height * .1, fill: '#e52b38', angle: 4, selectable: false, dataRole: 'template-bg' });
+  canvas.add(hero, logo, headline, ribbon);
+  const cols = 3; const rows = 3; const gap = width * .025; const cardW = (width - gap * 4) / cols; const cardH = height * .19; const startY = height * .39;
+  let index = 1;
+  for (let row = 0; row < rows; row += 1) for (let col = 0; col < cols; col += 1) {
+    addProductCard(canvas, gap + col * (cardW + gap), startY + row * (cardH + gap * .75), cardW, cardH, index, '#ff5a24'); index += 1;
+  }
+  canvas.renderAll();
+}
+
+function addSingleTeaTemplate(canvas, width, height) {
+  canvas.clear();
+  canvas.backgroundColor = '#f4f1e6';
+  const script = makeText('Angebot der Woche', { left: width * .11, top: height * .05, fontFamily: 'Georgia', fontStyle: 'italic', fontSize: width / 10, fill: '#e41f32', displayName: 'Angebotstitel' });
+  const product = makeText('MEVLANA SCHWARZER TEE', { left: width * .1, top: height * .21, fontSize: width / 18, fill: '#111111', displayName: 'Produktname' });
+  const slot = new Rect({ left: width * .18, top: height * .34, width: width * .64, height: height * .34, fill: '#ffffff', stroke: '#c9c4b8', strokeDashArray: [9, 7], rx: 20, ry: 20, dataRole: 'product-slot:1', displayName: 'Produktbild' });
+  const hint = makeText('PRODUKTBILD HIER ABLEGEN', { left: width / 2, top: height * .51, originX: 'center', originY: 'center', fontSize: width / 28, fill: '#8d887f', dataRole: 'product-slot-label:1', displayName: 'Bildhinweis' });
+  const yellow = new Rect({ left: 0, top: height * .72, width, height: height * .28, fill: '#f2bc17', selectable: false, dataRole: 'template-bg' });
+  const price = makeText('9,99 €', { left: width * .72, top: height * .78, fontSize: width / 9, fontWeight: 900, fill: '#2d12d9', displayName: 'Preis' });
+  const logo = makeText('DEIN LOGO', { left: width * .07, top: height * .86, fontSize: width / 16, fill: '#24528c', displayName: 'Logo' });
+  canvas.add(script, product, slot, hint, yellow, price, logo);
+  canvas.renderAll();
+}
+
 function getObjectName(object, index) {
   if (object.displayName) return object.displayName;
   if (object instanceof FabricText) return String(object.text || 'Text').slice(0, 24);
@@ -130,6 +189,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const historyIndexRef = useRef(-1);
   const restoringRef = useRef(false);
   const productInputRef = useRef(null);
+  const clipboardRef = useRef(null);
 
   const [formatKey, setFormatKey] = useState(project?.data?.format || 'post');
   const [projectId, setProjectId] = useState(project?.id || '');
@@ -148,7 +208,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const [adjustments, setAdjustments] = useState({ brightness: 0, contrast: 0, saturation: 0 });
 
   const format = useMemo(() => formats[formatKey], [formatKey]);
-  const isText = selected instanceof FabricText;
+  const isText = selected instanceof IText || selected instanceof FabricText || ['i-text', 'textbox', 'text'].includes(selected?.type);
   const isImage = selected instanceof FabricImage;
 
   function refreshLayers() {
@@ -195,6 +255,54 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     refreshLayers();
   }
 
+
+  useEffect(() => {
+    const onKeyDown = async (event) => {
+      const canvas = fabricRef.current;
+      if (!canvas) return;
+      const active = canvas.getActiveObject();
+      const editingText = active && active.isEditing;
+      const modifier = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+
+      if (modifier && key === 'c' && active && !editingText) {
+        event.preventDefault();
+        clipboardRef.current = await active.clone(customProps);
+      } else if (modifier && key === 'v' && clipboardRef.current && !editingText) {
+        event.preventDefault();
+        const clone = await clipboardRef.current.clone(customProps);
+        clone.set({ left: Number(clone.left || 0) + 22, top: Number(clone.top || 0) + 22, evented: true });
+        canvas.add(clone); canvas.setActiveObject(clone); canvas.requestRenderAll(); clipboardRef.current = clone; snapshot();
+      } else if (modifier && key === 'x' && active && !editingText) {
+        event.preventDefault();
+        clipboardRef.current = await active.clone(customProps); removeSelected();
+      } else if (modifier && key === 'd' && active && !editingText) {
+        event.preventDefault(); await duplicateSelected();
+      } else if (modifier && key === 'a' && !editingText) {
+        event.preventDefault();
+        const objects = canvas.getObjects().filter((item) => item.selectable !== false);
+        if (objects.length) { const selection = new ActiveSelection(objects, { canvas }); canvas.setActiveObject(selection); canvas.requestRenderAll(); }
+      } else if (modifier && key === 'z') {
+        event.preventDefault();
+        await restoreHistory(historyIndexRef.current + (event.shiftKey ? 1 : -1));
+      } else if (modifier && key === 'y') {
+        event.preventDefault(); await restoreHistory(historyIndexRef.current + 1);
+      } else if ((event.key === 'Delete' || event.key === 'Backspace') && active && !editingText) {
+        event.preventDefault(); removeSelected();
+      } else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) && active && !editingText) {
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        if (event.key === 'ArrowLeft') active.set('left', Number(active.left || 0) - step);
+        if (event.key === 'ArrowRight') active.set('left', Number(active.left || 0) + step);
+        if (event.key === 'ArrowUp') active.set('top', Number(active.top || 0) - step);
+        if (event.key === 'ArrowDown') active.set('top', Number(active.top || 0) + step);
+        active.setCoords(); canvas.requestRenderAll(); snapshot();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selected]);
+
   useEffect(() => {
     const canvas = new Canvas(elementRef.current, {
       width: format.canvas[0],
@@ -212,6 +320,16 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     canvas.on('selection:cleared', () => syncSelected(null));
     canvas.on('object:modified', onChanged);
     canvas.on('text:changed', onChanged);
+    canvas.on('mouse:dblclick', (event) => {
+      const target = event.target;
+      if (target && typeof target.enterEditing === 'function') {
+        canvas.setActiveObject(target);
+        target.enterEditing();
+        target.selectAll?.();
+        syncSelected(target);
+        canvas.requestRenderAll();
+      }
+    });
 
     async function initialize() {
       if (project?.data?.canvas) {
@@ -298,39 +416,33 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
 
   async function replaceProductImage(fileOrUrl) {
     const canvas = fabricRef.current;
-    const slot = canvas.getObjects().find((object) => object.dataRole === 'product-slot');
-    const label = canvas.getObjects().find((object) => object.dataRole === 'product-slot-label');
-    const existing = canvas.getObjects().find((object) => object.dataRole === 'product-image');
+    const active = canvas.getActiveObject();
+    const activeRole = String(active?.dataRole || '');
+    const activeId = activeRole.includes(':') ? activeRole.split(':')[1] : '';
+    const slot = activeRole.startsWith('product-slot:')
+      ? active
+      : canvas.getObjects().find((object) => String(object.dataRole || '') === `product-slot:${activeId}`)
+        || canvas.getObjects().find((object) => String(object.dataRole || '').startsWith('product-slot:'));
+    const slotId = String(slot?.dataRole || '').split(':')[1] || activeId || '1';
+    const label = canvas.getObjects().find((object) => String(object.dataRole || '') === `product-slot-label:${slotId}`);
+    const existing = activeRole.startsWith('product-image:')
+      ? active
+      : canvas.getObjects().find((object) => String(object.dataRole || '') === `product-image:${slotId}`);
     const url = typeof fileOrUrl === 'string' ? fileOrUrl : await fileToDataUrl(fileOrUrl);
     const image = await createFabricImage(url);
-
-    const target = slot || existing || {
-      left: canvas.width * .34,
-      top: canvas.height * .49,
-      width: canvas.width * .5,
-      height: canvas.height * .4,
-      originX: 'center', originY: 'center'
-    };
-    const targetWidth = slot ? slot.getScaledWidth() * .9 : existing ? existing.getScaledWidth() : canvas.width * .5;
-    const targetHeight = slot ? slot.getScaledHeight() * .9 : existing ? existing.getScaledHeight() : canvas.height * .4;
-
+    const targetWidth = slot ? slot.getScaledWidth() * .92 : existing ? existing.getScaledWidth() : canvas.width * .45;
+    const targetHeight = slot ? slot.getScaledHeight() * .92 : existing ? existing.getScaledHeight() : canvas.height * .35;
     image.scale(Math.min(targetWidth / image.width, targetHeight / image.height));
     image.set({
-      left: slot ? slot.left + slot.getScaledWidth() / 2 : existing?.left ?? target.left,
-      top: slot ? slot.top + slot.getScaledHeight() / 2 : existing?.top ?? target.top,
-      originX: 'center', originY: 'center', dataRole: 'product-image', displayName: 'Produktbild'
+      left: slot ? slot.left + slot.getScaledWidth() / 2 : existing?.left ?? canvas.width / 2,
+      top: slot ? slot.top + slot.getScaledHeight() / 2 : existing?.top ?? canvas.height / 2,
+      originX: 'center', originY: 'center', dataRole: `product-image:${slotId}`, displayName: `Produktbild ${slotId}`
     });
-
     if (slot) canvas.remove(slot);
     if (label) canvas.remove(label);
     if (existing) canvas.remove(existing);
-    canvas.add(image);
-    const price = canvas.getObjects().find((object) => object.dataRole === 'price-badge');
-    if (price) canvas.bringObjectToFront(price);
-    canvas.setActiveObject(image);
-    canvas.renderAll();
-    snapshot();
-    setStatus('Produktbild wurde ersetzt. Du kannst es jetzt frei verschieben und bearbeiten.');
+    canvas.add(image); canvas.setActiveObject(image); canvas.requestRenderAll(); snapshot();
+    setStatus(`Produktbild ${slotId} wurde ersetzt. Cmd/Ctrl+C und Cmd/Ctrl+V funktionieren jetzt.`);
   }
 
   async function uploadImage(event) {
@@ -506,6 +618,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     const canvas = fabricRef.current;
     const action = () => {
       if (type === 'offer') addOfferTemplate(canvas, canvas.width, canvas.height);
+      else if (type === 'atlas-grid') addAtlasGridTemplate(canvas, canvas.width, canvas.height);
+      else if (type === 'fresh-grid') addFreshGridTemplate(canvas, canvas.width, canvas.height);
+      else if (type === 'tea-single') addSingleTeaTemplate(canvas, canvas.width, canvas.height);
       else if (type === 'creative') addCreativeTemplate(canvas, canvas.width, canvas.height);
       else { canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.renderAll(); }
       setBackground(canvas.backgroundColor || '#ffffff');
@@ -614,7 +729,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     const file = Array.from(event.dataTransfer.files || []).find((item) => item.type.startsWith('image/'));
     if (!file) return;
     try {
-      if (fabricRef.current.getObjects().some((object) => object.dataRole === 'product-slot' || object.dataRole === 'product-image')) await replaceProductImage(file);
+      const active = fabricRef.current.getActiveObject();
+      const activeRole = String(active?.dataRole || '');
+      if (activeRole.startsWith('product-slot:') || activeRole.startsWith('product-image:') || fabricRef.current.getObjects().some((object) => String(object.dataRole || '').startsWith('product-slot:'))) await replaceProductImage(file);
       else await addImageUrl(await fileToDataUrl(file), { displayName: file.name });
     } catch (error) {
       setStatus(error.message);
@@ -627,7 +744,14 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         <div className="panel-section">
           <label>Projektname<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
           <label>Format<select value={formatKey} onChange={(event) => setFormatKey(event.target.value)}>{Object.entries(formats).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-          <label>Vorlage<select defaultValue={mode === 'flyer' ? 'offer' : 'creative'} onChange={(event) => applyTemplate(event.target.value)}><option value="offer">Angebot mit Produkt & Preis</option><option value="creative">Modernes Social-Media-Design</option><option value="blank">Leere Arbeitsfläche</option></select></label>
+          <div className="template-gallery">
+            <button onClick={() => applyTemplate('tea-single')}><img src="/templates/atlas-tee-single.jpg" alt="Einzelangebot"/><span>Einzelangebot</span></button>
+            <button onClick={() => applyTemplate('atlas-grid')}><img src="/templates/atlas-grid.jpg" alt="Atlas Raster"/><span>Atlas 3×3</span></button>
+            <button onClick={() => applyTemplate('fresh-grid')}><img src="/templates/fresh-grid.jpg" alt="Fresh Raster"/><span>Fresh 3×3</span></button>
+            <button onClick={() => applyTemplate('offer')}><img src="/templates/fresh-market-single.jpg" alt="Produktangebot"/><span>Produkt & Preis</span></button>
+            <button onClick={() => applyTemplate('creative')}><span className="template-abstract">AI</span><span>Kreativ</span></button>
+            <button onClick={() => applyTemplate('blank')}><span className="template-blank">+</span><span>Leer</span></button>
+          </div>
         </div>
 
         <div className="tool-grid">
@@ -671,6 +795,12 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
             <button onClick={() => move('up')}><MoveUp size={17}/>Vor</button>
             <button onClick={() => move('down')}><MoveDown size={17}/>Zurück</button>
           </div>
+          {isText && <div className="context-text-toolbar">
+            <select value={selected.fontFamily || 'Arial'} onChange={(event) => commitObject('fontFamily', event.target.value)}>{fontOptions.map((font) => <option key={font}>{font}</option>)}</select>
+            <input type="number" min="6" max="240" value={Math.round(selected.fontSize || 40)} onChange={(event) => updateObject('fontSize', Number(event.target.value))} onBlur={snapshot}/>
+            <input type="color" value={typeof selected.fill === 'string' ? selected.fill : '#111111'} onChange={(event) => commitObject('fill', event.target.value)}/>
+            <button onClick={() => commitObject('fontWeight', selected.fontWeight === 700 || selected.fontWeight === 'bold' ? 400 : 700)}><Bold size={16}/></button>
+          </div>}
           <div className="export-controls">
             <button onClick={saveProject}><Save size={17}/>{canSave ? 'Speichern' : 'Anmelden'}</button>
             <button onClick={exportPdf}><FileText size={17}/>PDF</button>
@@ -689,7 +819,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         </div>
         <div className="canvas-footer-pro">
           <label><ZoomIn size={15}/><input type="range" min="35" max="140" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}/><span>{zoom}%</span></label>
-          <div className="status-line">{status || 'Element anklicken. Text per Doppelklick bearbeiten. Produktbild direkt auf die Fläche ziehen.'}</div>
+          <div className="status-line">{status || 'Text anklicken und direkt tippen. Doppelklick öffnet die Texteingabe. Cmd/Ctrl+C, V, Z, D sowie Pfeiltasten funktionieren.'}</div>
         </div>
       </div>
 

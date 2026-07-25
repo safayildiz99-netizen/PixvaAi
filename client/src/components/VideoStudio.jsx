@@ -31,6 +31,9 @@ function newScene(index) {
     accentColor: '#ffd400',
     overlayOpacity: 0.72,
     fontScale: 1,
+    fontFamily: 'Arial',
+    fontWeight: 800,
+    textAlign: 'left',
     showText: true,
     trimStart: 0
   };
@@ -123,16 +126,20 @@ function drawOverlay(ctx, width, height, scene, index, localProgress) {
   const baseY = isTop ? height * .1 : height * .78;
   const scale = Number(scene.fontScale || 1);
   ctx.fillStyle = scene.accentColor || '#ffd400';
-  ctx.font = `800 ${Math.max(18, width / 36) * scale}px Arial`;
-  ctx.fillText(`0${index + 1}`, width * .07, baseY);
+  const family = scene.fontFamily || 'Arial';
+  const weight = Number(scene.fontWeight || 800);
+  ctx.textAlign = scene.textAlign || 'left';
+  const textX = scene.textAlign === 'center' ? width / 2 : scene.textAlign === 'right' ? width * .93 : width * .07;
+  ctx.font = `${weight} ${Math.max(18, width / 36) * scale}px ${family}`;
+  ctx.fillText(`0${index + 1}`, textX, baseY);
   ctx.fillStyle = scene.textColor || '#ffffff';
-  ctx.font = `800 ${Math.max(30, width / 18) * scale}px Arial`;
+  ctx.font = `${weight} ${Math.max(30, width / 18) * scale}px ${family}`;
   const title = String(scene.title || `Abschnitt ${index + 1}`).slice(0, 42);
-  ctx.fillText(title, width * .07, baseY + height * .06, width * .86);
+  ctx.fillText(title, textX, baseY + height * .06, width * .86);
   ctx.fillStyle = scene.textColor || 'rgba(255,255,255,.78)';
   ctx.globalAlpha = .78;
-  ctx.font = `500 ${Math.max(16, width / 38) * scale}px Arial`;
-  ctx.fillText(String(scene.prompt || '').slice(0, 88), width * .07, baseY + height * .11, width * .86);
+  ctx.font = `500 ${Math.max(16, width / 38) * scale}px ${family}`;
+  ctx.fillText(String(scene.prompt || '').slice(0, 88), textX, baseY + height * .11, width * .86);
   ctx.globalAlpha = 1;
 
   if (scene.transition === 'fade') {
@@ -237,6 +244,7 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
   const [resultBlob, setResultBlob] = useState(null);
   const [resultExt, setResultExt] = useState('webm');
   const hiddenCanvasRef = useRef(null);
+  const sceneClipboardRef = useRef(null);
   const format = useMemo(() => formats[formatKey] || formats.story, [formatKey]);
   const totalDuration = useMemo(() => scenes.reduce((sum, scene) => sum + Number(scene.duration || 0), 0), [scenes]);
   const selectedScene = useMemo(() => scenes.find((scene) => scene.id === selectedSceneId) || scenes[0], [scenes, selectedSceneId]);
@@ -251,6 +259,44 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
     setMusicVolume(project.data?.musicVolume ?? .55);
     setSelectedSceneId((project.data?.scenes?.[0] || scenes[0])?.id || '');
   }, [project?.id]);
+
+  function applyVideoTemplate(type) {
+    const presets = {
+      offer: [
+        { title: 'ANGEBOT DER WOCHE', prompt: 'Großer aufmerksamkeitsstarker Einstieg mit Marktlogo und Produktwelt.', duration: 3, animation: 'zoom', textPosition: 'top' },
+        { title: 'PRODUKT IM FOKUS', prompt: 'Produkt groß im Bild, Preis und Angebotsinformation klar sichtbar.', duration: 4, animation: 'pan-right', textPosition: 'bottom' },
+        { title: 'JETZT ZUGREIFEN', prompt: 'Abschluss mit Adresse, Logo und Call-to-Action.', duration: 3, animation: 'zoom-out', textPosition: 'bottom' }
+      ],
+      cloud: [
+        { title: 'WILLKOMMEN', prompt: 'Heller Wolkenhintergrund, weiche Bewegung und freundliche Musik.', duration: 4, animation: 'pan-up', textPosition: 'bottom', accentColor: '#63c7ff' },
+        { title: 'DEIN KANAL', prompt: 'Logo groß in der Mitte mit sanfter Einblendung.', duration: 4, animation: 'zoom', textPosition: 'bottom', accentColor: '#ffd400' }
+      ],
+      social: [
+        { title: 'STOPP SCROLLEN', prompt: 'Starker Social-Media-Hook, nahes Motiv, dynamische Bewegung.', duration: 2, animation: 'zoom', textPosition: 'top' },
+        { title: 'DAS IST NEU', prompt: 'Hauptinformation mit Produkt oder Person.', duration: 4, animation: 'pan-left', textPosition: 'bottom' },
+        { title: 'MEHR ERFAHREN', prompt: 'Klarer Abschluss mit Logo und Handlungsaufforderung.', duration: 3, animation: 'zoom-out', textPosition: 'bottom' }
+      ]
+    };
+    const source = presets[type] || presets.offer;
+    const next = source.map((item, index) => ({ ...newScene(index), ...item }));
+    setScenes(next); setSelectedSceneId(next[0].id); setStatus('Videovorlage geladen. Ersetze die Bilder oder lasse KI-Bilder erzeugen.');
+  }
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const modifier = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+      if (!selectedScene) return;
+      if (modifier && key === 'c') { event.preventDefault(); sceneClipboardRef.current = { ...selectedScene }; }
+      else if (modifier && key === 'v' && sceneClipboardRef.current) {
+        event.preventDefault(); const clone = { ...sceneClipboardRef.current, id: crypto.randomUUID(), title: `${sceneClipboardRef.current.title} Kopie` };
+        setScenes((old) => [...old, clone]); setSelectedSceneId(clone.id);
+      } else if (modifier && key === 'd') { event.preventDefault(); duplicateScene(selectedScene); }
+      else if ((event.key === 'Delete' || event.key === 'Backspace') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) { event.preventDefault(); deleteScene(selectedScene); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedScene]);
 
   const updateScene = (id, patch) => setScenes((old) => old.map((scene) => scene.id === id ? { ...scene, ...patch } : scene));
 
@@ -526,19 +572,24 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
 
       <div className="video-editor-main">
         <aside className="video-media-panel">
-          <h3>Medien & Projekt</h3>
+          <h3>Vorlagen & Medien</h3>
+          <div className="video-template-gallery">
+            <button onClick={() => applyVideoTemplate('offer')}><img src="/templates/atlas-grid.jpg" alt="Angebotsvideo"/><span>Angebotsvideo</span></button>
+            <button onClick={() => applyVideoTemplate('cloud')}><span className="video-template-cloud">☁</span><span>Kanal-Intro</span></button>
+            <button onClick={() => applyVideoTemplate('social')}><span className="video-template-social">▶</span><span>Social Reel</span></button>
+          </div>
           <label>Format<select value={formatKey} onChange={(event) => setFormatKey(event.target.value)}>{Object.entries(formats).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
           <label>Musikstil<select value={musicStyle} onChange={(event) => setMusicStyle(event.target.value)}><option value="soft">Sanft automatisch</option><option value="dynamic">Dynamisch automatisch</option><option value="none">Keine Musik</option></select></label>
           <label>Musiklautstärke <span>{Math.round(musicVolume * 100)} %</span><input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))}/></label>
           <label className="clip-upload"><Music2 size={16}/>Eigene Musik<input type="file" accept="audio/*" onChange={(event) => setMusicFile(event.target.files?.[0] || null)}/></label>
           <button onClick={generateAllImages} disabled={generatingAll}>{generatingAll ? <LoaderCircle className="spin" size={17}/> : <Sparkles size={17}/>}Alle KI-Bilder erzeugen</button>
-          <div className="video-project-info"><b>{scenes.length} Szenen</b><span>{totalDuration} Sekunden</span><span>{format.label}</span></div>
+          <div className="video-project-info"><b>{scenes.length} Szenen</b><span>{totalDuration} Sekunden</span><span>{format.label}</span><span>Cmd/Ctrl+C, V, D und Löschen funktionieren für Szenen.</span></div>
         </aside>
 
         <div className="video-preview-workspace">
           <div className={`video-stage-preview format-${formatKey}`} style={{ aspectRatio: `${format.width}/${format.height}` }}>
             {selectedScene?.videoUrl ? <video src={selectedScene.videoUrl} controls playsInline/> : selectedScene?.imageUrl ? <img src={selectedScene.imageUrl} alt={selectedScene.title}/> : <div className="empty-preview"><FileImage size={42}/>Bild oder Video für diese Szene hochladen</div>}
-            {selectedScene?.showText && <div className={`preview-text-overlay ${selectedScene.textPosition || 'bottom'}`} style={{ color: selectedScene.textColor || '#fff', background: `linear-gradient(${selectedScene.textPosition === 'top' ? '180deg' : '0deg'}, rgba(0,0,0,${selectedScene.overlayOpacity ?? .72}), transparent)` }}><small style={{ color: selectedScene.accentColor || '#ffd400' }}>YILDIZ AI</small><h3 style={{ fontSize: `${1.6 * Number(selectedScene.fontScale || 1)}rem` }}>{selectedScene.title}</h3><p>{selectedScene.prompt}</p></div>}
+            {selectedScene?.showText && <div className={`preview-text-overlay ${selectedScene.textPosition || 'bottom'}`} style={{ color: selectedScene.textColor || '#fff', background: `linear-gradient(${selectedScene.textPosition === 'top' ? '180deg' : '0deg'}, rgba(0,0,0,${selectedScene.overlayOpacity ?? .72}), transparent)`, fontFamily: selectedScene.fontFamily || 'Arial', textAlign: selectedScene.textAlign || 'left' }}><small style={{ color: selectedScene.accentColor || '#ffd400' }}>YILDIZ AI</small><h3 style={{ fontSize: `${1.6 * Number(selectedScene.fontScale || 1)}rem`, fontWeight: selectedScene.fontWeight || 800 }}>{selectedScene.title}</h3><p>{selectedScene.prompt}</p></div>}
           </div>
           <div className="video-preview-actions">
             <label className="clip-upload"><Upload size={16}/>Bild/Video<input type="file" accept="image/*,video/*" onChange={(event) => selectedScene && uploadMedia(selectedScene, event)}/></label>
@@ -559,7 +610,14 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
             </div>
             <label>Animation<select value={selectedScene.animation || 'zoom'} onChange={(event) => updateScene(selectedScene.id, { animation: event.target.value })}><option value="zoom">Langsam hineinzoomen</option><option value="zoom-out">Langsam herauszoomen</option><option value="pan-left">Nach links schwenken</option><option value="pan-right">Nach rechts schwenken</option><option value="pan-up">Nach oben schwenken</option><option value="none">Keine Bewegung</option></select></label>
             <label>Übergang<select value={selectedScene.transition || 'fade'} onChange={(event) => updateScene(selectedScene.id, { transition: event.target.value })}><option value="fade">Ein-/Ausblenden</option><option value="none">Kein Übergang</option></select></label>
-            <label>Textposition<select value={selectedScene.textPosition || 'bottom'} onChange={(event) => updateScene(selectedScene.id, { textPosition: event.target.value })}><option value="bottom">Unten</option><option value="top">Oben</option></select></label>
+            <div className="inspector-grid">
+              <label>Schrift<select value={selectedScene.fontFamily || 'Arial'} onChange={(event) => updateScene(selectedScene.id, { fontFamily: event.target.value })}><option>Arial</option><option>Inter</option><option>Georgia</option><option>Impact</option><option>Times New Roman</option><option>Verdana</option></select></label>
+              <label>Gewicht<select value={selectedScene.fontWeight || 800} onChange={(event) => updateScene(selectedScene.id, { fontWeight: Number(event.target.value) })}><option value="400">Normal</option><option value="700">Fett</option><option value="800">Extra Fett</option><option value="900">Schwarz</option></select></label>
+            </div>
+            <div className="inspector-grid">
+              <label>Ausrichtung<select value={selectedScene.textAlign || 'left'} onChange={(event) => updateScene(selectedScene.id, { textAlign: event.target.value })}><option value="left">Links</option><option value="center">Mitte</option><option value="right">Rechts</option></select></label>
+              <label>Textposition<select value={selectedScene.textPosition || 'bottom'} onChange={(event) => updateScene(selectedScene.id, { textPosition: event.target.value })}><option value="bottom">Unten</option><option value="top">Oben</option></select></label>
+            </div>
             <label className="checkbox-row"><input type="checkbox" checked={selectedScene.showText !== false} onChange={(event) => updateScene(selectedScene.id, { showText: event.target.checked })}/>Text im Video anzeigen</label>
             <div className="inspector-grid">
               <label>Textfarbe<input type="color" value={selectedScene.textColor || '#ffffff'} onChange={(event) => updateScene(selectedScene.id, { textColor: event.target.value })}/></label>
