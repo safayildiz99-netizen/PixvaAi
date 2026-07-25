@@ -332,21 +332,27 @@ export default function Chat() {
     setStatus(`Bild erstellt${result.provider ? ` · ${result.provider}` : ''}`);
   }
 
-  async function generateVideoMessage(clean) {
+  async function generateVideoMessage(clean, sourceImages = []) {
     setStatus('Yildiz AI erstellt zuerst Szenenbilder und rendert dann das Video mit Musik …');
-    const scenePrompts = [
-      `${clean}. Szene 1: starker Einstieg, klare Hauptszene, filmisch, hochwertig, realistisch.`,
-      `${clean}. Szene 2: Hauptmoment, dynamische Perspektive, Bewegung, hochwertig, realistisch.`,
-      `${clean}. Szene 3: Abschluss, heroischer Shot, klarer Fokus, hochwertig, realistisch.`
-    ];
-    const images = [];
-    for (let index = 0; index < scenePrompts.length; index += 1) {
-      setStatus(`Yildiz AI erstellt Szenenbild ${index + 1} von ${scenePrompts.length} …`);
-      const result = await api('/api/ai/image', {
-        method: 'POST',
-        body: JSON.stringify({ prompt: scenePrompts[index], aspect: 'story', style: 'realistic' })
-      });
-      images.push(result.imageDataUrl);
+    const images = sourceImages.filter(Boolean).slice(0, 6);
+    if (!images.length) {
+      const scenePrompts = [
+        `${clean}. Scene 1: strong opening shot, clearly visible real subjects and real environment, cinematic, photorealistic, vertical video frame, no text.`,
+        `${clean}. Scene 2: main action from a different camera angle, clearly visible subjects, dynamic movement, photorealistic, vertical video frame, no text.`,
+        `${clean}. Scene 3: detailed close-up or medium shot, realistic lighting, coherent characters and environment, vertical video frame, no text.`,
+        `${clean}. Scene 4: strong final hero shot, visually rich background, cinematic and photorealistic, vertical video frame, no text.`
+      ];
+      for (let index = 0; index < scenePrompts.length; index += 1) {
+        setStatus(`Yildiz AI erstellt echtes Szenenbild ${index + 1} von ${scenePrompts.length} …`);
+        const result = await api('/api/ai/image', {
+          method: 'POST',
+          body: JSON.stringify({ prompt: scenePrompts[index], aspect: 'story', style: 'realistic' })
+        });
+        if (!result?.imageDataUrl || result?.fallback) {
+          throw new Error('Ein echtes Szenenbild konnte nicht erzeugt werden. Das Video wurde abgebrochen, damit kein Farb-/Text-Platzhalter exportiert wird.');
+        }
+        images.push(result.imageDataUrl);
+      }
     }
     setStatus('Bilder fertig. Video wird jetzt im Browser mit Übergängen und Musik gerendert …');
     const video = await renderGeneratedVideo(images, clean);
@@ -380,8 +386,18 @@ export default function Chat() {
     setLoading(true);
 
     try {
-      if (clean && !outgoingAttachments.length && looksLikeVideoPrompt(clean)) {
-        await generateVideoMessage(clean);
+      if (clean && looksLikeVideoPrompt(clean)) {
+        const uploadedImages = attachments
+          .filter((item) => item.kind === 'image')
+          .map((item) => item.previewUrl || item.data)
+          .filter(Boolean);
+        const recentGeneratedImages = [...messages].reverse()
+          .flatMap((message) => Array.isArray(message.attachments) ? message.attachments : [])
+          .filter((item) => item.kind === 'image')
+          .map((item) => item.previewUrl || item.data)
+          .filter(Boolean)
+          .slice(0, 4);
+        await generateVideoMessage(clean, uploadedImages.length ? uploadedImages : recentGeneratedImages);
       } else if (clean && !outgoingAttachments.length && looksLikeImagePrompt(clean)) {
         await generateImageMessage(clean, history, userMessage);
       } else {
