@@ -40,43 +40,43 @@ function buildPrompt(prompt, style) {
 }
 
 function extractImage(data) {
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  for (const part of parts) {
-    const inline = part?.inlineData || part?.inline_data;
-    if (inline?.data) {
-      return {
-        data: inline.data,
-        mimeType: inline.mimeType || inline.mime_type || 'image/png'
-      };
+  const candidates = data?.candidates || [];
+  for (const candidate of candidates) {
+    for (const part of candidate?.content?.parts || []) {
+      const inline = part?.inlineData || part?.inline_data;
+      if (inline?.data) {
+        return {
+          data: inline.data,
+          mimeType: inline.mimeType || inline.mime_type || 'image/png'
+        };
+      }
     }
   }
-
-  const visited = new Set();
-  function walk(value) {
-    if (!value || typeof value !== 'object' || visited.has(value)) return null;
-    visited.add(value);
-    const inline = value.inlineData || value.inline_data;
-    if (inline?.data) {
-      return {
-        data: inline.data,
-        mimeType: inline.mimeType || inline.mime_type || 'image/png'
-      };
-    }
-    for (const child of Object.values(value)) {
-      const found = walk(child);
-      if (found) return found;
-    }
-    return null;
-  }
-  return walk(data);
+  return null;
 }
 
-async function requestGeminiImage({ apiKey, model, prompt, aspect }) {
+function imageRequestBody(prompt, aspect, withFormat = true) {
+  const generationConfig = { responseModalities: ['IMAGE'] };
+  if (withFormat) {
+    generationConfig.responseFormat = {
+      image: {
+        aspectRatio: aspectMap[aspect] || '4:5',
+        imageSize: '1K'
+      }
+    };
+  }
+  return {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig
+  };
+}
+
+async function requestGeminiImage({ apiKey, model, prompt, aspect, version, withFormat }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55000);
+  const timeout = setTimeout(() => controller.abort(), 60000);
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,
+      `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(model)}:generateContent`,
       {
         method: 'POST',
         signal: controller.signal,
@@ -84,18 +84,7 @@ async function requestGeminiImage({ apiKey, model, prompt, aspect }) {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey
         },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
-            responseFormat: {
-              image: {
-                aspectRatio: aspectMap[aspect] || '4:5',
-                imageSize: '1K'
-              }
-            }
-          }
-        })
+        body: JSON.stringify(imageRequestBody(prompt, aspect, withFormat))
       }
     );
     const data = await response.json().catch(() => ({}));
@@ -115,22 +104,39 @@ async function tryGemini({ apiKey, prompt, aspect }) {
     'gemini-2.5-flash-image'
   ].filter(Boolean))];
 
+  const attempts = [
+    { version: 'v1', withFormat: true },
+    { version: 'v1', withFormat: false },
+    { version: 'v1beta', withFormat: true },
+    { version: 'v1beta', withFormat: false }
+  ];
+
   for (const model of models) {
-    try {
-      const { response, data } = await requestGeminiImage({ apiKey, model, prompt, aspect });
-      if (!response.ok) {
-        console.warn('Gemini image model failed', model, response.status, data?.error?.message || '');
-        continue;
+    for (const attempt of attempts) {
+      try {
+        const { response, data } = await requestGeminiImage({
+          apiKey,
+          model,
+          prompt,
+          aspect,
+          version: attempt.version,
+          withFormat: attempt.withFormat
+        });
+        if (!response.ok) {
+          console.warn('Gemini image failed', model, attempt.version, response.status, data?.error?.message || '');
+          if ([401, 403].includes(response.status)) return null;
+          continue;
+        }
+        const image = extractImage(data);
+        if (!image) continue;
+        return {
+          imageDataUrl: `data:${image.mimeType};base64,${image.data}`,
+          provider: model,
+          fallback: false
+        };
+      } catch (error) {
+        console.warn('Gemini image request failed', model, attempt.version, error?.message || error);
       }
-      const image = extractImage(data);
-      if (!image) continue;
-      return {
-        imageDataUrl: `data:${image.mimeType};base64,${image.data}`,
-        provider: model,
-        fallback: false
-      };
-    } catch (error) {
-      console.warn('Gemini image request failed', model, error?.message || error);
     }
   }
   return null;
@@ -144,11 +150,11 @@ function makePublicImageUrl(prompt, aspect) {
 
 async function tryPublicProxy(url) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 28000);
+  const timeout = setTimeout(() => controller.abort(), 35000);
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Yildiz-AI-Studio/6.0' }
+      headers: { 'User-Agent': 'Yildiz-AI-Studio/7.0' }
     });
     if (!response.ok) return null;
     const contentType = response.headers.get('content-type') || '';
@@ -157,7 +163,7 @@ async function tryPublicProxy(url) {
     if (buffer.length < 1000) return null;
     return {
       imageDataUrl: `data:${contentType};base64,${buffer.toString('base64')}`,
-      provider: 'public-image-proxy',
+      provider: 'kostenloser Bilddienst',
       fallback: false
     };
   } catch (error) {
@@ -191,18 +197,21 @@ export default async function handler(req, res) {
     const proxiedImage = await tryPublicProxy(publicUrl);
     if (proxiedImage) return send(res, 200, proxiedImage);
 
-    // Let the browser load the public image directly. This avoids a hard error when
-    // the Vercel function cannot reach the public image host although the browser can.
+    // The browser can often reach the public image host even when a Vercel region cannot.
     return send(res, 200, {
       imageUrl: publicUrl,
-      provider: 'public-image-direct',
+      provider: 'kostenloser Browser-Bilddienst',
       fallback: false,
       remote: true
     });
   } catch (error) {
     console.error('Image generation failed', error);
-    return send(res, 500, {
-      error: 'Die Bildgenerierung konnte nicht gestartet werden. Bitte prüfe den Gemini-Key oder versuche es erneut.'
+    return send(res, 200, {
+      imageUrl: makePublicImageUrl('photorealistic premium advertising image', 'post'),
+      provider: 'kostenloser Browser-Bilddienst',
+      fallback: false,
+      remote: true,
+      warning: 'Der Server-Bilddienst war nicht erreichbar; Browser-Fallback wird verwendet.'
     });
   }
 }
