@@ -68,6 +68,33 @@ function looksLikeVideoPrompt(text) {
     /(video|film|clip|reel|animation|trailer|short)/.test(value) || /video dazu|mach .* video/.test(value);
 }
 
+function makeDirectImageUrl(prompt, aspect = 'post') {
+  const sizes = {
+    square: [1024, 1024],
+    post: [1024, 1280],
+    story: [1024, 1792],
+    landscape: [1280, 720]
+  };
+  const [width, height] = sizes[aspect] || sizes.post;
+  const finalPrompt = [
+    'photorealistic, realistic photography, natural believable lighting, high detail, premium commercial quality',
+    'not a painting, not an illustration, not cartoon, no text overlay',
+    String(prompt || '').trim()
+  ].join(', ');
+  const seed = Math.floor(Math.random() * 1_000_000_000);
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=${width}&height=${height}&model=flux&nologo=true&enhance=true&safe=true&seed=${seed}`;
+}
+
+function preloadImage(url, timeoutMs = 35000) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const timer = setTimeout(() => reject(new Error('Bilddienst hat zu lange gebraucht.')), timeoutMs);
+    image.onload = () => { clearTimeout(timer); resolve(url); };
+    image.onerror = () => { clearTimeout(timer); reject(new Error('Bild konnte nicht geladen werden.')); };
+    image.src = url;
+  });
+}
+
 function bestRecorderMime() {
   const candidates = [
     'video/mp4;codecs=h264,aac',
@@ -278,7 +305,7 @@ async function writeSavedChats(sessions) {
 }
 
 function hydrateMessages(messages) {
-  return (messages || []).map((message) => ({
+  const hydrated = (messages || []).map((message) => ({
     ...message,
     attachments: Array.isArray(message.attachments)
       ? message.attachments.map((item) => ({
@@ -287,6 +314,11 @@ function hydrateMessages(messages) {
         }))
       : undefined
   }));
+  return hydrated.filter((message, index, all) => {
+    if (!index) return true;
+    const previous = all[index - 1];
+    return !(message.role === previous.role && String(message.content || '').trim() === String(previous.content || '').trim());
+  });
 }
 
 export default function Chat() {
@@ -306,6 +338,7 @@ export default function Chat() {
   const cameraVideoRef = useRef(null);
   const anyFileRef = useRef(null);
   const lastSendRef = useRef({ text: '', at: 0 });
+  const sendingRef = useRef(false);
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
   const filteredSessions = useMemo(() => {
     const query = chatSearch.trim().toLowerCase();
@@ -350,6 +383,7 @@ export default function Chat() {
   }, [chatSessions, historyReady]);
 
   function newChat() {
+    sendingRef.current = false;
     const next = makeChatSession();
     setChatSessions((old) => [next, ...old]);
     setActiveChatId(next.id);
@@ -486,20 +520,32 @@ export default function Chat() {
     event.target.value = '';
   }
 
-  async function generateImageMessage(clean, history, userMessage) {
+  async function generateImageMessage(clean) {
     setStatus('Yildiz AI erstellt dein Bild …');
-    const result = await api('/api/ai/image', {
-      method: 'POST',
-      body: JSON.stringify({ prompt: clean, aspect: 'post', style: 'realistic' })
-    });
-    const imageSource = result?.imageDataUrl || result?.imageUrl;
-    if (!imageSource) throw new Error('Der Bilddienst hat keine Bilddatei geliefert.');
+    let result = null;
+    try {
+      result = await api('/api/ai/image', {
+        method: 'POST',
+        body: JSON.stringify({ prompt: clean, aspect: 'post', style: 'realistic' })
+      });
+    } catch (error) {
+      console.warn('Server image route failed, using direct browser fallback', error);
+    }
+
+    let imageSource = result?.imageDataUrl || result?.imageUrl || '';
+    let provider = result?.provider || '';
+    if (!imageSource) {
+      imageSource = makeDirectImageUrl(clean, 'post');
+      provider = 'kostenloser Browser-Bilddienst';
+    }
+
+    await preloadImage(imageSource);
     setMessages((old) => [...old, {
       role: 'assistant',
-      content: result.remote ? 'Hier ist dein Bild. Es wird direkt vom kostenlosen Bilddienst geladen.' : 'Hier ist dein Bild. Du kannst es direkt öffnen oder herunterladen.',
-      attachments: [{ kind: 'image', name: 'yildiz-ai-bild.png', previewUrl: imageSource, data: result.imageDataUrl || '' }]
+      content: 'Hier ist dein Bild. Du kannst es direkt öffnen, speichern oder in ein Video übernehmen.',
+      attachments: [{ kind: 'image', name: 'yildiz-ai-bild.png', previewUrl: imageSource, data: result?.imageDataUrl || '' }]
     }]);
-    setStatus(`Bild erstellt${result.provider ? ` · ${result.provider}` : ''}`);
+    setStatus(`Bild erstellt${provider ? ` · ${provider}` : ''}`);
   }
 
   async function generateVideoMessage(clean, sourceImages = []) {
@@ -514,14 +560,17 @@ export default function Chat() {
       ];
       for (let index = 0; index < scenePrompts.length; index += 1) {
         setStatus(`Yildiz AI erstellt echtes Szenenbild ${index + 1} von ${scenePrompts.length} …`);
-        const result = await api('/api/ai/image', {
-          method: 'POST',
-          body: JSON.stringify({ prompt: scenePrompts[index], aspect: 'story', style: 'realistic' })
-        });
-        const imageSource = result?.imageDataUrl || result?.imageUrl;
-        if (!imageSource || result?.fallback) {
-          throw new Error('Ein echtes Szenenbild konnte nicht erzeugt werden. Lade alternativ eigene Bilder hoch und schreibe danach „Erstelle daraus ein Video“.');
+        let result = null;
+        try {
+          result = await api('/api/ai/image', {
+            method: 'POST',
+            body: JSON.stringify({ prompt: scenePrompts[index], aspect: 'story', style: 'realistic' })
+          });
+        } catch (error) {
+          console.warn('Server scene image failed, using direct fallback', error);
         }
+        const imageSource = result?.imageDataUrl || result?.imageUrl || makeDirectImageUrl(scenePrompts[index], 'story');
+        await preloadImage(imageSource);
         images.push(imageSource);
       }
     }
@@ -537,14 +586,16 @@ export default function Chat() {
 
   async function sendMessage(text = input) {
     const clean = String(text || '').trim();
+    if (sendingRef.current) return;
     const now = Date.now();
-    if (clean && lastSendRef.current.text === clean && now - lastSendRef.current.at < 1200) return;
-    lastSendRef.current = { text: clean, at: now };
+    if (clean && lastSendRef.current.text === clean && now - lastSendRef.current.at < 5000) return;
     if ((!clean && !attachments.length) || loading) return;
     if (attachments.some((item) => item.extracting)) {
       setStatus('Bitte kurz warten, bis die Videoframes vorbereitet sind.');
       return;
     }
+    sendingRef.current = true;
+    lastSendRef.current = { text: clean, at: now };
 
     const history = messages;
     const outgoingAttachments = attachments.map(({ id, previewUrl, extracting, ...rest }) => rest);
@@ -578,7 +629,7 @@ export default function Chat() {
           .slice(0, 4);
         await generateVideoMessage(clean, uploadedImages.length ? uploadedImages : recentGeneratedImages);
       } else if (clean && !outgoingAttachments.length && looksLikeImagePrompt(clean)) {
-        await generateImageMessage(clean, history, userMessage);
+        await generateImageMessage(clean);
       } else {
         setStatus('Yildiz AI denkt …');
         const result = await api('/api/ai/chat', {
@@ -592,6 +643,7 @@ export default function Chat() {
       setMessages((old) => [...old, { role: 'assistant', content: error.message }]);
       setStatus('Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
     } finally {
+      sendingRef.current = false;
       setLoading(false);
     }
   }

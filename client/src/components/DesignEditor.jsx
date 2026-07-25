@@ -85,13 +85,21 @@ function addOfferTemplate(canvas, width, height) {
 function addCreativeTemplate(canvas, width, height) {
   canvas.clear();
   canvas.backgroundColor = '#071018';
-  const glow = new Circle({ left: width * .58, top: height * .1, radius: width * .25, fill: 'rgba(99,199,255,.22)', selectable: false, dataRole: 'template-bg' });
-  const yellow = new Circle({ left: width * .02, top: height * .65, radius: width * .22, fill: 'rgba(255,212,0,.17)', selectable: false, dataRole: 'template-bg' });
-  const title = makeText('DEINE IDEE.\nDEIN DESIGN.', { left: width * .08, top: height * .18, fontSize: width / 10, fill: '#ffffff', dataRole: 'headline', displayName: 'Hauptüberschrift' });
-  const text = makeText('Bilder, Texte, Logos und Formen frei bearbeiten.', { left: width * .08, top: height * .48, fontSize: width / 28, fill: '#b9d6e8', dataRole: 'subtitle', displayName: 'Beschreibung' });
+  const glow = new Circle({ left: width * .66, top: height * .08, radius: width * .2, fill: 'rgba(99,199,255,.22)', selectable: false, dataRole: 'template-bg' });
+  const yellow = new Circle({ left: -width * .05, top: height * .66, radius: width * .19, fill: 'rgba(255,212,0,.17)', selectable: false, dataRole: 'template-bg' });
+  const title = new Textbox('DEINE IDEE.\nDEIN DESIGN.', {
+    left: width * .08, top: height * .16, width: width * .78,
+    fontFamily: 'Arial', fontWeight: 800, fontSize: width / 10,
+    lineHeight: 1.04, fill: '#ffffff', dataRole: 'headline', displayName: 'Hauptüberschrift'
+  });
+  const description = new Textbox('Bilder, Texte, Logos und Formen frei bearbeiten.', {
+    left: width * .08, top: height * .46, width: width * .82,
+    fontFamily: 'Arial', fontWeight: 600, fontSize: width / 28,
+    lineHeight: 1.2, fill: '#b9d6e8', dataRole: 'subtitle', displayName: 'Beschreibung'
+  });
   const slot = new Rect({ left: width * .08, top: height * .58, width: width * .84, height: height * .3, fill: 'rgba(255,255,255,.06)', stroke: '#63c7ff', strokeDashArray: [10, 8], rx: 22, ry: 22, dataRole: 'product-slot', displayName: 'Bild-Platzhalter' });
   const hint = makeText('BILD HIER ABLEGEN', { left: width / 2, top: height * .73, originX: 'center', originY: 'center', fontSize: width / 27, fill: '#63c7ff', dataRole: 'product-slot-label', displayName: 'Bild-Hinweis' });
-  canvas.add(glow, yellow, title, text, slot, hint);
+  canvas.add(glow, yellow, title, description, slot, hint);
   canvas.renderAll();
 }
 
@@ -222,6 +230,37 @@ function getObjectName(object, index) {
   if (object.type === 'rect') return 'Rechteck';
   if (object.type === 'circle') return 'Kreis';
   return `Ebene ${index + 1}`;
+}
+
+function keepObjectInsideCanvas(canvas, object, padding = 4) {
+  if (!canvas || !object || object.visible === false) return;
+  object.setCoords();
+  let bounds = object.getBoundingRect();
+  const maxWidth = Math.max(10, canvas.width - padding * 2);
+  const maxHeight = Math.max(10, canvas.height - padding * 2);
+  if (bounds.width > maxWidth || bounds.height > maxHeight) {
+    const scale = Math.min(maxWidth / Math.max(1, bounds.width), maxHeight / Math.max(1, bounds.height));
+    object.scaleX = Number(object.scaleX || 1) * scale;
+    object.scaleY = Number(object.scaleY || 1) * scale;
+    object.setCoords();
+    bounds = object.getBoundingRect();
+  }
+  let dx = 0;
+  let dy = 0;
+  if (bounds.left < padding) dx = padding - bounds.left;
+  if (bounds.top < padding) dy = padding - bounds.top;
+  if (bounds.left + bounds.width > canvas.width - padding) dx = (canvas.width - padding) - (bounds.left + bounds.width);
+  if (bounds.top + bounds.height > canvas.height - padding) dy = (canvas.height - padding) - (bounds.top + bounds.height);
+  if (dx || dy) {
+    object.set({ left: Number(object.left || 0) + dx, top: Number(object.top || 0) + dy });
+    object.setCoords();
+  }
+}
+
+function normalizeCanvasObjects(canvas) {
+  if (!canvas) return;
+  canvas.getObjects().forEach((object) => keepObjectInsideCanvas(canvas, object));
+  canvas.requestRenderAll();
 }
 
 function sourceElementToBlob(imageObject) {
@@ -405,6 +444,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       } else {
         mode === 'flyer' ? addOfferTemplate(canvas, canvas.width, canvas.height) : addCreativeTemplate(canvas, canvas.width, canvas.height);
       }
+      normalizeCanvasObjects(canvas);
       historyRef.current = [];
       historyIndexRef.current = -1;
       snapshot();
@@ -440,6 +480,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
 
     canvas.setDimensions({ width: nextWidth, height: nextHeight });
     lastCanvasSizeRef.current = [nextWidth, nextHeight];
+    normalizeCanvasObjects(canvas);
     canvas.requestRenderAll();
     snapshot();
   }, [format]);
@@ -697,6 +738,15 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     snapshot();
   }
 
+  function fitAllObjects() {
+    const canvas = fabricRef.current;
+    normalizeCanvasObjects(canvas);
+    canvas.discardActiveObject();
+    syncSelected(null);
+    snapshot();
+    setStatus('Alle Elemente wurden vollständig in die Arbeitsfläche eingepasst.');
+  }
+
   function applyTemplate(type) {
     const canvas = fabricRef.current;
     const action = () => {
@@ -707,6 +757,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       else if (type === 'creative') addCreativeTemplate(canvas, canvas.width, canvas.height);
       else { canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.renderAll(); }
       setBackground(canvas.backgroundColor || '#ffffff');
+      normalizeCanvasObjects(canvas);
       snapshot();
       refreshLayers();
     };
@@ -879,6 +930,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
             <button onClick={() => restoreHistory(historyIndexRef.current + 1)} disabled={historyIndexRef.current >= historyRef.current.length - 1}><Redo2 size={17}/>Wiederholen</button>
             <button onClick={() => move('up')}><MoveUp size={17}/>Vor</button>
             <button onClick={() => move('down')}><MoveDown size={17}/>Zurück</button>
+            <button onClick={fitAllObjects}><AlignCenter size={17}/>Alles einpassen</button>
           </div>
           {isText && <div className="context-text-toolbar">
             <select value={selected.fontFamily || 'Arial'} onChange={(event) => commitObject('fontFamily', event.target.value)}>{fontOptions.map((font) => <option key={font}>{font}</option>)}</select>
@@ -899,7 +951,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           onDragLeave={() => setDragActive(false)}
           onDrop={onCanvasDrop}
         >
-          <div className="canvas-holder" style={{ transform: `scale(${zoom / 100})` }}><canvas ref={elementRef}/></div>
+          <div className="canvas-zoom-frame" style={{ width: `${format.canvas[0] * zoom / 100}px`, height: `${format.canvas[1] * zoom / 100}px` }}>
+            <div className="canvas-holder" style={{ transform: `scale(${zoom / 100})` }}><canvas ref={elementRef}/></div>
+          </div>
           {dragActive && <div className="canvas-drop-overlay">Produkt- oder Bilddatei hier ablegen</div>}
         </div>
         <div className="canvas-footer-pro">
