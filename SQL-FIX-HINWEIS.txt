@@ -1,0 +1,10 @@
+YILDIZ AI SQL-FIX
+
+Der Fehler „function digest(text, unknown) does not exist“ wurde behoben.
+Die Token-Hashes verwenden jetzt die eingebaute PostgreSQL-Funktion sha256(convert_to(...)).
+
+Benutze die Datei:
+SUPABASE-ALLES-EINFACH-OEFFNEN.html
+
+Dort auf „Alles kopieren“ klicken, den kompletten Inhalt in Supabase SQL Editor → New query einfügen und Run drücken.
+Der Code kann erneut vollständig ausgeführt werden.

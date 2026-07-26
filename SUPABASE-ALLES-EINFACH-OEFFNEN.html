@@ -70,7 +70,7 @@ as $$
   select s.user_id
   from public.app_sessions s
   join public.app_users u on u.id = s.user_id
-  where s.token_hash = encode(digest(coalesce(p_token, &#x27;&#x27;), &#x27;sha256&#x27;), &#x27;hex&#x27;)
+  where s.token_hash = encode(sha256(convert_to(coalesce(p_token, &#x27;&#x27;), &#x27;UTF8&#x27;)), &#x27;hex&#x27;)
     and s.expires_at &gt; now()
     and u.active = true
   limit 1;
@@ -115,7 +115,7 @@ begin
 
   v_token := encode(gen_random_bytes(32), &#x27;hex&#x27;);
   insert into public.app_sessions(token_hash, user_id, expires_at)
-  values (encode(digest(v_token, &#x27;sha256&#x27;), &#x27;hex&#x27;), v_user.id, now() + interval &#x27;7 days&#x27;);
+  values (encode(sha256(convert_to(v_token, &#x27;UTF8&#x27;)), &#x27;hex&#x27;), v_user.id, now() + interval &#x27;7 days&#x27;);
 
   return jsonb_build_object(
     &#x27;token&#x27;, v_token,
@@ -181,7 +181,7 @@ begin
   update public.app_users
   set password_hash = crypt(p_new_password, gen_salt(&#x27;bf&#x27;, 12)), must_change_password = false
   where id = v_id;
-  delete from public.app_sessions where user_id = v_id and token_hash &lt;&gt; encode(digest(p_token, &#x27;sha256&#x27;), &#x27;hex&#x27;);
+  delete from public.app_sessions where user_id = v_id and token_hash &lt;&gt; encode(sha256(convert_to(p_token, &#x27;UTF8&#x27;)), &#x27;hex&#x27;);
   return jsonb_build_object(&#x27;ok&#x27;, true);
 end;
 $$;
