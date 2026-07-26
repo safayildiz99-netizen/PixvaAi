@@ -89,6 +89,24 @@ export async function api(path, options = {}) {
     });
   }
 
+  if (path === '/api/usage/me' && method === 'GET') {
+    return rpc('app_my_usage', { p_token: token });
+  }
+  if (path === '/api/admin/usage' && method === 'GET') {
+    return rpc('app_admin_usage', { p_token: token });
+  }
+  if (path === '/api/admin/usage-limits' && (method === 'POST' || method === 'PUT')) {
+    return rpc('app_admin_set_usage_limits', {
+      p_token: token,
+      p_user_id: body.userId,
+      p_daily_image_limit: Number(body.dailyImageLimit),
+      p_daily_video_seconds_limit: Number(body.dailyVideoSecondsLimit),
+      p_monthly_budget_usd: Number(body.monthlyBudgetUsd),
+      p_allow_images: Boolean(body.allowImages),
+      p_allow_videos: Boolean(body.allowVideos)
+    });
+  }
+
   if (path === '/api/projects' && method === 'GET') {
     return rpc('app_list_projects', { p_token: token });
   }

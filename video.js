@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { readJson, send } from '../_lib.js';
+import { authorizeUsage, bindUsageProvider, finishUsage, verifyUsageAccess } from '../_usage.js';
 
 function query(req) {
   if (req.query) return req.query;
@@ -13,7 +15,7 @@ function errorMessage(status, data) {
   if (status === 403) return 'Sora ist für dieses OpenAI-Projekt noch nicht freigegeben.';
   if (status === 429) return 'Das OpenAI-Guthaben oder Sora-Limit ist erreicht.';
   if (/inpaint image must match|match the requested width and height/i.test(raw)) {
-    return 'Das Referenzbild hatte nicht exakt die Videoauflösung. Der neue Fix entfernt oder korrigiert solche Referenzen automatisch.';
+    return 'Das Referenzbild hatte nicht exakt die Videoauflösung. Yildiz AI hat es nicht korrekt vorbereiten können.';
   }
   return raw || `OpenAI-Videoanfrage fehlgeschlagen (${status}).`;
 }
@@ -57,12 +59,7 @@ function jpegDimensions(buffer) {
 function webpDimensions(buffer) {
   if (buffer.length < 30 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') return null;
   const chunk = buffer.toString('ascii', 12, 16);
-  if (chunk === 'VP8X') {
-    return {
-      width: 1 + buffer.readUIntLE(24, 3),
-      height: 1 + buffer.readUIntLE(27, 3)
-    };
-  }
+  if (chunk === 'VP8X') return { width: 1 + buffer.readUIntLE(24, 3), height: 1 + buffer.readUIntLE(27, 3) };
   return null;
 }
 
@@ -83,63 +80,132 @@ function allowedSize(model, requested, aspect) {
   return landscape ? '1280x720' : '720x1280';
 }
 
+function estimatedVideoCost(model, size, seconds) {
+  const duration = Number(seconds || 4);
+  if (model !== 'sora-2-pro') return duration * 0.10;
+  if (['1080x1920', '1920x1080'].includes(size)) return duration * 0.70;
+  if (['1024x1792', '1792x1024'].includes(size)) return duration * 0.50;
+  return duration * 0.30;
+}
+
+async function moderatePrompt(apiKey, prompt, referenceImage) {
+  const input = [{ type: 'text', text: prompt }];
+  if (referenceImage) input.push({ type: 'image_url', image_url: { url: referenceImage } });
+  const response = await fetch('https://api.openai.com/v1/moderations', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'omni-moderation-latest', input })
+  });
+  if (!response.ok) return;
+  const data = await response.json().catch(() => ({}));
+  if (data?.results?.some((item) => item?.flagged)) {
+    const error = new Error('Diese Videoanfrage wurde aus Sicherheitsgründen blockiert.');
+    error.status = 400;
+    throw error;
+  }
+}
+
 async function createVideo(req, res, apiKey) {
   const body = await readJson(req);
   const prompt = String(body?.prompt || '').trim().slice(0, 4000);
   if (!prompt) return send(res, 400, { error: 'Bitte gib einen Video-Prompt ein.' });
 
-  const model = String(process.env.OPENAI_VIDEO_MODEL || body?.model || 'sora-2').trim();
+  const requestedModel = String(body?.model || process.env.OPENAI_VIDEO_MODEL || 'sora-2').trim();
+  const model = ['sora-2', 'sora-2-pro'].includes(requestedModel) ? requestedModel : 'sora-2';
   const size = allowedSize(model, String(body?.size || ''), body?.aspect);
-  const seconds = ['4', '8', '12'].includes(String(body?.seconds)) ? String(body.seconds) : '8';
+  const seconds = ['4', '8', '12'].includes(String(body?.seconds)) ? String(body.seconds) : '4';
   const target = parseSize(size);
+  const requestId = String(body?.requestId || randomUUID());
+  const cost = estimatedVideoCost(model, size, seconds);
 
-  const form = new FormData();
-  form.append('model', model);
-  form.append('prompt', `${prompt}\nCreate a polished commercial-quality video with coherent motion, realistic lighting, strong composition, and synchronized audio. Keep visual continuity. Do not add captions, random letters, watermarks, or logos unless explicitly requested.`);
-  form.append('size', size);
-  form.append('seconds', seconds);
+  try {
+    await authorizeUsage(req, { requestId, kind: 'video', model, units: Number(seconds), estimatedCostUsd: cost });
+    await moderatePrompt(apiKey, prompt, String(body?.referenceImage || ''));
 
-  let referenceUsed = false;
-  let referenceWarning = '';
-  const reference = dataUrlToImage(body?.referenceImage);
-  if (reference && target) {
-    const dimensions = imageDimensions(reference);
-    if (dimensions?.width === target.width && dimensions?.height === target.height) {
-      const blob = new Blob([reference.buffer], { type: reference.type });
-      const extension = reference.type === 'image/png' ? 'png' : reference.type === 'image/webp' ? 'webp' : 'jpg';
-      form.append('input_reference', blob, `reference.${extension}`);
-      referenceUsed = true;
-    } else {
-      // Statt die gesamte Videogenerierung mit dem Inpaint-Größenfehler zu stoppen,
-      // wird bei einer falschen Referenzgröße zuverlässig Text-zu-Video verwendet.
-      referenceWarning = dimensions
-        ? `Referenzbild ${dimensions.width}x${dimensions.height} wurde ausgelassen; benötigt wird ${target.width}x${target.height}.`
-        : 'Referenzbild konnte nicht sicher geprüft werden und wurde ausgelassen.';
+    const form = new FormData();
+    form.append('model', model);
+    form.append('prompt', `${prompt}\nCreate a polished commercial-quality video with coherent motion, realistic lighting, strong composition, and synchronized audio. Keep visual continuity. Do not add captions, random letters, watermarks, or logos unless explicitly requested.`);
+    form.append('size', size);
+    form.append('seconds', seconds);
+
+    let referenceUsed = false;
+    let referenceWarning = '';
+    const reference = dataUrlToImage(body?.referenceImage);
+    if (reference && target) {
+      const dimensions = imageDimensions(reference);
+      if (dimensions?.width === target.width && dimensions?.height === target.height) {
+        const blob = new Blob([reference.buffer], { type: reference.type });
+        const extension = reference.type === 'image/png' ? 'png' : reference.type === 'image/webp' ? 'webp' : 'jpg';
+        form.append('input_reference', blob, `reference.${extension}`);
+        referenceUsed = true;
+      } else {
+        referenceWarning = dimensions
+          ? `Referenzbild ${dimensions.width}x${dimensions.height} wurde ausgelassen; benötigt wird ${target.width}x${target.height}.`
+          : 'Referenzbild konnte nicht sicher geprüft werden und wurde ausgelassen.';
+      }
     }
-  }
 
-  const response = await fetch('https://api.openai.com/v1/videos', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) return send(res, response.status, { error: errorMessage(response.status, data), technical: data?.error?.message });
-  return send(res, 200, { ...data, referenceUsed, referenceWarning, size, seconds, model });
+    const response = await fetch('https://api.openai.com/v1/videos', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = errorMessage(response.status, data);
+      await finishUsage(req, { requestId, status: 'failed', actualCostUsd: 0, error: message });
+      return send(res, response.status, { error: message, technical: data?.error?.message });
+    }
+    if (!data?.id) {
+      await finishUsage(req, { requestId, status: 'failed', actualCostUsd: 0, error: 'OpenAI hat keine Video-ID geliefert.' });
+      return send(res, 502, { error: 'OpenAI hat keine Video-ID geliefert.' });
+    }
+    try {
+      await bindUsageProvider(req, { requestId, providerId: data.id });
+    } catch (bindError) {
+      fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(data.id)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${apiKey}` }
+      }).catch(() => {});
+      await finishUsage(req, { requestId, status: 'failed', actualCostUsd: 0, error: bindError?.message });
+      return send(res, 500, { error: bindError?.message || 'Videoauftrag konnte nicht sicher dem Konto zugeordnet werden.' });
+    }
+    if (data.status === 'completed') await finishUsage(req, { requestId, status: 'completed' });
+    return send(res, 200, { ...data, requestId, estimatedCostUsd: cost, referenceUsed, referenceWarning, size, seconds, model });
+  } catch (error) {
+    await finishUsage(req, { requestId, status: 'failed', actualCostUsd: 0, error: error?.message });
+    return send(res, error?.status || (/anmelden/i.test(error?.message || '') ? 401 : 500), { error: error?.message || 'Sora-Video konnte nicht gestartet werden.' });
+  }
 }
 
-async function videoStatus(res, apiKey, id) {
-  if (!id) return send(res, 400, { error: 'Video-ID fehlt.' });
+async function videoStatus(req, res, apiKey, id, requestId) {
+  if (!id || !requestId) return send(res, 400, { error: 'Video-ID oder Request-ID fehlt.' });
+  await verifyUsageAccess(req, { requestId, providerId: id, kind: 'video' });
   const response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(id)}`, {
     headers: { Authorization: `Bearer ${apiKey}` }
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) return send(res, response.status, { error: errorMessage(response.status, data) });
+  if (requestId && data?.status === 'completed') await finishUsage(req, { requestId, status: 'completed' });
+  if (requestId && data?.status === 'failed') await finishUsage(req, { requestId, status: 'failed', actualCostUsd: 0, error: data?.error?.message || 'Sora fehlgeschlagen.' });
   return send(res, 200, data);
 }
 
-async function videoContent(res, apiKey, id) {
-  if (!id) return send(res, 400, { error: 'Video-ID fehlt.' });
+async function videoDelete(req, res, apiKey, id, requestId) {
+  if (!id || !requestId) return send(res, 400, { error: 'Video-ID oder Request-ID fehlt.' });
+  await verifyUsageAccess(req, { requestId, providerId: id, kind: 'video' });
+  const response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${apiKey}` }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return send(res, response.status, { error: errorMessage(response.status, data) });
+  if (requestId) await finishUsage(req, { requestId, status: 'cancelled', actualCostUsd: 0 });
+  return send(res, 200, { ...data, cancelled: true });
+}
+
+async function videoContent(req, res, apiKey, id, requestId) {
+  if (!id || !requestId) return send(res, 400, { error: 'Video-ID oder Request-ID fehlt.' });
+  await verifyUsageAccess(req, { requestId, providerId: id, kind: 'video' });
   const response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(id)}/content`, {
     headers: { Authorization: `Bearer ${apiKey}` }
   });
@@ -148,6 +214,7 @@ async function videoContent(res, apiKey, id) {
     return send(res, response.status, { error: errorMessage(response.status, data) });
   }
 
+  await finishUsage(req, { requestId, status: 'completed' });
   res.statusCode = 200;
   res.setHeader('Content-Type', response.headers.get('content-type') || 'video/mp4');
   res.setHeader('Content-Disposition', `inline; filename="yildiz-ai-${id}.mp4"`);
@@ -165,12 +232,17 @@ export default async function handler(req, res) {
   try {
     const params = query(req);
     const action = String(params.action || (req.method === 'POST' ? 'create' : 'status'));
+    const id = String(params.id || '');
+    const requestId = String(params.requestId || '');
     if (req.method === 'POST' && action === 'create') return createVideo(req, res, apiKey);
-    if (req.method === 'GET' && action === 'status') return videoStatus(res, apiKey, String(params.id || ''));
-    if (req.method === 'GET' && action === 'content') return videoContent(res, apiKey, String(params.id || ''));
+    if (req.method === 'GET' && action === 'status') return videoStatus(req, res, apiKey, id, requestId);
+    if (req.method === 'GET' && action === 'content') return videoContent(req, res, apiKey, id, requestId);
+    if (req.method === 'DELETE' && action === 'delete') return videoDelete(req, res, apiKey, id, requestId);
     return send(res, 405, { error: 'Nicht unterstützte Video-Aktion.' });
   } catch (error) {
     console.error('OpenAI video API failed', error);
-    return send(res, 500, { error: error?.message || 'Die OpenAI-Videogenerierung ist fehlgeschlagen.' });
+    const message = error?.message || 'Die OpenAI-Videogenerierung ist fehlgeschlagen.';
+    const status = error?.status || (/anmelden/i.test(message) ? 401 : /kein zugriff|gehört nicht/i.test(message) ? 403 : 500);
+    return send(res, status, { error: message });
   }
 }

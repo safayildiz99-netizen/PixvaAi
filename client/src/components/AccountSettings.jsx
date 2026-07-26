@@ -1,12 +1,29 @@
-import { useState } from 'react';
-import { CheckCircle2, KeyRound, Save, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BarChart3, CheckCircle2, Image, KeyRound, Save, ShieldCheck, UserCircle2, Video } from 'lucide-react';
 import { api } from '../api.js';
+
+function money(value) {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
+}
+
+function limitText(value, suffix = '') {
+  const number = Number(value);
+  return number < 0 ? 'Unbegrenzt' : `${number}${suffix}`;
+}
 
 export default function AccountSettings({ user, onUserChanged }) {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [usage, setUsage] = useState(null);
+  const [usageError, setUsageError] = useState('');
+
+  useEffect(() => {
+    api('/api/usage/me')
+      .then((result) => { setUsage(result); setUsageError(''); })
+      .catch((requestError) => { setUsage(null); setUsageError(requestError.message || 'Nutzung konnte nicht geladen werden.'); });
+  }, []);
 
   async function changePassword(event) {
     event.preventDefault();
@@ -34,12 +51,12 @@ export default function AccountSettings({ user, onUserChanged }) {
 
   return (
     <section className="account-page">
-      <div className="page-heading"><div><h2><UserCircle2 size={22}/> Mein Konto</h2><p>Jeder angemeldete Mitarbeiter kann hier sein eigenes Passwort ändern.</p></div></div>
+      <div className="page-heading"><div><h2><UserCircle2 size={22}/> Mein Konto</h2><p>Passwort, persönliche Nutzung und Kontolimits.</p></div></div>
       <div className="account-layout">
         <article className="account-card account-summary">
           <div className="account-avatar-large">{user.username.slice(0, 2).toUpperCase()}</div>
           <div><span>Angemeldet als</span><h3>{user.username}</h3><p>{user.role === 'admin' ? 'Administrator' : 'Mitarbeiter'}</p></div>
-          <div className="security-note"><ShieldCheck size={18}/> Dein Passwort wird verschlüsselt in Supabase gespeichert.</div>
+          <div className="security-note"><ShieldCheck size={18}/> Chats und Projekte sind privat an dieses Konto gebunden.</div>
         </article>
         <article className="account-card">
           <h3><KeyRound size={19}/> Eigenes Passwort ändern</h3>
@@ -54,6 +71,17 @@ export default function AccountSettings({ user, onUserChanged }) {
           </form>
         </article>
       </div>
+
+      {usageError && <article className="account-card usage-card"><div className="info-box">KI-Nutzung konnte nicht geladen werden: {usageError}<br/>Bitte die Datei PRO-KERN-UPDATE-ZUM-KOPIEREN.txt vollständig in Supabase ausführen.</div></article>}
+
+      {usage && <article className="account-card usage-card">
+        <h3><BarChart3 size={19}/> Meine KI-Nutzung</h3>
+        <div className="usage-metrics">
+          <div><Image size={18}/><span>Bilder heute</span><b>{usage.usage?.dailyImages || 0} / {limitText(usage.limits?.dailyImageLimit)}</b></div>
+          <div><Video size={18}/><span>Videosekunden heute</span><b>{usage.usage?.dailyVideoSeconds || 0} / {limitText(usage.limits?.dailyVideoSecondsLimit, ' s')}</b></div>
+          <div><BarChart3 size={18}/><span>Kosten diesen Monat</span><b>{money(usage.usage?.monthlyCostUsd)} / {Number(usage.limits?.monthlyBudgetUsd) < 0 ? 'Unbegrenzt' : money(usage.limits?.monthlyBudgetUsd)}</b></div>
+        </div>
+      </article>}
     </section>
   );
 }

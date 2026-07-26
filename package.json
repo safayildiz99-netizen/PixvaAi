@@ -1,9 +1,9 @@
 {
   "name": "yildiz-ai-studio",
-  "version": "6.1.0",
+  "version": "7.1.0",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI Komplettversion mit Gemini, GPT Image 2, Sora 2, bearbeitbarem Design-Editor und Video-Studio",
+  "description": "Yildiz AI PRO-KERN V1 mit privaten Chats, GPT Image, Sora, Mediensteuerung und serverseitiger Kostenkontrolle",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "vercel-build": "npm run build"

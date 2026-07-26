@@ -1,18 +1,20 @@
-# Yildiz AI – Gemini, Opera und Gastzugang
+# Yildiz AI – PRO-KERN V1
 
-Diese Version verwendet Gemini ausschließlich über eine geschützte Vercel-Funktion. Deshalb wird keine lokale GPU und kein WebGPU benötigt.
+Vollständige React/Vite- und Vercel-Version mit privater Kontosynchronisierung, Gemini-Chat, OpenAI-Bildern, Sora-Videos, Mediensteuerung und serverseitiger Kostenkontrolle.
 
-## Neu
-- Funktioniert in Opera, Chrome, Safari und Edge.
-- Automatische Wiederholungen und Modell-Fallback bei hoher Gemini-Auslastung.
-- Neuester stabiler Gemini-Stand zuerst, danach Flash-Lite-Ausweichmodelle.
-- Chat und Editoren können ohne Anmeldung geöffnet werden.
-- Anmeldung ist nur für dauerhaftes Speichern, Projekte und Adminfunktionen nötig.
-- API-Key bleibt serverseitig in Vercel.
+## Installation
 
-## Vercel-Variablen
+1. `PRO-KERN-UPDATE-ZUM-KOPIEREN.txt` vollständig im Supabase SQL Editor ausführen.
+2. Den Inhalt dieses Projektordners in das GitHub-Repository hochladen und vorhandene Dateien ersetzen.
+3. Auf das neue Vercel-Deployment warten und die Website hart neu laden.
+
+Commit-Nachricht: `Yildiz AI Pro Kern Chat Medien Kostenkontrolle`
+
+## Pflichtvariablen in Vercel
+
+- `OPENAI_API_KEY`
 - `GEMINI_API_KEY`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Optional: `GEMINI_MODEL`. Ohne diese Variable wählt Yildiz AI automatisch aktuelle stabile Modelle.
+API-Schlüssel niemals in Client-Dateien oder als `VITE_OPENAI_API_KEY` speichern.

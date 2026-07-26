@@ -1,60 +1,51 @@
-YILDIZ AI – KOMPLETTE OPENAI + SORA VERSION
-============================================
+YILDIZ AI – KOMPLETTE PRO-KERN-VERSION
+======================================
 
-Diese ZIP enthält den vollständigen Projektstand. Du brauchst keine ältere Patch-ZIP zusätzlich.
+Diese ZIP enthält den vollständigen Projektstand. Keine ältere Patch-ZIP zusätzlich verwenden.
+
+ZUERST SUPABASE
+1. PRO-KERN-UPDATE-ZUM-KOPIEREN.txt öffnen.
+2. Alles kopieren.
+3. Supabase -> SQL Editor -> New query.
+4. Einfügen und Run drücken.
+
+DANACH GITHUB
+1. ZIP entpacken.
+2. Nur den INHALT des Ordners in die Hauptseite des GitHub-Projekts hochladen.
+3. Vorhandene Dateien ersetzen.
+4. Nicht den äußeren Ordner als Unterordner hochladen.
+
+COMMIT-NACHRICHT
+Yildiz AI Pro Kern Chat Medien Kostenkontrolle
+
+DANACH VERCEL
+1. Auf Ready und Production warten.
+2. Seite hart neu laden:
+   Mac: Cmd + Shift + R
+   Windows: Ctrl + F5
+3. Einmal abmelden und wieder anmelden.
 
 ENTHALTEN
-- Bestehender Yildiz-AI-Chat mit Gemini
-- OpenAI GPT Image 2 für Bildgenerierung
-- Werbebild-/Poster-Erkennung mit besserem Werbe-Prompt
-- Bildqualität standardmäßig MEDIUM
-- OpenAI Sora 2 für echte MP4-Videos mit Ton
-- Fix für: "Inpaint image must match the requested width and height"
-- Ein normales Text-zu-Video verwendet nicht mehr automatisch das letzte Bild
-- Bild-zu-Video passt das Referenzbild auf 720 x 1280 an
-- Voll bearbeitbarer Design-Editor aus Stabil V6
-- Video-Studio und "Im Video-Studio bearbeiten"
+- private Chats je Konto und Synchronisierung zwischen Geräten
+- Chat suchen, umbenennen, anheften, bearbeiten, kopieren, erneut senden und löschen
+- OpenAI GPT Image mit Format-, Qualitäts-, Stil- und Hintergrundoptionen
+- Bildbearbeitung mit Referenzbild
+- Sora mit 4, 8 oder 12 Sekunden, Hoch-/Querformat und optionalem Referenzbild
+- Video-Fortschritt und Abbrechen
+- Fix für falsche Referenzbild-Abmessungen
+- Preisvorschau vor Bild und Video
+- tägliche und monatliche Limits je Konto
+- Adminübersicht für Nutzung und geschätzte Kosten
+- private Zuordnung von Sora-Aufträgen zum jeweiligen Konto
+- Design-Editor, Video-Studio, Projekte und Passwortänderung
 
 VERCEL-VARIABLEN
-Pflicht:
 OPENAI_API_KEY
 GEMINI_API_KEY
 VITE_SUPABASE_URL
 VITE_SUPABASE_PUBLISHABLE_KEY
 
 Optional:
-OPENAI_IMAGE_MODEL = gpt-image-2
-OPENAI_IMAGE_QUALITY = medium
-OPENAI_VIDEO_MODEL = sora-2
-GEMINI_MODEL = dein bisheriges Gemini-Modell
-
-WICHTIG
-- OPENAI_API_KEY niemals in GitHub oder in eine VITE_-Variable schreiben.
-- Keine SQL-Datei ist für dieses Update notwendig.
-
-GITHUB
-1. ZIP entpacken.
-2. Den INHALT des Ordners in die Hauptseite deines GitHub-Repositories hochladen.
-3. Vorhandene Dateien ersetzen.
-4. Nicht den äußeren Ordner als zusätzlichen Unterordner hochladen.
-5. Commit-Nachricht:
-
-Yildiz AI Komplett OpenAI Sora Bildqualitaet Video Fix
-
-DANACH
-1. In Vercel auf das neue Deployment warten.
-2. Es muss "Ready" und "Production" anzeigen.
-3. Website öffnen.
-4. Mac: Cmd + Shift + R
-5. Windows: Ctrl + F5
-6. Für den Test einen neuen Chat starten.
-
-TEST BILD
-Erstelle mir ein fotorealistisches Werbebild für eine moderne KI namens Yildiz AI.
-
-TEST VIDEO OHNE BILD
-Erstelle mir ein vertikales Werbevideo über Yildiz AI mit moderner Technologie, dynamischer Kamerafahrt und professionellem Ton.
-
-TEST BILD-ZU-VIDEO
-Zuerst ein Bild hochladen und dann schreiben:
-Animiere dieses Bild als vertikales Werbevideo mit langsamer Kamerafahrt.
+OPENAI_IMAGE_MODEL=gpt-image-2
+OPENAI_VIDEO_MODEL=sora-2
+GEMINI_MODEL=dein bisheriges Modell

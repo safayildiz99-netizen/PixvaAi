@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Bot, Camera, Cloud, Download, Edit3, FileText, ImagePlus, MessageSquarePlus, Paperclip, Search, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
-import { api } from '../api.js';
+import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Copy, Download, Edit3, FileText, ImagePlus, MessageSquarePlus, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, Square, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
+import { api, getToken } from '../api.js';
 
 const quickPrompts = [
   'Erkläre mir ein schwieriges Thema ganz einfach.',
@@ -74,6 +74,63 @@ function inferImageStyle(text) {
   if (/(produktfoto|produktbild|product shot|e.?commerce|freisteller|verpackung)/.test(value)) return 'product';
   if (/(studio|portrait|porträt|headshot)/.test(value)) return 'studio';
   return 'realistic';
+}
+
+function formatUsd(value) {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
+}
+
+function estimateImagePrice(settings) {
+  const portrait = settings.aspect !== 'square';
+  const table = {
+    low: portrait ? 0.02 : 0.015,
+    medium: portrait ? 0.07 : 0.05,
+    high: portrait ? 0.24 : 0.18,
+    auto: portrait ? 0.07 : 0.05
+  };
+  return table[settings.quality] ?? table.medium;
+}
+
+function estimateVideoPrice(settings) {
+  const seconds = Number(settings.seconds || 4);
+  return seconds * (settings.model === 'sora-2-pro' ? 0.30 : 0.10);
+}
+
+function delayWithSignal(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Abgebrochen', 'AbortError'));
+    const timer = setTimeout(() => { cleanup(); resolve(); }, ms);
+    const abort = () => { clearTimeout(timer); cleanup(); reject(new DOMException('Abgebrochen', 'AbortError')); };
+    const cleanup = () => signal?.removeEventListener('abort', abort);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
+async function prepareImageEditReference(dataUrl, maxEdge = 1536) {
+  if (!String(dataUrl || '').startsWith('data:image/')) return '';
+  const image = await new Promise((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error('Das Referenzbild konnte nicht vorbereitet werden.'));
+    element.src = dataUrl;
+  });
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const scale = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Das Referenzbild konnte nicht verarbeitet werden.');
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
+function downloadMedia(source, filename) {
+  const anchor = document.createElement('a');
+  anchor.href = source;
+  anchor.download = filename || 'yildiz-ai-datei';
+  anchor.click();
 }
 
 function wantsImageReferenceForVideo(text) {
@@ -293,7 +350,7 @@ function fileMessageAttachment(item) {
 const CHAT_DB = 'yildiz-ai-chat-history-v2';
 const CHAT_STORE = 'sessions';
 const MAX_CLOUD_MEDIA_CHARS = 3_500_000;
-const WELCOME_MESSAGE = { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien per Drag & Drop hochladen.' };
+const WELCOME_MESSAGE = { id: 'welcome', role: 'assistant', createdAt: Date.now(), content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien per Drag & Drop hochladen.' };
 
 function makeChatSession() {
   return {
@@ -301,7 +358,8 @@ function makeChatSession() {
     title: 'Neuer Chat',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    messages: [WELCOME_MESSAGE]
+    pinned: false,
+    messages: [{ ...WELCOME_MESSAGE }]
   };
 }
 
@@ -401,8 +459,11 @@ function cleanForCloudStorage(sessions) {
     title: String(session.title || 'Neuer Chat').slice(0, 120),
     createdAt: Number(session.createdAt || Date.now()),
     updatedAt: Number(session.updatedAt || Date.now()),
+    pinned: Boolean(session.pinned),
     messages: (session.messages || []).map((message) => ({
+      id: String(message.id || crypto.randomUUID()),
       role: message.role === 'user' ? 'user' : 'assistant',
+      createdAt: Number(message.createdAt || Date.now()),
       content: String(message.content || ''),
       attachments: Array.isArray(message.attachments)
         ? message.attachments.map(cleanAttachmentForCloud)
@@ -430,6 +491,8 @@ async function writeCloudSavedChats(sessions) {
 function hydrateMessages(messages) {
   const hydrated = (messages || []).map((message) => ({
     ...message,
+    id: message.id || crypto.randomUUID(),
+    createdAt: Number(message.createdAt || Date.now()),
     attachments: Array.isArray(message.attachments)
       ? message.attachments.map((item) => ({
           ...item,
@@ -455,6 +518,12 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   const [status, setStatus] = useState('Gemini beantwortet Fragen. OpenAI erstellt echte Bilder und Sora-Videos mit Ton. Uploads funktionieren per Drag & Drop.');
   const [attachments, setAttachments] = useState([]);
   const [dragActive, setDragActive] = useState(false);
+  const [creationMode, setCreationMode] = useState('auto');
+  const [showMediaSettings, setShowMediaSettings] = useState(false);
+  const [imageSettings, setImageSettings] = useState({ aspect: 'post', quality: 'medium', style: 'auto', model: 'gpt-image-2', background: 'auto' });
+  const [videoSettings, setVideoSettings] = useState({ seconds: '4', aspect: 'story', model: 'sora-2', useReference: false });
+  const [editingMessageId, setEditingMessageId] = useState('');
+  const [editingText, setEditingText] = useState('');
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const cameraImageRef = useRef(null);
@@ -462,15 +531,35 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   const anyFileRef = useRef(null);
   const lastSendRef = useRef({ text: '', at: 0 });
   const sendingRef = useRef(false);
+  const abortRef = useRef(null);
+  const activeVideoJobRef = useRef(null);
+  const activeChatIdRef = useRef('');
+  const generationRef = useRef({ id: '', chatId: '' });
   const cloudUpdatedAtRef = useRef(0);
   const ownerKey = useMemo(() => String(accountId || 'guest'), [accountId]);
   const cloudEnabled = !isGuest && ownerKey !== 'guest';
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
+  useEffect(() => { activeChatIdRef.current = activeChatId; }, [activeChatId]);
+
+  function isCurrentGeneration(runId) {
+    return Boolean(runId) && generationRef.current.id === runId && generationRef.current.chatId === activeChatIdRef.current;
+  }
+
+  function setGenerationStatus(runId, text) {
+    if (isCurrentGeneration(runId)) setStatus(text);
+  }
+
+  function appendGenerationMessage(runId, message) {
+    if (!isCurrentGeneration(runId)) return false;
+    setMessages((old) => [...old, message]);
+    return true;
+  }
+
   const filteredSessions = useMemo(() => {
     const query = chatSearch.trim().toLowerCase();
     return chatSessions
       .filter((session) => !query || String(session.title || '').toLowerCase().includes(query))
-      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
   }, [chatSessions, chatSearch]);
 
   useEffect(() => {
@@ -577,6 +666,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   }, [cloudEnabled, historyReady, activeChatId]);
 
   function newChat() {
+    if (loading) stopGeneration();
     sendingRef.current = false;
     const next = makeChatSession();
     setChatSessions((old) => [next, ...old]);
@@ -588,6 +678,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   }
 
   function openChat(session) {
+    if (loading) stopGeneration();
     setActiveChatId(session.id);
     setMessages(hydrateMessages(session.messages));
     setAttachments([]);
@@ -606,6 +697,66 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
       }
       return remaining;
     });
+  }
+
+  function renameChat(event, session) {
+    event.stopPropagation();
+    const title = window.prompt('Neuer Chatname:', session.title || 'Neuer Chat');
+    if (!title?.trim()) return;
+    setChatSessions((old) => old.map((item) => item.id === session.id ? { ...item, title: title.trim().slice(0, 120), updatedAt: Date.now() } : item));
+  }
+
+  function togglePinChat(event, session) {
+    event.stopPropagation();
+    setChatSessions((old) => old.map((item) => item.id === session.id ? { ...item, pinned: !item.pinned, updatedAt: Date.now() } : item));
+  }
+
+  function deleteAllChats() {
+    if (!window.confirm('Wirklich alle Chats dieses Kontos löschen?')) return;
+    const next = makeChatSession();
+    setChatSessions([next]);
+    setActiveChatId(next.id);
+    setMessages(next.messages);
+    setStatus('Alle Chats wurden gelöscht.');
+  }
+
+  async function copyMessage(message) {
+    try {
+      await navigator.clipboard.writeText(String(message.content || ''));
+      setStatus('Nachricht kopiert.');
+    } catch {
+      setStatus('Nachricht konnte nicht kopiert werden.');
+    }
+  }
+
+  function deleteMessage(messageId) {
+    setMessages((old) => old.filter((message) => message.id !== messageId));
+  }
+
+  function startEditMessage(message) {
+    setEditingMessageId(message.id);
+    setEditingText(message.content || '');
+  }
+
+  function saveEditedMessage() {
+    const clean = editingText.trim();
+    if (!clean) return;
+    setMessages((old) => old.map((message) => message.id === editingMessageId ? { ...message, content: clean, editedAt: Date.now() } : message));
+    setEditingMessageId('');
+    setEditingText('');
+    setStatus('Nachricht geändert.');
+  }
+
+  function reuseImage(item) {
+    const source = item.data || item.previewUrl;
+    if (!source) return setStatus('Dieses Bild ist nicht mehr lokal verfügbar.');
+    setAttachments((old) => [...old, {
+      id: crypto.randomUUID(), kind: 'image', name: item.name || 'referenz.png', size: item.size || 0,
+      mimeType: item.mimeType || 'image/png', previewUrl: source, data: source
+    }].slice(-4));
+    setCreationMode('image');
+    setShowMediaSettings(true);
+    setStatus('Bild als Referenz hinzugefügt. Beschreibe jetzt die gewünschte Änderung.');
   }
 
   function removeAttachment(id) {
@@ -714,43 +865,63 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     event.target.value = '';
   }
 
-  async function generateImageMessage(clean) {
-    setStatus('OpenAI erstellt dein Bild …');
+  async function generateImageMessage(clean, selectedAttachments, signal, requestId, runId) {
+    const referenceItem = selectedAttachments.find((item) => item.kind === 'image' && (item.data || item.previewUrl));
+    setGenerationStatus(runId, referenceItem ? 'OpenAI bearbeitet dein Referenzbild …' : 'OpenAI erstellt dein Bild …');
+    const referenceImage = referenceItem ? await prepareImageEditReference(referenceItem.data || referenceItem.previewUrl) : '';
     const result = await api('/api/ai/image', {
       method: 'POST',
+      signal,
       body: JSON.stringify({
+        requestId,
         prompt: clean,
-        aspect: 'post',
-        style: inferImageStyle(clean),
-        quality: 'medium'
+        aspect: imageSettings.aspect,
+        style: imageSettings.style === 'auto' ? inferImageStyle(clean) : imageSettings.style,
+        quality: imageSettings.quality,
+        model: imageSettings.model,
+        background: imageSettings.background,
+        referenceImage
       })
     });
     const imageSource = result?.imageDataUrl || result?.imageUrl || '';
     if (!imageSource) throw new Error('OpenAI hat keine Bilddatei geliefert.');
     await preloadImage(imageSource);
-    setMessages((old) => [...old, {
+    appendGenerationMessage(runId, {
+      id: crypto.randomUUID(),
       role: 'assistant',
-      content: 'Hier ist dein mit OpenAI GPT Image 2 erstelltes Bild in mittlerer Qualität. Du kannst es speichern oder ausdrücklich als Referenz für ein Sora-Video verwenden.',
-      attachments: [{ kind: 'image', name: 'yildiz-ai-openai.png', previewUrl: imageSource, data: result?.imageDataUrl || '' }]
-    }]);
-    setStatus(`Bild erstellt · ${result.provider || 'OpenAI'}`);
+      createdAt: Date.now(),
+      content: `${result.edited ? 'Bild bearbeitet' : 'Bild erstellt'} · ${result.provider || 'OpenAI'} · ${imageSettings.quality} · geschätzt ${formatUsd(result.estimatedCostUsd ?? estimateImagePrice(imageSettings))}.`,
+      attachments: [{
+        kind: 'image',
+        name: result.edited
+          ? `yildiz-ai-bearbeitet.${result.mimeType === 'image/png' ? 'png' : 'webp'}`
+          : `yildiz-ai-openai.${result.mimeType === 'image/png' ? 'png' : 'webp'}`,
+        previewUrl: imageSource,
+        data: result?.imageDataUrl || imageSource,
+        mimeType: result.mimeType || (String(imageSource).startsWith('data:image/webp') ? 'image/webp' : 'image/png')
+      }]
+    });
+    setGenerationStatus(runId, `Bild fertig · ${result.provider || 'OpenAI'}`);
   }
 
-  async function waitForSoraVideo(jobId) {
+  async function waitForSoraVideo(jobId, requestId, signal, runId) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < 12 * 60 * 1000) {
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-      const job = await api(`/api/ai/video?action=status&id=${encodeURIComponent(jobId)}`);
+      await delayWithSignal(7000, signal);
+      const job = await api(`/api/ai/video?action=status&id=${encodeURIComponent(jobId)}&requestId=${encodeURIComponent(requestId)}`, { signal });
       const progress = Number(job?.progress || 0);
-      setStatus(job?.status === 'queued' ? 'Sora: Auftrag wartet …' : `Sora erstellt dein Video … ${progress ? `${Math.round(progress)} %` : ''}`);
+      setGenerationStatus(runId, job?.status === 'queued' ? 'Sora: Auftrag wartet …' : `Sora erstellt dein Video … ${progress ? `${Math.round(progress)} %` : ''}`);
       if (job?.status === 'completed') return job;
       if (job?.status === 'failed') throw new Error(job?.error?.message || 'Sora konnte das Video nicht erstellen.');
     }
-    throw new Error('Sora braucht länger als erwartet. Der Auftrag läuft möglicherweise noch; versuche es später erneut.');
+    throw new Error('Sora braucht länger als erwartet. Der Auftrag läuft möglicherweise noch.');
   }
 
-  async function downloadSoraVideo(jobId) {
-    const response = await fetch(`/api/ai/video?action=content&id=${encodeURIComponent(jobId)}`);
+  async function downloadSoraVideo(jobId, requestId, signal) {
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch(`/api/ai/video?action=content&id=${encodeURIComponent(jobId)}&requestId=${encodeURIComponent(requestId)}`, { signal, headers });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(data?.error || 'Das fertige Sora-Video konnte nicht geladen werden.');
@@ -759,151 +930,192 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     return { blob, url: URL.createObjectURL(blob) };
   }
 
-  async function generateVideoMessage(clean, sourceImages = []) {
+  async function generateVideoMessage(clean, sourceImages, signal, requestId, runId) {
+    const targetWidth = videoSettings.aspect === 'landscape' ? 1280 : 720;
+    const targetHeight = videoSettings.aspect === 'landscape' ? 720 : 1280;
     const rawReferenceImage = sourceImages.find((value) => String(value || '').startsWith('data:image/')) || '';
-    setStatus(rawReferenceImage ? 'Referenzbild wird für Sora angepasst …' : 'Sora-Videoauftrag wird gestartet …');
+    setGenerationStatus(runId, rawReferenceImage ? 'Referenzbild wird exakt für Sora angepasst …' : 'Sora-Videoauftrag wird gestartet …');
     const referenceImage = rawReferenceImage
-      ? await prepareSoraReferenceImage(rawReferenceImage, 720, 1280)
+      ? await prepareSoraReferenceImage(rawReferenceImage, targetWidth, targetHeight)
       : '';
 
-    setStatus('Sora-Videoauftrag wird gestartet …');
     const created = await api('/api/ai/video', {
       method: 'POST',
+      signal,
       body: JSON.stringify({
+        requestId,
         prompt: clean,
-        aspect: 'story',
-        size: '720x1280',
-        seconds: '8',
-        model: 'sora-2',
+        aspect: videoSettings.aspect,
+        size: `${targetWidth}x${targetHeight}`,
+        seconds: videoSettings.seconds,
+        model: videoSettings.model,
         referenceImage
       })
     });
     if (!created?.id) throw new Error('OpenAI hat keine Video-ID geliefert.');
+    activeVideoJobRef.current = { id: created.id, requestId };
 
-    const completed = ['completed', 'failed'].includes(created.status) ? created : await waitForSoraVideo(created.id);
+    const completed = ['completed', 'failed'].includes(created.status)
+      ? created
+      : await waitForSoraVideo(created.id, requestId, signal, runId);
     if (completed.status !== 'completed') throw new Error(completed?.error?.message || 'Sora konnte das Video nicht erstellen.');
-    setStatus('Sora-Video fertig. MP4 wird geladen …');
-    const video = await downloadSoraVideo(created.id);
-    const duration = Number(completed.seconds || created.seconds || 8);
+    setGenerationStatus(runId, 'Sora-Video fertig. MP4 wird geladen …');
+    const video = await downloadSoraVideo(created.id, requestId, signal);
+    const duration = Number(completed.seconds || created.seconds || videoSettings.seconds || 4);
 
     const editableScene = {
-      id: crypto.randomUUID(),
-      title: 'SORA VIDEO',
-      prompt: clean,
-      duration,
-      imageUrl: '',
-      videoUrl: video.url,
-      fileName: 'sora-video.mp4',
-      mediaType: 'video',
-      status: 'Mit OpenAI Sora erstellt',
-      transition: 'fade',
-      animation: 'none',
-      textPosition: 'bottom',
-      textColor: '#ffffff',
-      accentColor: '#ffd400',
-      overlayOpacity: 0.25,
-      fontScale: 1,
-      fontFamily: 'Arial',
-      fontWeight: 800,
-      textAlign: 'left',
-      showText: false,
-      trimStart: 0,
-      mediaScale: 1,
-      mediaX: 0,
-      mediaY: 0,
-      mediaRotation: 0,
-      mediaOpacity: 1,
-      textX: 7,
-      textY: 76
+      id: crypto.randomUUID(), title: 'SORA VIDEO', prompt: clean, duration,
+      imageUrl: '', videoUrl: video.url, fileName: 'sora-video.mp4', mediaType: 'video',
+      status: 'Mit OpenAI Sora erstellt', transition: 'fade', animation: 'none',
+      textPosition: 'bottom', textColor: '#ffffff', accentColor: '#ffd400', overlayOpacity: 0.25,
+      fontScale: 1, fontFamily: 'Arial', fontWeight: 800, textAlign: 'left', showText: false,
+      trimStart: 0, mediaScale: 1, mediaX: 0, mediaY: 0, mediaRotation: 0, mediaOpacity: 1,
+      textX: 7, textY: 76
     };
-
     const videoProject = {
-      name: String(clean || 'Sora Video').slice(0, 64),
-      type: 'video',
-      data: { scenes: [editableScene], format: 'story', musicStyle: 'none', musicVolume: 0 }
+      name: String(clean || 'Sora Video').slice(0, 64), type: 'video',
+      data: { scenes: [editableScene], format: videoSettings.aspect === 'landscape' ? 'landscape' : 'story', musicStyle: 'none', musicVolume: 0 }
     };
 
-    setMessages((old) => [...old, {
+    appendGenerationMessage(runId, {
+      id: crypto.randomUUID(),
       role: 'assistant',
-      content: 'Hier ist dein echtes Sora-Video mit synchronisiertem Ton. Du kannst den Clip im Video-Studio zuschneiden, positionieren, mit Text ergänzen und mit weiteren Szenen kombinieren.',
-      attachments: [{
-        kind: 'video',
-        name: 'yildiz-ai-sora.mp4',
-        previewUrl: video.url,
-        blob: video.blob,
-        projectData: videoProject
-      }]
-    }]);
-    setStatus('Sora-Video erstellt · MP4 · mit Ton');
+      createdAt: Date.now(),
+      content: `Sora-Video fertig · ${duration} Sekunden · ${created.model || videoSettings.model} · geschätzt ${formatUsd(created.estimatedCostUsd ?? estimateVideoPrice(videoSettings))}.`,
+      attachments: [{ kind: 'video', name: 'yildiz-ai-sora.mp4', previewUrl: video.url, blob: video.blob, projectData: videoProject }]
+    });
+    activeVideoJobRef.current = null;
+    setGenerationStatus(runId, 'Sora-Video erstellt · MP4 · mit Ton');
   }
 
-  async function sendMessage(text = input) {
+  async function stopGeneration() {
+    const activeRun = generationRef.current.id;
+    abortRef.current?.controller?.abort();
+    const active = activeVideoJobRef.current;
+    if (active?.id) {
+      const headers = {};
+      const token = getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      fetch(`/api/ai/video?action=delete&id=${encodeURIComponent(active.id)}&requestId=${encodeURIComponent(active.requestId)}`, { method: 'DELETE', headers }).catch(() => {});
+    }
+    activeVideoJobRef.current = null;
+    generationRef.current = { id: '', chatId: '' };
+    abortRef.current = null;
+    sendingRef.current = false;
+    setLoading(false);
+    if (activeRun) setStatus('Erstellung abgebrochen.');
+  }
+
+  function retryAssistant(index) {
+    let userIndex = index - 1;
+    while (userIndex >= 0 && messages[userIndex]?.role !== 'user') userIndex -= 1;
+    if (userIndex < 0) return;
+    const userMessage = messages[userIndex];
+    const restoredAttachments = (userMessage.attachments || []).map((item) => ({ ...item, id: crypto.randomUUID() }));
+    const displayBase = messages.slice(0, index);
+    const historyBase = messages.slice(0, userIndex);
+    sendMessage(userMessage.content, restoredAttachments, { retry: true, appendUser: false, displayBase, historyBase });
+  }
+
+  async function sendMessage(text = input, providedAttachments = attachments, options = {}) {
     const clean = String(text || '').trim();
+    const selectedAttachments = Array.isArray(providedAttachments) ? providedAttachments : [];
     if (sendingRef.current) return;
     const now = Date.now();
-    if (clean && lastSendRef.current.text === clean && now - lastSendRef.current.at < 5000) return;
-    if ((!clean && !attachments.length) || loading) return;
-    if (attachments.some((item) => item.extracting)) {
+    if (!options.retry && clean && lastSendRef.current.text === clean && now - lastSendRef.current.at < 5000) return;
+    if ((!clean && !selectedAttachments.length) || loading) return;
+    if (selectedAttachments.some((item) => item.extracting)) {
       setStatus('Bitte kurz warten, bis die Videoframes vorbereitet sind.');
       return;
     }
+
+    const videoAction = creationMode === 'video' || (creationMode === 'auto' && clean && looksLikeVideoPrompt(clean));
+    const imageAction = !videoAction && (creationMode === 'image' || (creationMode === 'auto' && clean && looksLikeImagePrompt(clean)));
+    if ((videoAction || imageAction) && isGuest) {
+      setStatus('Bitte anmelden: Kostenpflichtige OpenAI-Bilder und Sora-Videos sind zum Schutz deines Guthabens nur für Konten freigeschaltet.');
+      return;
+    }
+
+    if (imageAction) {
+      const accepted = window.confirm(`Geschätzte Kosten für dieses Bild: ${formatUsd(estimateImagePrice(imageSettings))}. Jetzt erstellen?`);
+      if (!accepted) return;
+    }
+    if (videoAction) {
+      const accepted = window.confirm(`Geschätzte Kosten für dieses Video: ${formatUsd(estimateVideoPrice(videoSettings))} (${videoSettings.seconds} Sekunden). Jetzt erstellen?`);
+      if (!accepted) return;
+    }
+
     sendingRef.current = true;
     lastSendRef.current = { text: clean, at: now };
-
-    const history = messages;
-    const outgoingAttachments = attachments.map(({ id, previewUrl, extracting, ...rest }) => rest);
+    const controller = new AbortController();
+    const runId = crypto.randomUUID();
+    const requestId = crypto.randomUUID();
+    generationRef.current = { id: runId, chatId: activeChatId };
+    abortRef.current = { controller, runId };
+    const history = options.historyBase || messages;
+    const outgoingAttachments = selectedAttachments.map(({ id, previewUrl, extracting, ...rest }) => rest);
     const userMessage = {
-      role: 'user',
+      id: crypto.randomUUID(), role: 'user', createdAt: Date.now(),
       content: clean || 'Bitte analysiere den Anhang.',
-      attachments: attachments.map(fileMessageAttachment)
+      attachments: selectedAttachments.map(fileMessageAttachment)
     };
 
-    if (clean) {
+    if (clean && options.appendUser !== false) {
       setChatSessions((old) => old.map((session) => session.id === activeChatId && session.title === 'Neuer Chat'
         ? { ...session, title: clean.replace(/\s+/g, ' ').slice(0, 42), updatedAt: Date.now() }
         : session));
     }
-    setMessages((old) => [...old, userMessage]);
+    if (options.appendUser === false) setMessages(options.displayBase || messages);
+    else setMessages((old) => [...old, userMessage]);
     setInput('');
     setAttachments([]);
     setLoading(true);
 
     try {
-      if (clean && looksLikeVideoPrompt(clean)) {
-        const uploadedImages = attachments
+      if (videoAction) {
+        const uploadedImages = selectedAttachments
           .filter((item) => item.kind === 'image')
-          .map((item) => item.previewUrl || item.data)
+          .map((item) => item.data || item.previewUrl)
           .filter(Boolean);
-
-        // Ein normales Text-zu-Video darf nicht automatisch das letzte Chat-Bild
-        // als Inpaint-Referenz mitsenden. Das verursachte den Größenfehler.
-        let videoReferenceImages = uploadedImages;
-        if (!uploadedImages.length && wantsImageReferenceForVideo(clean)) {
-          videoReferenceImages = [...messages].reverse()
-            .flatMap((message) => Array.isArray(message.attachments) ? message.attachments : [])
-            .filter((item) => item.kind === 'image')
-            .map((item) => item.previewUrl || item.data)
-            .filter(Boolean)
-            .slice(0, 1);
+        let videoReferenceImages = [];
+        const explicitlyRequested = videoSettings.useReference || wantsImageReferenceForVideo(clean);
+        if (explicitlyRequested) {
+          videoReferenceImages = uploadedImages;
+          if (!videoReferenceImages.length) {
+            videoReferenceImages = [...messages].reverse()
+              .flatMap((message) => Array.isArray(message.attachments) ? message.attachments : [])
+              .filter((item) => item.kind === 'image')
+              .map((item) => item.data || item.previewUrl)
+              .filter(Boolean)
+              .slice(0, 1);
+          }
         }
-        await generateVideoMessage(clean, videoReferenceImages);
-      } else if (clean && !outgoingAttachments.length && looksLikeImagePrompt(clean)) {
-        await generateImageMessage(clean);
+        await generateVideoMessage(clean, videoReferenceImages, controller.signal, requestId, runId);
+      } else if (imageAction) {
+        await generateImageMessage(clean, selectedAttachments, controller.signal, requestId, runId);
       } else {
-        setStatus('Yildiz AI denkt …');
+        setGenerationStatus(runId, 'Yildiz AI denkt …');
         const result = await api('/api/ai/chat', {
-          method: 'POST',
+          method: 'POST', signal: controller.signal,
           body: JSON.stringify({ message: clean, history, attachments: outgoingAttachments })
         });
-        setMessages((old) => [...old, { role: 'assistant', content: result.answer }]);
-        setStatus(`Gemini verbunden${result.model ? ` · ${result.model}` : ''}`);
+        appendGenerationMessage(runId, { id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(), content: result.answer });
+        setGenerationStatus(runId, `Gemini verbunden${result.model ? ` · ${result.model}` : ''}`);
       }
     } catch (error) {
-      setMessages((old) => [...old, { role: 'assistant', content: error.message }]);
-      setStatus('Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
+      if (error?.name === 'AbortError') {
+        setGenerationStatus(runId, 'Erstellung abgebrochen.');
+      } else if (isCurrentGeneration(runId)) {
+        appendGenerationMessage(runId, { id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(), content: error.message || 'Unbekannter Fehler.' });
+        setGenerationStatus(runId, 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
+      }
     } finally {
-      sendingRef.current = false;
-      setLoading(false);
+      if (generationRef.current.id === runId) {
+        generationRef.current = { id: '', chatId: '' };
+        sendingRef.current = false;
+        abortRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -917,15 +1129,22 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     <section className="chat-workspace-pro">
       <aside className="chat-history-panel">
         <button className="new-chat-button" onClick={newChat}><MessageSquarePlus size={18}/>Neuer Chat</button>
-        <button className="chat-export-button" onClick={exportCurrentChat}><Download size={16}/>Aktuellen Chat speichern</button>
+        <div className="chat-history-top-actions">
+          <button className="chat-export-button" onClick={exportCurrentChat}><Download size={16}/>Speichern</button>
+          <button className="chat-export-button danger-soft" onClick={deleteAllChats}><Trash2 size={16}/>Alle löschen</button>
+        </div>
         <label className="chat-search"><Search size={15}/><input value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Chats suchen" /></label>
         <div className="chat-history-list">
           {filteredSessions.map((session) => (
-            <button key={session.id} className={`chat-history-item ${session.id === activeChatId ? 'active' : ''}`} onClick={() => openChat(session)}>
-              <span>{session.title || 'Neuer Chat'}</span>
+            <div key={session.id} className={`chat-history-item ${session.id === activeChatId ? 'active' : ''}`} onClick={() => openChat(session)} role="button" tabIndex={0}>
+              <span>{session.pinned && <Pin size={12}/>} {session.title || 'Neuer Chat'}</span>
               <small>{new Date(session.updatedAt || session.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</small>
-              <i onClick={(event) => deleteChat(event, session.id)} title="Chat löschen"><Trash2 size={14}/></i>
-            </button>
+              <div className="chat-history-actions">
+                <button onClick={(event) => togglePinChat(event, session)} title={session.pinned ? 'Lösen' : 'Anheften'}>{session.pinned ? <PinOff size={13}/> : <Pin size={13}/>}</button>
+                <button onClick={(event) => renameChat(event, session)} title="Umbenennen"><Edit3 size={13}/></button>
+                <button onClick={(event) => deleteChat(event, session.id)} title="Löschen"><Trash2 size={13}/></button>
+              </div>
+            </div>
           ))}
         </div>
         <p className="chat-save-note">{cloudEnabled ? 'Chats sind privat an dieses Konto gebunden und werden geräteübergreifend synchronisiert.' : 'Gast-Chats bleiben nur auf diesem Gerät.'} Mit „Chat speichern“ kannst du zusätzlich eine TXT-Datei herunterladen.</p>
@@ -934,19 +1153,35 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
       <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI · Gemini + OpenAI + Sora</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
       <div className="chat-messages">
         {messages.map((message, index) => (
-          <article className={`message ${message.role}`} key={`${message.role}-${index}`}>
+          <article className={`message ${message.role}`} key={message.id || `${message.role}-${index}`}>
             <div className="avatar">{message.role === 'assistant' ? <Bot size={18} /> : <User size={18} />}</div>
             <div className="message-body">
-              <div>{message.content}</div>
+              {editingMessageId === message.id ? (
+                <div className="message-edit-box">
+                  <textarea value={editingText} onChange={(event) => setEditingText(event.target.value)} />
+                  <div><button onClick={saveEditedMessage}><Check size={15}/>Speichern</button><button onClick={() => { setEditingMessageId(''); setEditingText(''); }}><X size={15}/>Abbrechen</button></div>
+                </div>
+              ) : <div>{message.content}</div>}
+
               {Array.isArray(message.attachments) && message.attachments.length > 0 && (
                 <div className="message-attachments">
                   {message.attachments.map((item, i) => item.kind === 'image' ? (
-                    <div className="attachment-card" key={`${item.name}-${i}`}><img src={item.previewUrl || item.data} alt={item.name || 'Bild'} /><span>{item.name}</span></div>
+                    <div className="attachment-card" key={`${item.name}-${i}`}>
+                      <img src={item.previewUrl || item.data} alt={item.name || 'Bild'} />
+                      <span>{item.name}</span>
+                      <div className="attachment-actions">
+                        <button onClick={() => downloadMedia(item.previewUrl || item.data, item.name || 'yildiz-ai.png')}><Download size={14}/>Speichern</button>
+                        <button onClick={() => reuseImage(item)}><ImagePlus size={14}/>Als Referenz</button>
+                      </div>
+                    </div>
                   ) : item.kind === 'video' ? (
                     <div className="attachment-card video" key={`${item.name}-${i}`}>
                       {item.previewUrl ? <video src={item.previewUrl} controls playsInline /> : <div className="video-placeholder"><Video size={24}/><small>{item.cloudMediaMissing ? 'Videodatei war nur lokal verfügbar' : 'Keine Vorschau'}</small></div>}
                       <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
-                      {item.projectData?.data?.scenes?.length > 0 && <button className="edit-video-project-btn" onClick={() => onOpenVideoProject?.(item.projectData)}><Edit3 size={15}/>Im Video-Studio bearbeiten</button>}
+                      <div className="attachment-actions">
+                        {item.previewUrl && <button onClick={() => downloadMedia(item.previewUrl, item.name || 'yildiz-ai-video.mp4')}><Download size={14}/>Speichern</button>}
+                        {item.projectData?.data?.scenes?.length > 0 && <button className="edit-video-project-btn" onClick={() => onOpenVideoProject?.(item.projectData)}><Edit3 size={15}/>Video-Studio</button>}
+                      </div>
                     </div>
                   ) : (
                     <div className="attachment-card file" key={`${item.name}-${i}`}>
@@ -956,10 +1191,17 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
                   ))}
                 </div>
               )}
+
+              <div className="message-actions">
+                <button onClick={() => copyMessage(message)} title="Kopieren"><Copy size={14}/></button>
+                {message.role === 'user' && <button onClick={() => startEditMessage(message)} title="Bearbeiten"><Edit3 size={14}/></button>}
+                {message.role === 'assistant' && index > 0 && <button onClick={() => retryAssistant(index)} title="Antwort erneut erstellen"><RotateCcw size={14}/></button>}
+                {message.id !== 'welcome' && <button onClick={() => deleteMessage(message.id)} title="Nachricht löschen"><Trash2 size={14}/></button>}
+              </div>
             </div>
           </article>
         ))}
-        {loading && <article className="message assistant"><div className="avatar"><Bot size={18} /></div><div className="message-body typing">{status}</div></article>}
+        {loading && <article className="message assistant"><div className="avatar"><Bot size={18} /></div><div className="message-body typing"><span>{status}</span><button className="stop-generation-btn" onClick={stopGeneration}><Square size={14}/>Stoppen</button></div></article>}
       </div>
 
       {attachments.length > 0 && (
@@ -981,6 +1223,40 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
         onDragLeave={() => setDragActive(false)}
         onDrop={onDrop}
       >
+        <div className="creation-mode-row">
+          <div className="creation-mode-tabs">
+            <button type="button" className={creationMode === 'auto' ? 'active' : ''} onClick={() => setCreationMode('auto')}>Auto</button>
+            <button type="button" className={creationMode === 'image' ? 'active' : ''} onClick={() => { setCreationMode('image'); setShowMediaSettings(true); }}><ImagePlus size={14}/>Bild</button>
+            <button type="button" className={creationMode === 'video' ? 'active' : ''} onClick={() => { setCreationMode('video'); setShowMediaSettings(true); }}><Video size={14}/>Video</button>
+          </div>
+          <button type="button" className="media-settings-toggle" onClick={() => setShowMediaSettings((value) => !value)}><Settings2 size={15}/>Einstellungen {showMediaSettings ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</button>
+          <span className="cost-preview">{creationMode === 'video' ? `ca. ${formatUsd(estimateVideoPrice(videoSettings))}` : creationMode === 'image' ? `ca. ${formatUsd(estimateImagePrice(imageSettings))}` : 'Modus automatisch'}</span>
+        </div>
+
+        {showMediaSettings && <div className="media-settings-panel">
+          {(creationMode === 'auto' || creationMode === 'image') && <div className="media-settings-section">
+            <h4><ImagePlus size={16}/>Bildeinstellungen</h4>
+            <div className="media-settings-grid">
+              <label>Format<select value={imageSettings.aspect} onChange={(event) => setImageSettings({ ...imageSettings, aspect: event.target.value })}><option value="square">Quadratisch</option><option value="post">Hochformat</option><option value="landscape">Querformat</option></select></label>
+              <label>Qualität<select value={imageSettings.quality} onChange={(event) => setImageSettings({ ...imageSettings, quality: event.target.value })}><option value="low">Entwurf</option><option value="medium">Standard</option><option value="high">Hoch</option></select></label>
+              <label>Stil<select value={imageSettings.style} onChange={(event) => setImageSettings({ ...imageSettings, style: event.target.value })}><option value="auto">Automatisch</option><option value="realistic">Fotorealistisch</option><option value="poster">Werbedesign</option><option value="product">Produktfoto</option><option value="studio">Studio</option></select></label>
+              <label>Hintergrund<select value={imageSettings.background} onChange={(event) => setImageSettings({ ...imageSettings, background: event.target.value })}><option value="auto">Automatisch</option><option value="opaque">Deckend</option><option value="transparent">Transparent</option></select></label>
+            </div>
+            <small>Ein angehängtes Bild wird im Bildmodus als Referenz bearbeitet. Preis ist eine Schätzung und wird vor dem Start bestätigt.</small>
+          </div>}
+          {(creationMode === 'auto' || creationMode === 'video') && <div className="media-settings-section">
+            <h4><Video size={16}/>Videoeinstellungen</h4>
+            <div className="media-settings-grid">
+              <label>Länge<select value={videoSettings.seconds} onChange={(event) => setVideoSettings({ ...videoSettings, seconds: event.target.value })}><option value="4">4 Sekunden</option><option value="8">8 Sekunden</option><option value="12">12 Sekunden</option></select></label>
+              <label>Format<select value={videoSettings.aspect} onChange={(event) => setVideoSettings({ ...videoSettings, aspect: event.target.value })}><option value="story">Hochformat 9:16</option><option value="landscape">Querformat 16:9</option></select></label>
+              <label>Modell<select value={videoSettings.model} onChange={(event) => setVideoSettings({ ...videoSettings, model: event.target.value })}><option value="sora-2">Sora 2</option><option value="sora-2-pro">Sora 2 Pro</option></select></label>
+              <label className="checkbox-row"><input type="checkbox" checked={videoSettings.useReference} onChange={(event) => setVideoSettings({ ...videoSettings, useReference: event.target.checked })}/>Angehängtes/letztes Bild verwenden</label>
+            </div>
+            <small>Geschätzte Kosten: {formatUsd(estimateVideoPrice(videoSettings))}. Sora 2 Pro ist deutlich teurer.</small>
+          </div>}
+          {isGuest && <div className="media-login-note">Chat und Editoren funktionieren als Gast. Für OpenAI-Bilder und Sora-Videos bitte anmelden.</div>}
+        </div>}
+
         <div className="chat-upload-row">
           <button type="button" className="upload-pill" onClick={() => imageInputRef.current?.click()}><ImagePlus size={15}/>Bild</button>
           <button type="button" className="upload-pill" onClick={() => videoInputRef.current?.click()}><Video size={15}/>Video</button>

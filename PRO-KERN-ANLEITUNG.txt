@@ -1,0 +1,39 @@
+YILDIZ AI PRO-KERN V1 – EINFACHE INSTALLATION
+===============================================
+
+WICHTIG: Diese ZIP ist die vollständige Version. Keine ältere ZIP zusätzlich hochladen.
+
+1. SUPABASE
+- Öffne PRO-KERN-UPDATE-ZUM-KOPIEREN.txt.
+- Alles markieren und kopieren.
+- Supabase -> SQL Editor -> New query.
+- Code einfügen und Run drücken.
+- Bei Erfolg darf unten keine rote Fehlermeldung stehen.
+
+2. GITHUB
+- ZIP entpacken.
+- Den INHALT des entpackten Ordners in die Hauptseite deines GitHub-Repositories hochladen.
+- Vorhandene Dateien ersetzen.
+- Den äußeren Ordner nicht als neuen Unterordner hochladen.
+
+Commit-Nachricht:
+Yildiz AI Pro Kern Chat Medien Kostenkontrolle
+
+3. VERCEL
+- Warten, bis das neueste Deployment Ready und Production zeigt.
+- Website öffnen und hart neu laden:
+  Mac: Cmd + Shift + R
+  Windows: Ctrl + F5
+- Danach einmal abmelden und wieder anmelden.
+
+VERCEL-VARIABLEN BLEIBEN:
+OPENAI_API_KEY
+GEMINI_API_KEY
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+
+WICHTIG:
+- OpenAI-Bilder und Sora-Videos sind nur für angemeldete Konten freigeschaltet.
+- Chat und Editoren bleiben im Gastmodus verfügbar.
+- Jeder Account besitzt eigene Chats, Projekte und Nutzungslimits.
+- Im Adminbereich bedeutet -1 unbegrenzt.
