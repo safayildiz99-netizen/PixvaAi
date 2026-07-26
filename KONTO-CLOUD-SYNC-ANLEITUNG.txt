@@ -1,0 +1,30 @@
+YILDIZ AI – PRIVATE KONTEN UND CLOUD-SYNCHRONISIERUNG
+
+Warum vorher alle Konten dieselben Chats sahen:
+Die Chats wurden nur im Browser unter einem gemeinsamen Schlüssel gespeichert. Deshalb teilten Admin und Mitarbeiter auf demselben Gerät denselben Verlauf. Auf einem anderen Gerät fehlten die Chats vollständig.
+
+Neu:
+- Jedes Konto hat einen eigenen privaten Chat-Speicher in Supabase.
+- Derselbe Account lädt auf jedem Gerät denselben Chat-Verlauf.
+- Beim Account-Wechsel wird der Chat vollständig neu geladen.
+- Gast-Chats bleiben nur lokal auf dem jeweiligen Gerät.
+- Projekte sind ebenfalls nur noch für ihren Besitzer sichtbar. Admins verwalten Konten, sehen aber keine fremden Projekte.
+- Es gibt weiterhin eine lokale Sicherung, falls die Internetverbindung kurz ausfällt.
+
+WICHTIG – ZUERST SQL:
+1. Supabase öffnen.
+2. SQL Editor öffnen.
+3. Neue Query erstellen.
+4. Den vollständigen Inhalt aus KONTO-CLOUD-SYNC.sql einfügen.
+5. Run drücken.
+
+DANACH GITHUB:
+Den INHALT dieses vollständigen Projektordners in das Hauptverzeichnis des GitHub-Repositorys hochladen und vorhandene Dateien ersetzen.
+
+Commit-Nachricht:
+Yildiz AI private Konten und Cloud Synchronisierung
+
+Danach Vercel-Deployment abwarten und mit Cmd + Shift + R beziehungsweise Ctrl + F5 neu laden.
+
+Hinweis zu Medien:
+Chattexte und normale Bildvorschauen werden mit dem Konto synchronisiert. Sehr große Dateien und erzeugte MP4-Videodateien werden nicht als Datenbank-Text kopiert; sie bleiben auf dem Erstellungsgerät. Solche Videos bitte zusätzlich herunterladen oder als Projekt speichern.

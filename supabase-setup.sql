@@ -32,17 +32,26 @@ create table if not exists public.app_projects (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.app_chat_state (
+  user_id uuid primary key references public.app_users(id) on delete cascade,
+  chats jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists app_projects_owner_idx on public.app_projects(owner_id);
 create index if not exists app_projects_updated_idx on public.app_projects(updated_at desc);
 create index if not exists app_sessions_user_idx on public.app_sessions(user_id);
+create index if not exists app_chat_state_updated_idx on public.app_chat_state(updated_at desc);
 
 alter table public.app_users enable row level security;
 alter table public.app_sessions enable row level security;
 alter table public.app_projects enable row level security;
+alter table public.app_chat_state enable row level security;
 
 revoke all on public.app_users from anon, authenticated;
 revoke all on public.app_sessions from anon, authenticated;
 revoke all on public.app_projects from anon, authenticated;
+revoke all on public.app_chat_state from anon, authenticated;
 
 insert into public.app_users (username, password_hash, role, active, must_change_password)
 values ('admin', crypt('SafaStart2026!', gen_salt('bf', 12)), 'admin', true, true)
@@ -253,6 +262,61 @@ begin
 end;
 $$;
 
+create or replace function public.app_get_chat_state(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_id uuid;
+  v_chats jsonb;
+  v_updated timestamptz;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object('error', 'Nicht angemeldet.'); end if;
+
+  select chats, updated_at into v_chats, v_updated
+  from public.app_chat_state
+  where user_id = v_id;
+
+  return jsonb_build_object(
+    'chats', coalesce(v_chats, '[]'::jsonb),
+    'updatedAt', v_updated
+  );
+end;
+$$;
+
+create or replace function public.app_save_chat_state(p_token text, p_chats jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_id uuid;
+  v_updated timestamptz;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object('error', 'Nicht angemeldet.'); end if;
+  if jsonb_typeof(coalesce(p_chats, '[]'::jsonb)) <> 'array' then
+    return jsonb_build_object('error', 'Ungültige Chat-Daten.');
+  end if;
+  if pg_column_size(coalesce(p_chats, '[]'::jsonb)) > 25 * 1024 * 1024 then
+    return jsonb_build_object('error', 'Der Chat-Verlauf ist für eine einzelne Synchronisierung zu groß. Große Videos bitte als Projekt speichern.');
+  end if;
+
+  insert into public.app_chat_state(user_id, chats, updated_at)
+  values (v_id, coalesce(p_chats, '[]'::jsonb), now())
+  on conflict (user_id) do update
+  set chats = excluded.chats,
+      updated_at = excluded.updated_at
+  returning updated_at into v_updated;
+
+  return jsonb_build_object('ok', true, 'updatedAt', v_updated);
+end;
+$$;
+
 create or replace function public.app_list_projects(p_token text)
 returns jsonb
 language plpgsql
@@ -276,7 +340,7 @@ begin
   ) order by p.updated_at desc), '[]'::jsonb)
   into v_projects
   from public.app_projects p
-  where p.owner_id = v_id or private.is_admin(v_id);
+  where p.owner_id = v_id;
   return jsonb_build_object('projects', v_projects);
 end;
 $$;
@@ -328,7 +392,7 @@ begin
   if v_id is null then return jsonb_build_object('error', 'Nicht angemeldet.'); end if;
   select * into v_project from public.app_projects where id = p_project_id;
   if v_project.id is null then return jsonb_build_object('error', 'Projekt nicht gefunden.'); end if;
-  if v_project.owner_id <> v_id and not private.is_admin(v_id) then return jsonb_build_object('error', 'Kein Zugriff.'); end if;
+  if v_project.owner_id <> v_id then return jsonb_build_object('error', 'Kein Zugriff.'); end if;
   update public.app_projects
   set name = left(coalesce(nullif(trim(p_name), ''), name), 100),
       data = coalesce(p_data, data),
@@ -357,7 +421,7 @@ begin
   if v_id is null then return jsonb_build_object('error', 'Nicht angemeldet.'); end if;
   select owner_id into v_owner from public.app_projects where id = p_project_id;
   if v_owner is null then return jsonb_build_object('error', 'Projekt nicht gefunden.'); end if;
-  if v_owner <> v_id and not private.is_admin(v_id) then return jsonb_build_object('error', 'Kein Zugriff.'); end if;
+  if v_owner <> v_id then return jsonb_build_object('error', 'Kein Zugriff.'); end if;
   delete from public.app_projects where id = p_project_id;
   return jsonb_build_object('ok', true);
 end;
@@ -370,6 +434,8 @@ grant execute on function public.app_change_password(text,text,text) to anon, au
 grant execute on function public.app_list_users(text) to anon, authenticated;
 grant execute on function public.app_create_user(text,text,text,text) to anon, authenticated;
 grant execute on function public.app_set_user_active(text,uuid,boolean) to anon, authenticated;
+grant execute on function public.app_get_chat_state(text) to anon, authenticated;
+grant execute on function public.app_save_chat_state(text,jsonb) to anon, authenticated;
 grant execute on function public.app_list_projects(text) to anon, authenticated;
 grant execute on function public.app_create_project(text,text,text,jsonb) to anon, authenticated;
 grant execute on function public.app_update_project(text,uuid,text,jsonb) to anon, authenticated;

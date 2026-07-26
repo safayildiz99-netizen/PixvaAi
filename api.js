@@ -79,6 +79,16 @@ export async function api(path, options = {}) {
     });
   }
 
+  if (path === '/api/chat-state' && method === 'GET') {
+    return rpc('app_get_chat_state', { p_token: token });
+  }
+  if (path === '/api/chat-state' && (method === 'PUT' || method === 'POST')) {
+    return rpc('app_save_chat_state', {
+      p_token: token,
+      p_chats: Array.isArray(body.chats) ? body.chats : []
+    });
+  }
+
   if (path === '/api/projects' && method === 'GET') {
     return rpc('app_list_projects', { p_token: token });
   }

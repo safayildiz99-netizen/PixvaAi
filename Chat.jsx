@@ -290,8 +290,9 @@ function fileMessageAttachment(item) {
 }
 
 
-const CHAT_DB = 'yildiz-ai-chat-history-v1';
+const CHAT_DB = 'yildiz-ai-chat-history-v2';
 const CHAT_STORE = 'sessions';
+const MAX_CLOUD_MEDIA_CHARS = 3_500_000;
 const WELCOME_MESSAGE = { role: 'assistant', content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien per Drag & Drop hochladen.' };
 
 function makeChatSession() {
@@ -302,6 +303,11 @@ function makeChatSession() {
     updatedAt: Date.now(),
     messages: [WELCOME_MESSAGE]
   };
+}
+
+function accountStorageKey(ownerKey) {
+  const safeOwner = String(ownerKey || 'guest').trim() || 'guest';
+  return `account:${safeOwner}`;
 }
 
 function openChatDatabase() {
@@ -316,17 +322,17 @@ function openChatDatabase() {
   });
 }
 
-async function readSavedChats() {
+async function readLocalSavedChats(ownerKey) {
   const db = await openChatDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(CHAT_STORE, 'readonly');
-    const request = tx.objectStore(CHAT_STORE).get('all');
+    const request = tx.objectStore(CHAT_STORE).get(accountStorageKey(ownerKey));
     request.onsuccess = () => resolve(Array.isArray(request.result?.value) ? request.result.value : []);
     request.onerror = () => reject(request.error);
   });
 }
 
-function cleanForStorage(sessions) {
+function cleanForLocalStorage(sessions) {
   return sessions.map((session) => ({
     ...session,
     messages: (session.messages || []).map((message) => ({
@@ -341,14 +347,84 @@ function cleanForStorage(sessions) {
   }));
 }
 
-async function writeSavedChats(sessions) {
+async function writeLocalSavedChats(ownerKey, sessions) {
   const db = await openChatDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(CHAT_STORE, 'readwrite');
-    tx.objectStore(CHAT_STORE).put({ key: 'all', value: cleanForStorage(sessions) });
+    tx.objectStore(CHAT_STORE).put({ key: accountStorageKey(ownerKey), value: cleanForLocalStorage(sessions) });
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
+}
+
+function portableString(value) {
+  const text = String(value || '');
+  if (!text || text.startsWith('blob:')) return '';
+  if (text.startsWith('data:') && text.length > MAX_CLOUD_MEDIA_CHARS) return '';
+  return text;
+}
+
+function cleanPortableValue(value, depth = 0) {
+  if (depth > 8 || value == null) return value == null ? value : undefined;
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return undefined;
+  if (typeof File !== 'undefined' && value instanceof File) return undefined;
+  if (typeof value === 'string') return portableString(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value.map((item) => cleanPortableValue(item, depth + 1)).filter((item) => item !== undefined);
+  if (typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .map(([key, item]) => [key, cleanPortableValue(item, depth + 1)])
+      .filter(([, item]) => item !== undefined));
+  }
+  return undefined;
+}
+
+function cleanAttachmentForCloud(item) {
+  const previewUrl = portableString(item.previewUrl || item.data || '');
+  const data = portableString(item.data || '');
+  return {
+    kind: item.kind || 'file',
+    name: item.name || 'Datei',
+    size: Number(item.size || 0),
+    mimeType: item.mimeType || '',
+    previewUrl,
+    data,
+    frames: Array.isArray(item.frames) ? item.frames.map(portableString).filter(Boolean) : undefined,
+    projectData: cleanPortableValue(item.projectData),
+    cloudMediaMissing: Boolean((item.kind === 'video' || item.kind === 'file') && !previewUrl)
+  };
+}
+
+function cleanForCloudStorage(sessions) {
+  return sessions.map((session) => ({
+    id: session.id,
+    title: String(session.title || 'Neuer Chat').slice(0, 120),
+    createdAt: Number(session.createdAt || Date.now()),
+    updatedAt: Number(session.updatedAt || Date.now()),
+    messages: (session.messages || []).map((message) => ({
+      role: message.role === 'user' ? 'user' : 'assistant',
+      content: String(message.content || ''),
+      attachments: Array.isArray(message.attachments)
+        ? message.attachments.map(cleanAttachmentForCloud)
+        : undefined
+    }))
+  }));
+}
+
+async function readCloudSavedChats() {
+  const result = await api('/api/chat-state');
+  return {
+    chats: Array.isArray(result?.chats) ? result.chats : [],
+    updatedAt: result?.updatedAt ? Date.parse(result.updatedAt) || 0 : 0
+  };
+}
+
+async function writeCloudSavedChats(sessions) {
+  const result = await api('/api/chat-state', {
+    method: 'PUT',
+    body: JSON.stringify({ chats: cleanForCloudStorage(sessions) })
+  });
+  return result?.updatedAt ? Date.parse(result.updatedAt) || Date.now() : Date.now();
 }
 
 function hydrateMessages(messages) {
@@ -368,7 +444,7 @@ function hydrateMessages(messages) {
   });
 }
 
-export default function Chat({ onOpenVideoProject }) {
+export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest = true }) {
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [chatSessions, setChatSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState('');
@@ -386,6 +462,9 @@ export default function Chat({ onOpenVideoProject }) {
   const anyFileRef = useRef(null);
   const lastSendRef = useRef({ text: '', at: 0 });
   const sendingRef = useRef(false);
+  const cloudUpdatedAtRef = useRef(0);
+  const ownerKey = useMemo(() => String(accountId || 'guest'), [accountId]);
+  const cloudEnabled = !isGuest && ownerKey !== 'guest';
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
   const filteredSessions = useMemo(() => {
     const query = chatSearch.trim().toLowerCase();
@@ -396,23 +475,54 @@ export default function Chat({ onOpenVideoProject }) {
 
   useEffect(() => {
     let cancelled = false;
-    readSavedChats().then((saved) => {
-      if (cancelled) return;
-      const sessions = saved.length ? saved : [makeChatSession()];
-      const first = sessions[0];
-      setChatSessions(sessions);
-      setActiveChatId(first.id);
-      setMessages(hydrateMessages(first.messages));
-      setHistoryReady(true);
-    }).catch(() => {
-      const first = makeChatSession();
-      setChatSessions([first]);
-      setActiveChatId(first.id);
-      setMessages(first.messages);
-      setHistoryReady(true);
-    });
+
+    async function loadChats() {
+      try {
+        let saved = [];
+        if (cloudEnabled) {
+          const remote = await readCloudSavedChats();
+          saved = remote.chats;
+          cloudUpdatedAtRef.current = remote.updatedAt;
+        } else {
+          saved = await readLocalSavedChats(ownerKey);
+        }
+        if (cancelled) return;
+        const sessions = saved.length ? saved : [makeChatSession()];
+        const first = sessions[0];
+        setChatSessions(sessions);
+        setActiveChatId(first.id);
+        setMessages(hydrateMessages(first.messages));
+        setHistoryReady(true);
+        setStatus(cloudEnabled
+          ? 'Deine Chats werden privat in deinem Konto gespeichert und auf deinen Geräten synchronisiert.'
+          : 'Gast-Chats werden nur auf diesem Gerät gespeichert.');
+      } catch (error) {
+        try {
+          const local = await readLocalSavedChats(ownerKey);
+          if (cancelled) return;
+          const sessions = local.length ? local : [makeChatSession()];
+          const first = sessions[0];
+          setChatSessions(sessions);
+          setActiveChatId(first.id);
+          setMessages(hydrateMessages(first.messages));
+          setHistoryReady(true);
+          setStatus(cloudEnabled
+            ? `Cloud-Synchronisierung nicht erreichbar: ${error.message}. Lokale Sicherung wurde geöffnet.`
+            : 'Chats konnten lokal nicht geladen werden.');
+        } catch {
+          if (cancelled) return;
+          const first = makeChatSession();
+          setChatSessions([first]);
+          setActiveChatId(first.id);
+          setMessages(first.messages);
+          setHistoryReady(true);
+        }
+      }
+    }
+
+    loadChats();
     return () => { cancelled = true; };
-  }, []);
+  }, [cloudEnabled, ownerKey]);
 
   useEffect(() => {
     if (!historyReady || !activeChatId) return;
@@ -423,11 +533,48 @@ export default function Chat({ onOpenVideoProject }) {
 
   useEffect(() => {
     if (!historyReady || !chatSessions.length) return;
-    const timer = setTimeout(() => {
-      writeSavedChats(chatSessions).catch(() => setStatus('Chats konnten im Browser nicht gespeichert werden.'));
-    }, 400);
+    const timer = setTimeout(async () => {
+      try {
+        await writeLocalSavedChats(ownerKey, chatSessions);
+        if (cloudEnabled) cloudUpdatedAtRef.current = await writeCloudSavedChats(chatSessions);
+      } catch (error) {
+        setStatus(cloudEnabled
+          ? `Chats konnten nicht mit deinem Konto synchronisiert werden: ${error.message}`
+          : 'Chats konnten auf diesem Gerät nicht gespeichert werden.');
+      }
+    }, 900);
     return () => clearTimeout(timer);
-  }, [chatSessions, historyReady]);
+  }, [chatSessions, historyReady, cloudEnabled, ownerKey]);
+
+  useEffect(() => {
+    if (!cloudEnabled || !historyReady) return undefined;
+    let busy = false;
+    const refreshFromCloud = async () => {
+      if (busy || document.visibilityState === 'hidden') return;
+      busy = true;
+      try {
+        const remote = await readCloudSavedChats();
+        if (remote.updatedAt > cloudUpdatedAtRef.current + 500 && remote.chats.length) {
+          cloudUpdatedAtRef.current = remote.updatedAt;
+          const first = remote.chats.find((item) => item.id === activeChatId) || remote.chats[0];
+          setChatSessions(remote.chats);
+          setActiveChatId(first.id);
+          setMessages(hydrateMessages(first.messages));
+          setStatus('Neueste Chats aus deinem Konto wurden geladen.');
+        }
+      } catch {
+        // Die lokale Sicherung bleibt erhalten; beim nächsten Fokus wird erneut versucht.
+      } finally {
+        busy = false;
+      }
+    };
+    window.addEventListener('focus', refreshFromCloud);
+    document.addEventListener('visibilitychange', refreshFromCloud);
+    return () => {
+      window.removeEventListener('focus', refreshFromCloud);
+      document.removeEventListener('visibilitychange', refreshFromCloud);
+    };
+  }, [cloudEnabled, historyReady, activeChatId]);
 
   function newChat() {
     sendingRef.current = false;
@@ -781,7 +928,7 @@ export default function Chat({ onOpenVideoProject }) {
             </button>
           ))}
         </div>
-        <p className="chat-save-note">Chats werden automatisch in diesem Browser gespeichert. Mit „Chat speichern“ kannst du zusätzlich eine TXT-Datei herunterladen.</p>
+        <p className="chat-save-note">{cloudEnabled ? 'Chats sind privat an dieses Konto gebunden und werden geräteübergreifend synchronisiert.' : 'Gast-Chats bleiben nur auf diesem Gerät.'} Mit „Chat speichern“ kannst du zusätzlich eine TXT-Datei herunterladen.</p>
       </aside>
       <section className="chat-shell">
       <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI · Gemini + OpenAI + Sora</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
@@ -797,7 +944,7 @@ export default function Chat({ onOpenVideoProject }) {
                     <div className="attachment-card" key={`${item.name}-${i}`}><img src={item.previewUrl || item.data} alt={item.name || 'Bild'} /><span>{item.name}</span></div>
                   ) : item.kind === 'video' ? (
                     <div className="attachment-card video" key={`${item.name}-${i}`}>
-                      {item.previewUrl ? <video src={item.previewUrl} controls playsInline /> : <div className="video-placeholder"><Video size={24}/></div>}
+                      {item.previewUrl ? <video src={item.previewUrl} controls playsInline /> : <div className="video-placeholder"><Video size={24}/><small>{item.cloudMediaMissing ? 'Videodatei war nur lokal verfügbar' : 'Keine Vorschau'}</small></div>}
                       <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
                       {item.projectData?.data?.scenes?.length > 0 && <button className="edit-video-project-btn" onClick={() => onOpenVideoProject?.(item.projectData)}><Edit3 size={15}/>Im Video-Studio bearbeiten</button>}
                     </div>

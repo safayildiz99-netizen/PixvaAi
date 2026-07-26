@@ -53,6 +53,16 @@ export default function App(){
   function changeView(id){setSelectedProject(null);setView(guest&&id==='projects'?'flyer':id)}
   function openProject(project){setSelectedProject(project);setView(project.type)}
   function saved(){setRefreshKey((n)=>n+1)}
+  function openGeneratedVideoProject(videoProject){
+    if(!videoProject?.data?.scenes?.length) return;
+    setSelectedProject({
+      id:`generated-${Date.now()}`,
+      type:'video',
+      name:videoProject.name||'Generiertes Video',
+      data:videoProject.data
+    });
+    setView('video');
+  }
 
   if(loading) return <div className="app-loader"><Sparkles/>Yildiz AI Studio lädt …</div>;
   if(!activeUser) return <Login onLogin={loggedIn} onGuest={enterGuest}/>;
@@ -74,7 +84,7 @@ export default function App(){
       {guest&&<div className="guest-banner"><span>Gastmodus: Chat und Editoren funktionieren ohne Anmeldung. Zum dauerhaften Speichern bitte anmelden.</span><button onClick={exit}>Anmelden</button></div>}
       {activeUser.mustChangePassword&&!guest&&<div className="warning-banner">Das Startpasswort ist noch aktiv. Öffne links „Mein Konto“ und lege dein eigenes Passwort fest.</div>}
       <div className="workspace-content">
-        {view==='chat'&&<Chat/>}
+        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenVideoProject={openGeneratedVideoProject}/>}
         {view==='flyer'&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest}/>} 
         {view==='image'&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest}/>} 
         {view==='video'&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest}/>} 
