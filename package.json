@@ -1,9 +1,9 @@
 {
   "name": "yildiz-ai-studio",
-  "version": "8.0.0",
+  "version": "9.0.0",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI Admin-Kontrollzentrum V2 mit privater Cloud-Synchronisierung, sicherer Passwort-Zurücksetzung, Admin-Chat-Audit und konfigurierbarer 1:1-App-Ansicht",
+  "description": "Yildiz AI V4: stabile Mobilansicht, kontogetrennte Chats, direkte Admin-Liveansicht, kostenlose Produktbildsuche und PDF/Dateierstellung",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "vercel-build": "npm run build"

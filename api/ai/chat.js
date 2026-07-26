@@ -1,6 +1,6 @@
 import { readJson, send } from '../_lib.js';
 
-const SYSTEM_PROMPT = `Du bist Yildiz AI, ein freundlicher, präziser und vielseitiger KI-Assistent. Du hilfst bei Alltag, Lernen, Schreiben, Übersetzen, Programmieren, Unternehmen, Kreativität und Planung. Zusätzlich kennst du dich mit Werbetechnik, Angeboten, Flyern, Druckdaten, Social Media und Webseiten aus. Antworte in der Sprache des Nutzers, klar, ehrlich und praktisch. Wenn Bilder angehängt sind, beschreibe sie hilfreich. Wenn nur eine Videodatei als Anhang vorhanden ist und keine Frames übertragen wurden, erkläre ehrlich, dass nur die Datei vorliegt und keine Bildanalyse der Videoinhalte möglich ist.`;
+const SYSTEM_PROMPT = `Du bist Yildiz AI, ein freundlicher, präziser und vielseitiger KI-Assistent. Du hilfst bei Alltag, Lernen, Schreiben, Übersetzen, Programmieren, Unternehmen, Kreativität und Planung. Zusätzlich kennst du dich mit Werbetechnik, Angeboten, Flyern, Druckdaten, Social Media und Webseiten aus. Antworte immer in der Sprache des Nutzers, klar, direkt und praktisch. Die Yildiz-AI-Oberfläche besitzt Werkzeuge für Bildgenerierung, kostenlose Produktbildsuche, Videoerstellung und herunterladbare Dateien wie PDF, TXT, CSV, JSON, HTML und Markdown. Behaupte deshalb niemals, du seist nur textbasiert oder könntest grundsätzlich keine Bilder, Videos oder Dateien liefern. Wenn der Nutzer eine Datei verlangt, erstelle den vollständigen verwendbaren Inhalt ohne Anleitungen zum manuellen Speichern; die Oberfläche übernimmt die Dateierstellung. Wenn ein Nutzer ein vorhandenes Marken- oder Produktbild sucht, erfinde kein Produkt und behaupte nicht ungeprüft, welches das beliebteste ist. Die Oberfläche übernimmt die kostenlose Bildsuche und zeigt Quellenlinks. Nutze übersichtliche Absätze und kurze Listen statt unnötiger Sternchen. Wenn Bilder angehängt sind, beschreibe sie hilfreich. Wenn nur eine Videodatei als Anhang vorhanden ist und keine Frames übertragen wurden, erkläre ehrlich, dass nur die Datei vorliegt und keine Bildanalyse der Videoinhalte möglich ist.`;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -28,12 +28,13 @@ function normalizeAttachments(input) {
   return input
     .slice(0, 4)
     .map((item) => ({
-      kind: item?.kind === 'video' ? 'video' : 'image',
+      kind: item?.kind === 'video' ? 'video' : item?.kind === 'file' ? 'file' : 'image',
       name: String(item?.name || '').slice(0, 120),
       mimeType: String(item?.mimeType || '').slice(0, 80),
       data: String(item?.data || ''),
       size: Number(item?.size || 0),
-      frames: Array.isArray(item?.frames) ? item.frames.slice(0, 4).map((frame) => String(frame || '')) : []
+      frames: Array.isArray(item?.frames) ? item.frames.slice(0, 4).map((frame) => String(frame || '')) : [],
+      text: String(item?.text || '').slice(0, 30000)
     }))
     .filter((item) => item.name || item.data);
 }
@@ -42,6 +43,7 @@ function createUserParts(message, attachments) {
   const parts = [];
   const videoAttachments = attachments.filter((item) => item.kind === 'video');
   const imageAttachments = attachments.filter((item) => item.kind === 'image');
+  const fileAttachments = attachments.filter((item) => item.kind === 'file');
 
   let intro = String(message || '').trim();
   if (videoAttachments.length) {
@@ -52,10 +54,23 @@ function createUserParts(message, attachments) {
     }).join('\n');
     intro += `\n\nVideo-Anhänge:\n${videoInfo}\nAnalysiere die angehängten Vorschaubilder als Stichprobe und erwähne, dass sie nicht jeden Moment des Videos zeigen.`;
   }
+  if (fileAttachments.length) {
+    const fileInfo = fileAttachments.map((item) => `- ${item.name || 'Datei'} (${item.mimeType || 'unbekannter Typ'}, ${item.size || 0} Bytes)`).join('\n');
+    const textContents = fileAttachments.filter((item) => item.text).map((item) => `\n--- Inhalt von ${item.name} ---\n${item.text}`).join('');
+    intro += `\n\nDatei-Anhänge:\n${fileInfo}${textContents}`;
+  }
+
   parts.push({ text: intro || 'Bitte hilf mir mit diesem Anhang.' });
 
   for (const image of imageAttachments) {
     const match = image.data.match(/^data:(.+?);base64,(.+)$/);
+    if (!match) continue;
+    parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+  }
+
+  for (const file of fileAttachments) {
+    if (file.mimeType !== 'application/pdf') continue;
+    const match = file.data.match(/^data:(.+?);base64,(.+)$/);
     if (!match) continue;
     parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
   }
@@ -89,7 +104,7 @@ async function callGemini({ apiKey, model, message, history, attachments }) {
             ...cleanHistory(history),
             { role: 'user', parts: createUserParts(message, attachments) }
           ],
-          generationConfig: { maxOutputTokens: 2048 }
+          generationConfig: { maxOutputTokens: 4096 }
         })
       }
     );

@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, BarChart3, CheckCircle2, ClipboardCopy, Cpu, Eye, Image, KeyRound,
-  LayoutDashboard, MessageSquareText, Monitor, Palette, Plus, RefreshCw, Save,
-  Search, Shield, ShieldAlert, UserRoundCog, Video, XCircle
+  Activity, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ClipboardCopy, Cpu, Eye, EyeOff, GripVertical, Image, KeyRound,
+  LayoutDashboard, MessageSquareText, Monitor, Palette, Plus, RefreshCw, RotateCcw, Save,
+  Search, Shield, ShieldAlert, Trash2, UserRoundCog, Video, XCircle
 } from 'lucide-react';
 import { api } from '../api.js';
+
+const DEFAULT_NAV_ITEMS = [
+  { id:'chat', label:'Chat', visible:true },
+  { id:'flyer', label:'Angebote & Flyer', visible:true },
+  { id:'image', label:'Motive & Editor', visible:true },
+  { id:'video', label:'Video-Studio', visible:true },
+  { id:'website', label:'Website-Builder', visible:true },
+  { id:'projects', label:'Projekte', visible:true }
+];
 
 const DEFAULT_UI_SETTINGS = {
   defaultView: 'chat',
@@ -17,8 +26,42 @@ const DEFAULT_UI_SETTINGS = {
   showProjects: true,
   announcement: '',
   maintenanceMode: false,
-  compactSidebar: false
+  compactSidebar: false,
+  mobileHistoryDrawer: true,
+  navItems: DEFAULT_NAV_ITEMS,
+  texts: {
+    appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
+    statusTitle:'Yildiz AI · Gemini + OpenAI + Sora',
+    welcome:'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und hochladen.',
+    composer:'Frag Yildiz AI …'
+  },
+  theme: { sidebarWidth:255, accentBlue:'#63c7ff', accentYellow:'#ffd400' }
 };
+
+function normalizeSettings(value = {}) {
+  const incomingNav = Array.isArray(value.navItems) ? value.navItems : [];
+  const navItems = incomingNav.length ? incomingNav.filter((item)=>DEFAULT_NAV_ITEMS.some((known)=>known.id===item.id)).map((item)=>({id:item.id,label:String(item.label||DEFAULT_NAV_ITEMS.find((known)=>known.id===item.id)?.label||item.id),visible:item.visible!==false})) : DEFAULT_NAV_ITEMS.map((item)=>({...item}));
+  for (const item of DEFAULT_NAV_ITEMS) if (!navItems.some((entry)=>entry.id===item.id)) navItems.push({...item});
+  return {
+    ...DEFAULT_UI_SETTINGS,
+    ...value,
+    navItems,
+    texts:{...DEFAULT_UI_SETTINGS.texts,...(value.texts||{})},
+    theme:{...DEFAULT_UI_SETTINGS.theme,...(value.theme||{})}
+  };
+}
+
+function withLegacyVisibility(settings) {
+  const visibility = Object.fromEntries((settings.navItems||[]).map((item)=>[item.id,item.visible!==false]));
+  return {
+    ...settings,
+    showFlyer:visibility.flyer!==false,
+    showImage:visibility.image!==false,
+    showVideo:visibility.video!==false,
+    showWebsite:visibility.website!==false,
+    showProjects:visibility.projects!==false
+  };
+}
 
 function money(value) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
@@ -71,7 +114,9 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [chatData, setChatData] = useState({ username: '', chats: [], updatedAt: null });
   const [selectedChatId, setSelectedChatId] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const [settingsDraft, setSettingsDraft] = useState({ ...DEFAULT_UI_SETTINGS, ...uiSettings });
+  const [settingsDraft, setSettingsDraft] = useState(() => normalizeSettings(uiSettings));
+  const [selectedVisualId, setSelectedVisualId] = useState('nav-chat');
+  const [dragVisualId, setDragVisualId] = useState('');
   const [auditLog, setAuditLog] = useState([]);
 
   async function loadCore() {
@@ -111,7 +156,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   }
 
   useEffect(() => { loadCore(); }, []);
-  useEffect(() => { setSettingsDraft({ ...DEFAULT_UI_SETTINGS, ...uiSettings }); }, [uiSettings]);
+  useEffect(() => { setSettingsDraft(normalizeSettings(uiSettings)); }, [uiSettings]);
   useEffect(() => {
     if (tab === 'chats') loadChatAccounts();
     if (tab === 'system') loadAuditLog();
@@ -204,16 +249,72 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   }
 
   function resetViewDefaults() {
-    setSettingsDraft({ ...DEFAULT_UI_SETTINGS });
+    setSettingsDraft(normalizeSettings(DEFAULT_UI_SETTINGS));
+    setSelectedVisualId('nav-chat');
+  }
+
+
+  function patchText(key, value) {
+    setSettingsDraft((old) => ({ ...old, texts: { ...old.texts, [key]: String(value || '').slice(0, 220) } }));
+  }
+
+  function patchTheme(patch) {
+    setSettingsDraft((old) => ({ ...old, theme: { ...old.theme, ...patch } }));
+  }
+
+  function patchNav(id, patch) {
+    setSettingsDraft((old) => ({ ...old, navItems: old.navItems.map((item) => item.id === id ? { ...item, ...patch } : item) }));
+  }
+
+  function moveNav(id, direction) {
+    setSettingsDraft((old) => {
+      const next = old.navItems.map((item) => ({ ...item }));
+      const index = next.findIndex((item) => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= next.length) return old;
+      [next[index], next[target]] = [next[target], next[index]];
+      return { ...old, navItems: next };
+    });
+  }
+
+  function dropNav(targetId) {
+    if (!dragVisualId || dragVisualId === targetId) return;
+    setSettingsDraft((old) => {
+      const next = old.navItems.map((item) => ({ ...item }));
+      const sourceIndex = next.findIndex((item) => item.id === dragVisualId);
+      const targetIndex = next.findIndex((item) => item.id === targetId);
+      if (sourceIndex < 0 || targetIndex < 0) return old;
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return { ...old, navItems: next };
+    });
+    setDragVisualId('');
+  }
+
+  function deleteSelectedVisual() {
+    if (selectedVisualId.startsWith('nav-')) {
+      const id = selectedVisualId.slice(4);
+      if (id === 'chat') return setStatus('Der Chat kann nicht gelöscht werden.');
+      patchNav(id, { visible:false });
+      setSelectedVisualId('nav-chat');
+      return;
+    }
+    if (selectedVisualId.startsWith('text-')) {
+      patchText(selectedVisualId.slice(5), '');
+    }
+  }
+
+  function selectedNavId() {
+    return selectedVisualId.startsWith('nav-') ? selectedVisualId.slice(4) : '';
   }
 
   async function saveViewSettings() {
     try {
       const response = await api('/api/admin/ui-settings', {
         method: 'POST',
-        body: JSON.stringify({ settings: settingsDraft })
+        body: JSON.stringify({ settings: withLegacyVisibility(settingsDraft) })
       });
-      const saved = { ...DEFAULT_UI_SETTINGS, ...(response.settings || settingsDraft) };
+      const saved = normalizeSettings(response.settings || settingsDraft);
       setSettingsDraft(saved);
       onSettingsChanged?.(saved);
       setStatus('App-Ansicht gespeichert. Die Standardansicht bleibt im Yildiz-AI-Layout.');
@@ -288,9 +389,70 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       </section>
     </div>}
 
-    {tab === 'view' && <div className="admin-view-grid">
-      <article className="admin-card admin-view-settings"><h3><Palette size={19}/> App-Ansicht verwalten</h3><p>Die Standardwerte entsprechen der aktuellen Yildiz-AI-Ansicht. Änderungen wirken nach dem Speichern für alle Konten.</p><label>Startansicht<select value={settingsDraft.defaultView} onChange={(event)=>patchSettings({defaultView:event.target.value})}><option value="chat">Chat</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option><option value="projects">Projekte</option></select></label><label>„Work“-Ziel<select value={settingsDraft.workView} onChange={(event)=>patchSettings({workView:event.target.value})}><option value="projects">Projekte</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option></select></label><div className="admin-toggle-grid"><label><input type="checkbox" checked={settingsDraft.allowGuest} onChange={(event)=>patchSettings({allowGuest:event.target.checked})}/>Gastmodus erlauben</label><label><input type="checkbox" checked={settingsDraft.showFlyer} onChange={(event)=>patchSettings({showFlyer:event.target.checked})}/>Angebote & Flyer</label><label><input type="checkbox" checked={settingsDraft.showImage} onChange={(event)=>patchSettings({showImage:event.target.checked})}/>Motive & Editor</label><label><input type="checkbox" checked={settingsDraft.showVideo} onChange={(event)=>patchSettings({showVideo:event.target.checked})}/>Video-Studio</label><label><input type="checkbox" checked={settingsDraft.showWebsite} onChange={(event)=>patchSettings({showWebsite:event.target.checked})}/>Website-Builder</label><label><input type="checkbox" checked={settingsDraft.showProjects} onChange={(event)=>patchSettings({showProjects:event.target.checked})}/>Projekte</label><label><input type="checkbox" checked={settingsDraft.compactSidebar} onChange={(event)=>patchSettings({compactSidebar:event.target.checked})}/>Kompakte Seitenleiste</label><label><input type="checkbox" checked={settingsDraft.maintenanceMode} onChange={(event)=>patchSettings({maintenanceMode:event.target.checked})}/>Wartungshinweis aktiv</label></div><label>Globale Mitteilung<textarea rows="3" value={settingsDraft.announcement} onChange={(event)=>patchSettings({announcement:event.target.value})} placeholder="Optionaler Hinweis oberhalb des Arbeitsbereichs"/></label><div className="admin-view-actions"><button onClick={resetViewDefaults}>1:1 Standard wiederherstellen</button><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Ansicht speichern</button></div></article>
-      <article className="admin-card admin-live-preview"><h3><Monitor size={19}/> Vorschau</h3><div className={`mini-app-preview ${settingsDraft.compactSidebar ? 'compact' : ''}`}><aside><div className="mini-logo">yildiz<span>☆</span>AI</div><b>Neues Design</b><span>Chat</span>{settingsDraft.showFlyer && <span>Angebote & Flyer</span>}{settingsDraft.showImage && <span>Motive & Editor</span>}{settingsDraft.showVideo && <span>Video-Studio</span>}{settingsDraft.showWebsite && <span>Website-Builder</span>}{settingsDraft.showProjects && <span>Projekte</span>}</aside><main><header><b>Yildiz AI Chat</b><i>Chat&nbsp;&nbsp;&nbsp; Work</i></header>{settingsDraft.announcement && <div className="mini-announcement">{settingsDraft.announcement}</div>}<section><div className="mini-status">Yildiz AI · Gemini + OpenAI + Sora</div><div className="mini-message">Hallo! Ich bin Yildiz AI.</div><div className="mini-input">Frag Yildiz AI …</div></section></main></div><small>Die Vorschau zeigt die feste Desktop-Struktur. Auf kleineren Geräten bleibt sie responsiv.</small></article>
+    {tab === 'view' && <div className="admin-visual-view-editor">
+      <div className="visual-editor-head">
+        <div><h3><Monitor size={19}/> Live-Ansicht bearbeiten</h3><p>Klicke direkt auf einen Text, um ihn zu ändern. Ziehe Menüeinträge an eine neue Position. Ausgewählte Elemente kannst du verschieben, ausblenden oder zurücksetzen.</p></div>
+        <div className="admin-view-actions"><button onClick={resetViewDefaults}><RotateCcw size={16}/>1:1 zurücksetzen</button><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Ansicht speichern</button></div>
+      </div>
+
+      <div className="visual-editor-switches">
+        <button className={settingsDraft.allowGuest ? 'active' : ''} onClick={()=>patchSettings({allowGuest:!settingsDraft.allowGuest})}>{settingsDraft.allowGuest ? <Eye size={15}/> : <EyeOff size={15}/>}Gastmodus</button>
+        <button className={settingsDraft.compactSidebar ? 'active' : ''} onClick={()=>patchSettings({compactSidebar:!settingsDraft.compactSidebar})}>Kompakte Seitenleiste</button>
+        <button className={settingsDraft.maintenanceMode ? 'active warning' : ''} onClick={()=>patchSettings({maintenanceMode:!settingsDraft.maintenanceMode})}>Wartungshinweis</button>
+        <label>Startansicht<select value={settingsDraft.defaultView} onChange={(event)=>patchSettings({defaultView:event.target.value})}><option value="chat">Chat</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option><option value="projects">Projekte</option></select></label>
+        <label>Work-Ziel<select value={settingsDraft.workView} onChange={(event)=>patchSettings({workView:event.target.value})}><option value="projects">Projekte</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option></select></label>
+      </div>
+
+      <div className="live-view-stage" style={{'--preview-sidebar':`${Math.max(210,Math.min(360,Number(settingsDraft.theme.sidebarWidth||255)))}px`,'--preview-blue':settingsDraft.theme.accentBlue,'--preview-yellow':settingsDraft.theme.accentYellow}}>
+        <aside className={settingsDraft.compactSidebar ? 'compact' : ''}>
+          <div className="live-logo">yildiz<span>☆</span>AI</div>
+          <button className={`live-editable new-design ${selectedVisualId==='text-newDesign'?'selected':''}`} onClick={()=>setSelectedVisualId('text-newDesign')}>
+            <span contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('newDesign',event.currentTarget.textContent)}>{settingsDraft.texts.newDesign}</span>
+          </button>
+          <nav>
+            {settingsDraft.navItems.filter((item)=>item.visible!==false).map((item)=><button
+              key={item.id}
+              draggable
+              onDragStart={()=>setDragVisualId(item.id)}
+              onDragOver={(event)=>event.preventDefault()}
+              onDrop={()=>dropNav(item.id)}
+              className={`live-editable ${selectedVisualId===`nav-${item.id}`?'selected':''}`}
+              onClick={()=>setSelectedVisualId(`nav-${item.id}`)}
+            ><GripVertical size={13}/><span contentEditable suppressContentEditableWarning onBlur={(event)=>patchNav(item.id,{label:event.currentTarget.textContent})}>{item.label}</span></button>)}
+          </nav>
+          <div className="live-sidebar-footer"><span>Mein Konto</span><span>Admin</span></div>
+        </aside>
+        <main>
+          <header>
+            <b className={`live-editable text-only ${selectedVisualId==='text-appTitle'?'selected':''}`} onClick={()=>setSelectedVisualId('text-appTitle')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('appTitle',event.currentTarget.textContent)}>{settingsDraft.texts.appTitle}</b>
+            <div className="live-tabs"><span className={`live-editable text-only ${selectedVisualId==='text-chatTab'?'selected':''}`} onClick={()=>setSelectedVisualId('text-chatTab')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('chatTab',event.currentTarget.textContent)}>{settingsDraft.texts.chatTab}</span><span className={`live-editable text-only ${selectedVisualId==='text-workTab'?'selected':''}`} onClick={()=>setSelectedVisualId('text-workTab')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('workTab',event.currentTarget.textContent)}>{settingsDraft.texts.workTab}</span></div>
+          </header>
+          {settingsDraft.announcement && <div className={`live-announcement live-editable ${selectedVisualId==='text-announcement'?'selected':''}`} onClick={()=>setSelectedVisualId('text-announcement')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchSettings({announcement:event.currentTarget.textContent})}>{settingsDraft.announcement}</div>}
+          <section>
+            <div className={`live-status live-editable ${selectedVisualId==='text-statusTitle'?'selected':''}`} onClick={()=>setSelectedVisualId('text-statusTitle')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('statusTitle',event.currentTarget.textContent)}>{settingsDraft.texts.statusTitle}</div>
+            <div className={`live-welcome live-editable ${selectedVisualId==='text-welcome'?'selected':''}`} onClick={()=>setSelectedVisualId('text-welcome')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('welcome',event.currentTarget.textContent)}>{settingsDraft.texts.welcome}</div>
+            <div className="live-spacer"/>
+            <div className={`live-composer live-editable ${selectedVisualId==='text-composer'?'selected':''}`} onClick={()=>setSelectedVisualId('text-composer')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('composer',event.currentTarget.textContent)}>{settingsDraft.texts.composer}</div>
+          </section>
+        </main>
+
+        <div className="visual-floating-tools">
+          <b>{selectedVisualId.startsWith('nav-') ? 'Menüelement' : 'Text ausgewählt'}</b>
+          {selectedNavId() && <><button onClick={()=>moveNav(selectedNavId(),-1)} title="Nach oben"><ArrowUp size={15}/></button><button onClick={()=>moveNav(selectedNavId(),1)} title="Nach unten"><ArrowDown size={15}/></button></>}
+          <button onClick={deleteSelectedVisual} title="Ausblenden oder leeren"><Trash2 size={15}/></button>
+        </div>
+      </div>
+
+      <div className="visual-add-panel">
+        <div><b><Plus size={16}/>Element hinzufügen</b><span>Ausgeblendete Bereiche erscheinen nach einem Klick wieder direkt in der Vorschau.</span></div>
+        <div>{settingsDraft.navItems.filter((item)=>item.visible===false).map((item)=><button key={item.id} onClick={()=>{patchNav(item.id,{visible:true});setSelectedVisualId(`nav-${item.id}`)}}><Plus size={14}/>{item.label}</button>)}{!settingsDraft.announcement&&<button onClick={()=>{patchSettings({announcement:'Neue Mitteilung'});setSelectedVisualId('text-announcement')}}><Plus size={14}/>Mitteilung</button>}</div>
+      </div>
+
+      <div className="visual-theme-panel">
+        <label>Seitenleistenbreite<input type="range" min="210" max="360" value={settingsDraft.theme.sidebarWidth} onChange={(event)=>patchTheme({sidebarWidth:Number(event.target.value)})}/><span>{settingsDraft.theme.sidebarWidth}px</span></label>
+        <label>Blau<input type="color" value={settingsDraft.theme.accentBlue} onChange={(event)=>patchTheme({accentBlue:event.target.value})}/></label>
+        <label>Gelb<input type="color" value={settingsDraft.theme.accentYellow} onChange={(event)=>patchTheme({accentYellow:event.target.value})}/></label>
+      </div>
     </div>}
 
     {tab === 'system' && <div className="admin-grid admin-grid-two">

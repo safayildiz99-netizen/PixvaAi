@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Copy, Download, Edit3, FileText, ImagePlus, MessageSquarePlus, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, Square, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Menu, MessageSquarePlus, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, Square, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
 import { api, getToken } from '../api.js';
 
 const quickPrompts = [
@@ -60,6 +61,154 @@ function looksLikeImagePrompt(text) {
   const value = String(text || '').toLowerCase();
   return /(erstell|erstelle|generier|generiere|mach|zeichne|male|create|generate)/.test(value) &&
     /(bild|foto|image|grafik|poster|illustration|sticker|logo|cover|banner|thumbnail)/.test(value);
+}
+
+
+function looksLikeFreeImageSearchPrompt(text) {
+  const value = String(text || '').toLowerCase();
+  const asksForExisting = /(gib|zeig|find|finde|such|suche|such mir|wo finde|bild von|foto von|produktbild|packung|verpackung)/.test(value);
+  const asksForImage = /(bild|foto|produkt|packung|verpackung|logo)/.test(value);
+  const asksToGenerate = /(erstell|erstelle|generier|generiere|zeichne|male|entwirf|design|werbebild|poster|flyer)/.test(value);
+  return asksForExisting && asksForImage && !asksToGenerate;
+}
+
+function extractImageSearchQuery(text) {
+  let value = String(text || '').trim();
+  value = value
+    .replace(/^\s*(gib|zeige?|finde?|suche?|such)\s+(mir\s+)?/i, '')
+    .replace(/\s+als\s+(pdf|datei|jpg|jpeg|png)\b.*$/i, '')
+    .replace(/\b(ein|eine|einen|das|die|der)\s+(bild|foto|produktbild)\s+(von|der|des)?\s*/i, '')
+    .replace(/[?!]+$/g, '')
+    .trim();
+  return `${value || String(text || '').trim()} Produktbild`.replace(/\s+/g, ' ').slice(0, 180);
+}
+
+function requestedFileType(text) {
+  const value = String(text || '').toLowerCase();
+  if (/\b(pdf)\b/.test(value)) return 'pdf';
+  if (/\b(csv)\b/.test(value)) return 'csv';
+  if (/\b(json)\b/.test(value)) return 'json';
+  if (/\b(html?)\b|webseite als datei/.test(value)) return 'html';
+  if (/\b(markdown|md-datei)\b/.test(value)) return 'md';
+  if (/\b(txt|textdatei)\b/.test(value)) return 'txt';
+  return '';
+}
+
+function safeFileName(value, fallback = 'yildiz-ai-datei') {
+  const clean = String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9äöüÄÖÜß._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+  return clean || fallback;
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Datei konnte nicht vorbereitet werden.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function fetchRemoteImageDataUrl(url) {
+  const response = await fetch(`/api/ai/image-proxy?url=${encodeURIComponent(url)}`);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data?.error || 'Produktbild konnte nicht geladen werden.');
+  }
+  return blobToDataUrl(await response.blob());
+}
+
+async function normalizeImageDataUrlForPdf(dataUrl) {
+  const image = await new Promise((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error('Bild konnte nicht in die PDF eingefügt werden.'));
+    element.src = dataUrl;
+  });
+  const max = 1800;
+  const scale = Math.min(1, max / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+  canvas.height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
+async function createFileAttachment(type, content, title = 'Yildiz AI', imageUrl = '') {
+  const base = safeFileName(title, 'yildiz-ai');
+  let blob;
+  let name;
+  let mimeType;
+
+  if (type === 'pdf') {
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const margin = 16;
+    pdf.setProperties({ title, creator: 'Yildiz AI' });
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.text(String(title || 'Yildiz AI').slice(0, 90), margin, 18);
+    let cursorY = 28;
+    if (imageUrl) {
+      const source = String(imageUrl).startsWith('data:image/') ? imageUrl : await fetchRemoteImageDataUrl(imageUrl);
+      const jpeg = await normalizeImageDataUrlForPdf(source);
+      const props = pdf.getImageProperties(jpeg);
+      const maxWidth = 210 - margin * 2;
+      const maxHeight = 230;
+      const ratio = Math.min(maxWidth / props.width, maxHeight / props.height);
+      const width = props.width * ratio;
+      const height = props.height * ratio;
+      pdf.addImage(jpeg, 'JPEG', (210 - width) / 2, cursorY, width, height, undefined, 'FAST');
+      cursorY += height + 8;
+    }
+    const cleanText = String(content || '').replace(/https?:\/\/\S+/g, (url) => url.slice(0, 110));
+    if (cleanText.trim()) {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10.5);
+      const lines = pdf.splitTextToSize(cleanText, 210 - margin * 2);
+      for (const line of lines) {
+        if (cursorY > 282) { pdf.addPage(); cursorY = 18; }
+        pdf.text(line, margin, cursorY);
+        cursorY += 5.2;
+      }
+    }
+    blob = pdf.output('blob');
+    name = `${base}.pdf`;
+    mimeType = 'application/pdf';
+  } else {
+    const map = {
+      csv: ['text/csv;charset=utf-8', 'csv'], json: ['application/json;charset=utf-8', 'json'],
+      html: ['text/html;charset=utf-8', 'html'], md: ['text/markdown;charset=utf-8', 'md'],
+      txt: ['text/plain;charset=utf-8', 'txt']
+    };
+    const [mime, extension] = map[type] || map.txt;
+    blob = new Blob([String(content || '')], { type: mime });
+    name = `${base}.${extension}`;
+    mimeType = mime;
+  }
+  const previewUrl = URL.createObjectURL(blob);
+  let data = '';
+  if (blob.size < 2300000) data = await blobToDataUrl(blob).catch(() => '');
+  return { kind: 'file', name, size: blob.size, mimeType, previewUrl, data, blob };
+}
+
+function openExternal(url) {
+  if (!url) return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function MessageContent({ text }) {
+  const lines = String(text || '').split(/\n/);
+  return <div className="message-markdown">{lines.map((line, index) => {
+    const value = line.trim();
+    if (!value) return <br key={index}/>;
+    if (/^#{1,3}\s+/.test(value)) return <strong className="md-heading" key={index}>{value.replace(/^#{1,3}\s+/, '')}</strong>;
+    if (/^[-*]\s+/.test(value)) return <div className="md-list-item" key={index}><span>•</span><span>{value.replace(/^[-*]\s+/, '')}</span></div>;
+    const parts = line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+    return <div key={index}>{parts.map((part, partIndex) => /^\*\*.*\*\*$/.test(part) ? <strong key={partIndex}>{part.slice(2,-2)}</strong> : <span key={partIndex}>{part}</span>)}</div>;
+  })}</div>;
 }
 
 function looksLikeVideoPrompt(text) {
@@ -343,14 +492,14 @@ async function renderGeneratedVideo(imageUrls, prompt) {
 function fileMessageAttachment(item) {
   if (item.kind === 'image') return { kind: 'image', name: item.name, previewUrl: item.previewUrl || item.data, data: item.data, size: item.size };
   if (item.kind === 'video') return { kind: 'video', name: item.name, previewUrl: item.previewUrl, size: item.size, blob: item.blob };
-  return { kind: 'file', name: item.name, size: item.size, blob: item.blob };
+  return { kind: 'file', name: item.name, size: item.size, mimeType: item.mimeType, data: item.data || '', text: item.text || '', blob: item.blob };
 }
 
 
 const CHAT_DB = 'yildiz-ai-chat-history-v2';
 const CHAT_STORE = 'sessions';
 const MAX_CLOUD_MEDIA_CHARS = 3_500_000;
-const WELCOME_MESSAGE = { id: 'welcome', role: 'assistant', createdAt: Date.now(), content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien per Drag & Drop hochladen.' };
+const WELCOME_MESSAGE = { id: 'welcome', role: 'assistant', createdAt: Date.now(), content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und per Drag & Drop hochladen.' };
 
 function makeChatSession() {
   return {
@@ -449,6 +598,12 @@ function cleanAttachmentForCloud(item) {
     data,
     frames: Array.isArray(item.frames) ? item.frames.map(portableString).filter(Boolean) : undefined,
     projectData: cleanPortableValue(item.projectData),
+    imageUrl: portableString(item.imageUrl || ''),
+    sourceUrl: portableString(item.sourceUrl || ''),
+    title: String(item.title || '').slice(0, 180),
+    source: String(item.source || '').slice(0, 120),
+    text: String(item.text || '').slice(0, 30000),
+    searchQuery: String(item.searchQuery || '').slice(0, 180),
     cloudMediaMissing: Boolean((item.kind === 'video' || item.kind === 'file') && !previewUrl)
   };
 }
@@ -507,12 +662,14 @@ function hydrateMessages(messages) {
   });
 }
 
-export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest = true }) {
-  const [messages, setMessages] = useState([WELCOME_MESSAGE]);
+export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest = true, uiText = {} }) {
+  const welcomeMessage = useMemo(() => ({ ...WELCOME_MESSAGE, content: uiText.welcome || WELCOME_MESSAGE.content }), [uiText.welcome]);
+  const [messages, setMessages] = useState([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState('');
   const [historyReady, setHistoryReady] = useState(false);
   const [chatSearch, setChatSearch] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('Gemini beantwortet Fragen. OpenAI erstellt echte Bilder und Sora-Videos mit Ton. Uploads funktionieren per Drag & Drop.');
@@ -540,6 +697,12 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   const cloudEnabled = !isGuest && ownerKey !== 'guest';
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
   useEffect(() => { activeChatIdRef.current = activeChatId; }, [activeChatId]);
+  useEffect(() => {
+    if (!historyOpen) return undefined;
+    const close = (event) => { if (event.key === 'Escape') setHistoryOpen(false); };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [historyOpen]);
 
   function isCurrentGeneration(runId) {
     return Boolean(runId) && generationRef.current.id === runId && generationRef.current.chatId === activeChatIdRef.current;
@@ -580,7 +743,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
         const first = sessions[0];
         setChatSessions(sessions);
         setActiveChatId(first.id);
-        setMessages(hydrateMessages(first.messages));
+        setMessages(hydrateMessages(first.messages).map((message)=>message.id==='welcome'?{...message,content:uiText.welcome||message.content}:message));
         setHistoryReady(true);
         setStatus(cloudEnabled
           ? 'Deine Chats werden privat in deinem Konto gespeichert und auf deinen Geräten synchronisiert.'
@@ -593,7 +756,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
           const first = sessions[0];
           setChatSessions(sessions);
           setActiveChatId(first.id);
-          setMessages(hydrateMessages(first.messages));
+          setMessages(hydrateMessages(first.messages).map((message)=>message.id==='welcome'?{...message,content:uiText.welcome||message.content}:message));
           setHistoryReady(true);
           setStatus(cloudEnabled
             ? `Cloud-Synchronisierung nicht erreichbar: ${error.message}. Lokale Sicherung wurde geöffnet.`
@@ -666,9 +829,11 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   }, [cloudEnabled, historyReady, activeChatId]);
 
   function newChat() {
+    setHistoryOpen(false);
     if (loading) stopGeneration();
     sendingRef.current = false;
     const next = makeChatSession();
+    next.messages = [{ ...welcomeMessage }];
     setChatSessions((old) => [next, ...old]);
     setActiveChatId(next.id);
     setMessages(next.messages);
@@ -678,6 +843,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   }
 
   function openChat(session) {
+    setHistoryOpen(false);
     if (loading) stopGeneration();
     setActiveChatId(session.id);
     setMessages(hydrateMessages(session.messages));
@@ -691,7 +857,10 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
       const remaining = old.filter((session) => session.id !== id);
       if (id === activeChatId) {
         const next = remaining[0] || makeChatSession();
-        if (!remaining.length) remaining.push(next);
+        if (!remaining.length) {
+          next.messages = [{ ...welcomeMessage }];
+          remaining.push(next);
+        }
         setActiveChatId(next.id);
         setMessages(hydrateMessages(next.messages));
       }
@@ -714,6 +883,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   function deleteAllChats() {
     if (!window.confirm('Wirklich alle Chats dieses Kontos löschen?')) return;
     const next = makeChatSession();
+    next.messages = [{ ...welcomeMessage }];
     setChatSessions([next]);
     setActiveChatId(next.id);
     setMessages(next.messages);
@@ -782,11 +952,16 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     setStatus('Chat als TXT gespeichert.');
   }
 
-  function addGenericFile(file) {
-    setAttachments((old) => [...old, {
-      id: crypto.randomUUID(), kind: 'file', name: file.name, size: file.size, mimeType: file.type || 'application/octet-stream', blob: file
-    }].slice(-4));
-    setStatus(`Datei „${file.name}“ hinzugefügt.`);
+  async function addGenericFile(file) {
+    const mimeType = file.type || 'application/octet-stream';
+    const item = { id: crypto.randomUUID(), kind: 'file', name: file.name, size: file.size, mimeType, blob: file, data: '', text: '' };
+    if (file.size <= 8 * 1024 * 1024 && mimeType === 'application/pdf') {
+      item.data = await blobToDataUrl(file);
+    } else if (file.size <= 2 * 1024 * 1024 && (/^text\//.test(mimeType) || /\.(txt|csv|json|md|html?|xml)$/i.test(file.name))) {
+      item.text = await file.text();
+    }
+    setAttachments((old) => [...old, item].slice(-4));
+    setStatus(`Datei „${file.name}“ hinzugefügt${item.data || item.text ? ' und für die Analyse vorbereitet' : ''}.`);
   }
 
   function addImageFile(file) {
@@ -831,7 +1006,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     for (const file of files) {
       if (file.type.startsWith('image/')) await addImageFile(file);
       else if (file.type.startsWith('video/')) await addVideoFile(file);
-      else addGenericFile(file);
+      else await addGenericFile(file);
     }
   }
 
@@ -886,20 +1061,27 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     const imageSource = result?.imageDataUrl || result?.imageUrl || '';
     if (!imageSource) throw new Error('OpenAI hat keine Bilddatei geliefert.');
     await preloadImage(imageSource);
+    const imageAttachment = {
+      kind: 'image',
+      name: result.edited
+        ? `yildiz-ai-bearbeitet.${result.mimeType === 'image/png' ? 'png' : 'webp'}`
+        : `yildiz-ai-openai.${result.mimeType === 'image/png' ? 'png' : 'webp'}`,
+      previewUrl: imageSource,
+      data: result?.imageDataUrl || imageSource,
+      mimeType: result.mimeType || (String(imageSource).startsWith('data:image/webp') ? 'image/webp' : 'image/png')
+    };
+    const generatedAttachments = [imageAttachment];
+    if (requestedFileType(clean) === 'pdf') {
+      try {
+        generatedAttachments.push(await createFileAttachment('pdf', 'Mit Yildiz AI erstelltes Bild.', clean.slice(0, 72) || 'Yildiz AI Bild', imageSource));
+      } catch {}
+    }
     appendGenerationMessage(runId, {
       id: crypto.randomUUID(),
       role: 'assistant',
       createdAt: Date.now(),
-      content: `${result.edited ? 'Bild bearbeitet' : 'Bild erstellt'} · ${result.provider || 'OpenAI'} · ${imageSettings.quality} · geschätzt ${formatUsd(result.estimatedCostUsd ?? estimateImagePrice(imageSettings))}.`,
-      attachments: [{
-        kind: 'image',
-        name: result.edited
-          ? `yildiz-ai-bearbeitet.${result.mimeType === 'image/png' ? 'png' : 'webp'}`
-          : `yildiz-ai-openai.${result.mimeType === 'image/png' ? 'png' : 'webp'}`,
-        previewUrl: imageSource,
-        data: result?.imageDataUrl || imageSource,
-        mimeType: result.mimeType || (String(imageSource).startsWith('data:image/webp') ? 'image/webp' : 'image/png')
-      }]
+      content: `${result.edited ? 'Bild bearbeitet' : 'Bild erstellt'} · ${result.provider || 'OpenAI'} · ${imageSettings.quality} · geschätzt ${formatUsd(result.estimatedCostUsd ?? estimateImagePrice(imageSettings))}.${requestedFileType(clean) === 'pdf' ? ' PDF wurde ebenfalls erstellt.' : ''}`,
+      attachments: generatedAttachments
     });
     setGenerationStatus(runId, `Bild fertig · ${result.provider || 'OpenAI'}`);
   }
@@ -988,6 +1170,76 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     setGenerationStatus(runId, 'Sora-Video erstellt · MP4 · mit Ton');
   }
 
+
+  async function createPdfFromSearchResult(item, title = 'Produktbild') {
+    try {
+      setStatus('PDF wird erstellt …');
+      const file = await createFileAttachment('pdf', `Bildquelle: ${item.sourceUrl || item.imageUrl || ''}`, title, item.imageUrl || item.thumbnailUrl);
+      setMessages((old) => [...old, {
+        id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
+        content: 'PDF fertig erstellt.', attachments: [file]
+      }]);
+      setStatus('PDF wurde erstellt und kann heruntergeladen werden.');
+    } catch (error) {
+      setStatus(error.message || 'PDF konnte nicht erstellt werden.');
+    }
+  }
+
+  async function generateFreeImageSearchMessage(clean, signal, runId) {
+    const query = extractImageSearchQuery(clean);
+    setGenerationStatus(runId, 'Kostenlose Produktbildsuche läuft …');
+    const response = await fetch(`/api/ai/image-search?q=${encodeURIComponent(query)}`, { signal });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error || 'Die kostenlose Bildsuche ist fehlgeschlagen.');
+    const results = Array.isArray(data.results) ? data.results : [];
+    const attachments = results.map((item) => ({
+      kind: 'image-link',
+      name: item.title || query,
+      title: item.title || query,
+      previewUrl: `/api/ai/image-proxy?url=${encodeURIComponent(item.thumbnailUrl || item.imageUrl)}`,
+      imageUrl: item.imageUrl || item.thumbnailUrl,
+      thumbnailUrl: item.thumbnailUrl || item.imageUrl,
+      sourceUrl: item.sourceUrl,
+      source: item.source,
+      searchQuery: query
+    }));
+    const fileType = requestedFileType(clean);
+    if (fileType === 'pdf' && attachments[0]?.imageUrl) {
+      try {
+        const pdf = await createFileAttachment('pdf', `Kostenlos gefundenes Produktbild.\nQuelle: ${attachments[0].sourceUrl || attachments[0].imageUrl}`, attachments[0].title || query, attachments[0].imageUrl);
+        attachments.unshift(pdf);
+      } catch (error) {
+        attachments.unshift({ kind: 'link', name: 'PDF konnte nicht automatisch erstellt werden', title: error.message, sourceUrl: data.searchLinks?.googleImages || '' });
+      }
+    }
+    if (!results.length) {
+      attachments.push({ kind: 'link', name: 'Google Bilder öffnen', title: query, sourceUrl: data.searchLinks?.googleImages });
+      attachments.push({ kind: 'link', name: 'Bing Bilder öffnen', title: query, sourceUrl: data.searchLinks?.bingImages });
+    }
+    appendGenerationMessage(runId, {
+      id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
+      content: results.length
+        ? `Hier sind kostenlos gefundene Bilder zu „${query.replace(/ Produktbild$/i, '')}“. Dafür wurde kein OpenAI-Guthaben verbraucht. Prüfe vor einer gewerblichen Nutzung die Bildrechte der jeweiligen Quelle.${fileType === 'pdf' ? ' Die PDF wurde direkt erstellt.' : ''}`
+        : `Direkte Bildtreffer konnten gerade nicht geladen werden. Öffne einen der kostenlosen Suchlinks für „${query.replace(/ Produktbild$/i, '')}“.`,
+      attachments
+    });
+    setGenerationStatus(runId, 'Kostenlose Bildsuche abgeschlossen · 0,00 €');
+  }
+
+  async function attachRequestedFile(runId, clean, answer) {
+    const type = requestedFileType(clean);
+    if (!type) return false;
+    const title = clean.replace(/\b(als|in)\s+(pdf|csv|json|html?|markdown|md-datei|txt|textdatei)\b.*$/i, '').trim().slice(0, 80) || 'Yildiz AI Datei';
+    const file = await createFileAttachment(type, answer, title);
+    appendGenerationMessage(runId, {
+      id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
+      content: `Fertig – ich habe die ${type.toUpperCase()}-Datei erstellt.`,
+      attachments: [file]
+    });
+    setGenerationStatus(runId, `${type.toUpperCase()}-Datei erstellt.`);
+    return true;
+  }
+
   async function stopGeneration() {
     const activeRun = generationRef.current.id;
     abortRef.current?.controller?.abort();
@@ -1030,7 +1282,8 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     }
 
     const videoAction = creationMode === 'video' || (creationMode === 'auto' && clean && looksLikeVideoPrompt(clean));
-    const imageAction = !videoAction && (creationMode === 'image' || (creationMode === 'auto' && clean && looksLikeImagePrompt(clean)));
+    const imageSearchAction = !videoAction && clean && looksLikeFreeImageSearchPrompt(clean);
+    const imageAction = !videoAction && !imageSearchAction && (creationMode === 'image' || (creationMode === 'auto' && clean && looksLikeImagePrompt(clean)));
     if ((videoAction || imageAction) && isGuest) {
       setStatus('Bitte anmelden: Kostenpflichtige OpenAI-Bilder und Sora-Videos sind zum Schutz deines Guthabens nur für Konten freigeschaltet.');
       return;
@@ -1072,7 +1325,9 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     setLoading(true);
 
     try {
-      if (videoAction) {
+      if (imageSearchAction) {
+        await generateFreeImageSearchMessage(clean, controller.signal, runId);
+      } else if (videoAction) {
         const uploadedImages = selectedAttachments
           .filter((item) => item.kind === 'image')
           .map((item) => item.data || item.previewUrl)
@@ -1099,8 +1354,9 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
           method: 'POST', signal: controller.signal,
           body: JSON.stringify({ message: clean, history, attachments: outgoingAttachments })
         });
-        appendGenerationMessage(runId, { id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(), content: result.answer });
-        setGenerationStatus(runId, `Gemini verbunden${result.model ? ` · ${result.model}` : ''}`);
+        const fileCreated = await attachRequestedFile(runId, clean, result.answer);
+        if (!fileCreated) appendGenerationMessage(runId, { id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(), content: result.answer });
+        if (!fileCreated) setGenerationStatus(runId, `Gemini verbunden${result.model ? ` · ${result.model}` : ''}`);
       }
     } catch (error) {
       if (error?.name === 'AbortError') {
@@ -1119,6 +1375,60 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     }
   }
 
+
+  function renderMessageAttachment(item, index) {
+    const key = `${item.name || item.kind}-${index}`;
+    if (item.kind === 'image-link') {
+      return <div className="attachment-card image-search-card" key={key}>
+        <img src={item.previewUrl} alt={item.title || item.name || 'Gefundenes Bild'} loading="lazy" />
+        <b>{item.title || item.name}</b>
+        {item.source && <span>{item.source}</span>}
+        <div className="attachment-actions">
+          <button onClick={() => openExternal(item.imageUrl)}><ExternalLink size={14}/>Bild öffnen</button>
+          {item.sourceUrl && <button onClick={() => openExternal(item.sourceUrl)}><Search size={14}/>Quelle</button>}
+          <button onClick={() => createPdfFromSearchResult(item, item.title || item.name)}><FileDown size={14}/>PDF</button>
+        </div>
+      </div>;
+    }
+    if (item.kind === 'image') {
+      return <div className="attachment-card" key={key}>
+        <img src={item.previewUrl || item.data} alt={item.name || 'Bild'} />
+        <span>{item.name}</span>
+        <div className="attachment-actions">
+          <button onClick={() => downloadMedia(item.previewUrl || item.data, item.name || 'yildiz-ai.png')}><Download size={14}/>Speichern</button>
+          <button onClick={() => reuseImage(item)}><ImagePlus size={14}/>Als Referenz</button>
+        </div>
+      </div>;
+    }
+    if (item.kind === 'video') {
+      return <div className="attachment-card video" key={key}>
+        {item.previewUrl ? <video src={item.previewUrl} controls playsInline /> : <div className="video-placeholder"><Video size={24}/><small>{item.cloudMediaMissing ? 'Videodatei war nur lokal verfügbar' : 'Keine Vorschau'}</small></div>}
+        <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
+        <div className="attachment-actions">
+          {item.previewUrl && <button onClick={() => downloadMedia(item.previewUrl, item.name || 'yildiz-ai-video.mp4')}><Download size={14}/>Speichern</button>}
+          {item.projectData?.data?.scenes?.length > 0 && <button className="edit-video-project-btn" onClick={() => onOpenVideoProject?.(item.projectData)}><Edit3 size={15}/>Video-Studio</button>}
+        </div>
+      </div>;
+    }
+    if (item.kind === 'link') {
+      return <div className="attachment-card file link-card" key={key}>
+        <div className="file-placeholder"><Images size={26}/></div>
+        <b>{item.name || 'Link öffnen'}</b>
+        {item.title && <span>{item.title}</span>}
+        <div className="attachment-actions"><button onClick={() => openExternal(item.sourceUrl)}><ExternalLink size={14}/>Öffnen</button></div>
+      </div>;
+    }
+    const source = item.previewUrl || item.data;
+    return <div className="attachment-card file" key={key}>
+      <div className="file-placeholder"><FileText size={26}/></div>
+      <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
+      {source && <div className="attachment-actions">
+        <button onClick={() => openExternal(source)}><ExternalLink size={14}/>Öffnen</button>
+        <button onClick={() => downloadMedia(source, item.name || 'yildiz-ai-datei')}><Download size={14}/>Speichern</button>
+      </div>}
+    </div>;
+  }
+
   function onDrop(event) {
     event.preventDefault();
     setDragActive(false);
@@ -1127,7 +1437,9 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
 
   return (
     <section className="chat-workspace-pro">
-      <aside className="chat-history-panel">
+      <div className="chat-mobile-toolbar"><button onClick={() => setHistoryOpen(true)}><Menu size={17}/>Chats</button><button onClick={newChat}><MessageSquarePlus size={17}/>Neuer Chat</button></div>
+      {historyOpen && <button className="chat-history-backdrop" aria-label="Chatverlauf schließen" onClick={() => setHistoryOpen(false)}/>}
+      <aside className={`chat-history-panel ${historyOpen ? 'open' : ''}`}>
         <button className="new-chat-button" onClick={newChat}><MessageSquarePlus size={18}/>Neuer Chat</button>
         <div className="chat-history-top-actions">
           <button className="chat-export-button" onClick={exportCurrentChat}><Download size={16}/>Speichern</button>
@@ -1150,7 +1462,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
         <p className="chat-save-note">{cloudEnabled ? 'Chats sind privat an dieses Konto gebunden und werden geräteübergreifend synchronisiert.' : 'Gast-Chats bleiben nur auf diesem Gerät.'} Mit „Chat speichern“ kannst du zusätzlich eine TXT-Datei herunterladen.</p>
       </aside>
       <section className="chat-shell">
-      <div className="local-ai-banner"><Cloud size={17}/><div><b>Yildiz AI · Gemini + OpenAI + Sora</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
+      <div className="local-ai-banner"><Cloud size={17}/><div><b>{uiText.statusTitle || 'Yildiz AI · Gemini + OpenAI + Sora'}</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
       <div className="chat-messages">
         {messages.map((message, index) => (
           <article className={`message ${message.role}`} key={message.id || `${message.role}-${index}`}>
@@ -1161,34 +1473,11 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
                   <textarea value={editingText} onChange={(event) => setEditingText(event.target.value)} />
                   <div><button onClick={saveEditedMessage}><Check size={15}/>Speichern</button><button onClick={() => { setEditingMessageId(''); setEditingText(''); }}><X size={15}/>Abbrechen</button></div>
                 </div>
-              ) : <div>{message.content}</div>}
+              ) : <MessageContent text={message.content}/>}
 
               {Array.isArray(message.attachments) && message.attachments.length > 0 && (
                 <div className="message-attachments">
-                  {message.attachments.map((item, i) => item.kind === 'image' ? (
-                    <div className="attachment-card" key={`${item.name}-${i}`}>
-                      <img src={item.previewUrl || item.data} alt={item.name || 'Bild'} />
-                      <span>{item.name}</span>
-                      <div className="attachment-actions">
-                        <button onClick={() => downloadMedia(item.previewUrl || item.data, item.name || 'yildiz-ai.png')}><Download size={14}/>Speichern</button>
-                        <button onClick={() => reuseImage(item)}><ImagePlus size={14}/>Als Referenz</button>
-                      </div>
-                    </div>
-                  ) : item.kind === 'video' ? (
-                    <div className="attachment-card video" key={`${item.name}-${i}`}>
-                      {item.previewUrl ? <video src={item.previewUrl} controls playsInline /> : <div className="video-placeholder"><Video size={24}/><small>{item.cloudMediaMissing ? 'Videodatei war nur lokal verfügbar' : 'Keine Vorschau'}</small></div>}
-                      <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
-                      <div className="attachment-actions">
-                        {item.previewUrl && <button onClick={() => downloadMedia(item.previewUrl, item.name || 'yildiz-ai-video.mp4')}><Download size={14}/>Speichern</button>}
-                        {item.projectData?.data?.scenes?.length > 0 && <button className="edit-video-project-btn" onClick={() => onOpenVideoProject?.(item.projectData)}><Edit3 size={15}/>Video-Studio</button>}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="attachment-card file" key={`${item.name}-${i}`}>
-                      <div className="file-placeholder"><FileText size={26}/></div>
-                      <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
-                    </div>
-                  ))}
+                  {message.attachments.map(renderMessageAttachment)}
                 </div>
               )}
 
@@ -1270,7 +1559,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
           <input ref={anyFileRef} type="file" multiple onChange={onAnyFileUpload} hidden />
         </div>
         <div className="drop-hint">Ziehe Bilder, Videos oder Dateien hier hinein – oder mache direkt ein Foto/Video.</div>
-        <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder="Frag Yildiz AI … oder schreibe z. B. 'Erstelle mir ein Bild …' / 'Erstelle mir ein Video …'" onKeyDown={(e) => {
+        <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder={`${uiText.composer || 'Frag Yildiz AI …'} · z. B. „Suche mir ein Produktbild als PDF“`} onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
         }} />
         <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !hasPayload}><ArrowUp size={20} /></button>

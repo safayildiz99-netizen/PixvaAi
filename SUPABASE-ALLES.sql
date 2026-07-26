@@ -1280,7 +1280,7 @@ begin
   v_work_view := coalesce(p_settings->>'workView', 'projects');
   if v_work_view not in ('flyer','image','video','website','projects') then v_work_view := 'projects'; end if;
 
-  v_clean := jsonb_build_object(
+  v_clean := coalesce(p_settings, '{}'::jsonb) || jsonb_build_object(
     'defaultView', v_default_view,
     'workView', v_work_view,
     'allowGuest', coalesce((p_settings->>'allowGuest')::boolean, true),
@@ -1291,8 +1291,19 @@ begin
     'showProjects', coalesce((p_settings->>'showProjects')::boolean, true),
     'announcement', left(coalesce(p_settings->>'announcement',''), 500),
     'maintenanceMode', coalesce((p_settings->>'maintenanceMode')::boolean, false),
-    'compactSidebar', coalesce((p_settings->>'compactSidebar')::boolean, false)
+    'compactSidebar', coalesce((p_settings->>'compactSidebar')::boolean, false),
+    'mobileHistoryDrawer', coalesce((p_settings->>'mobileHistoryDrawer')::boolean, true)
   );
+
+  if jsonb_typeof(v_clean->'navItems') is distinct from 'array' then
+    v_clean := v_clean - 'navItems';
+  end if;
+  if jsonb_typeof(v_clean->'texts') is distinct from 'object' then
+    v_clean := v_clean - 'texts';
+  end if;
+  if jsonb_typeof(v_clean->'theme') is distinct from 'object' then
+    v_clean := v_clean - 'theme';
+  end if;
 
   insert into public.app_global_settings(id, settings, updated_by, updated_at)
   values (1, v_clean, v_admin, now())

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Yildiz AI V4 – Supabase Update</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#061018;color:#eaf6ff;font-family:Inter,Arial,sans-serif}main{max-width:1120px;margin:auto;padding:24px}h1{margin:0 0 8px;color:#ffd400}p{color:#a9c2d2;line-height:1.55}.bar{position:sticky;top:0;z-index:2;display:flex;gap:10px;flex-wrap:wrap;padding:14px 0;background:#061018}button{border:1px solid #63c7ff;background:linear-gradient(90deg,#63c7ff,#ffd400);color:#061018;font-weight:900;border-radius:10px;padding:11px 16px;cursor:pointer}button.secondary{background:#102431;color:#eaf6ff}textarea{width:100%;min-height:68vh;resize:vertical;background:#091923;color:#dff4ff;border:1px solid #315e7c;border-radius:14px;padding:16px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}.ok{color:#8dffbd;font-weight:800}</style></head>
+<body><main><h1>Yildiz AI V4 – Supabase Update</h1><p>Für dein bestehendes Projekt reicht dieses kurze Update. Alles kopieren, in SQL Editor → New query einfügen und Run drücken.</p><div class="bar"><button id="copy">Alles kopieren</button><button class="secondary" id="select">Code markieren</button><span id="status"></span></div><textarea id="code" spellcheck="false">-- Yildiz AI V4 – nur dieses Update im Supabase SQL Editor ausführen
+
+create or replace function public.app_admin_save_ui_settings(p_token text, p_settings jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_admin uuid;
+  v_clean jsonb;
+  v_default_view text;
+  v_work_view text;
+begin
+  v_admin := private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then
+    return jsonb_build_object(&#x27;error&#x27;, &#x27;Nur für Admins.&#x27;);
+  end if;
+
+  v_default_view := coalesce(p_settings-&gt;&gt;&#x27;defaultView&#x27;, &#x27;chat&#x27;);
+  if v_default_view not in (&#x27;chat&#x27;,&#x27;flyer&#x27;,&#x27;image&#x27;,&#x27;video&#x27;,&#x27;website&#x27;,&#x27;projects&#x27;) then v_default_view := &#x27;chat&#x27;; end if;
+  v_work_view := coalesce(p_settings-&gt;&gt;&#x27;workView&#x27;, &#x27;projects&#x27;);
+  if v_work_view not in (&#x27;flyer&#x27;,&#x27;image&#x27;,&#x27;video&#x27;,&#x27;website&#x27;,&#x27;projects&#x27;) then v_work_view := &#x27;projects&#x27;; end if;
+
+  v_clean := coalesce(p_settings, &#x27;{}&#x27;::jsonb) || jsonb_build_object(
+    &#x27;defaultView&#x27;, v_default_view,
+    &#x27;workView&#x27;, v_work_view,
+    &#x27;allowGuest&#x27;, coalesce((p_settings-&gt;&gt;&#x27;allowGuest&#x27;)::boolean, true),
+    &#x27;showFlyer&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showFlyer&#x27;)::boolean, true),
+    &#x27;showImage&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showImage&#x27;)::boolean, true),
+    &#x27;showVideo&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showVideo&#x27;)::boolean, true),
+    &#x27;showWebsite&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showWebsite&#x27;)::boolean, true),
+    &#x27;showProjects&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showProjects&#x27;)::boolean, true),
+    &#x27;announcement&#x27;, left(coalesce(p_settings-&gt;&gt;&#x27;announcement&#x27;,&#x27;&#x27;), 500),
+    &#x27;maintenanceMode&#x27;, coalesce((p_settings-&gt;&gt;&#x27;maintenanceMode&#x27;)::boolean, false),
+    &#x27;compactSidebar&#x27;, coalesce((p_settings-&gt;&gt;&#x27;compactSidebar&#x27;)::boolean, false),
+    &#x27;mobileHistoryDrawer&#x27;, coalesce((p_settings-&gt;&gt;&#x27;mobileHistoryDrawer&#x27;)::boolean, true)
+  );
+
+  if jsonb_typeof(v_clean-&gt;&#x27;navItems&#x27;) is distinct from &#x27;array&#x27; then v_clean := v_clean - &#x27;navItems&#x27;; end if;
+  if jsonb_typeof(v_clean-&gt;&#x27;texts&#x27;) is distinct from &#x27;object&#x27; then v_clean := v_clean - &#x27;texts&#x27;; end if;
+  if jsonb_typeof(v_clean-&gt;&#x27;theme&#x27;) is distinct from &#x27;object&#x27; then v_clean := v_clean - &#x27;theme&#x27;; end if;
+
+  insert into public.app_global_settings(id, settings, updated_by, updated_at)
+  values (1, v_clean, v_admin, now())
+  on conflict (id) do update set settings=excluded.settings, updated_by=excluded.updated_by, updated_at=excluded.updated_at;
+
+  insert into public.app_admin_audit_log(admin_id, action, details)
+  values (v_admin, &#x27;APP_VIEW_UPDATED&#x27;, jsonb_build_object(&#x27;settings&#x27;, v_clean));
+
+  return jsonb_build_object(&#x27;ok&#x27;, true, &#x27;settings&#x27;, v_clean);
+end;
+$$;
+
+grant execute on function public.app_admin_save_ui_settings(text,jsonb) to anon, authenticated;
+</textarea></main>
+<script>const code=document.getElementById('code'),status=document.getElementById('status');document.getElementById('select').onclick=()=>{code.focus();code.select();status.textContent='Code markiert.'};document.getElementById('copy').onclick=async()=>{try{await navigator.clipboard.writeText(code.value)}catch(e){code.focus();code.select();document.execCommand('copy')}status.textContent='Alles kopiert – jetzt in Supabase einfügen.';status.className='ok'};</script></body></html>

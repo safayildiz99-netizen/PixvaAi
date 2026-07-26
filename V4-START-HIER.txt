@@ -1,0 +1,64 @@
+YILDIZ AI V4 – START HIER
+========================================
+
+Diese ZIP ist die vollständige Projektversion.
+
+WAS BEHOBEN WURDE
+- Mobilansicht: Seitenleiste und Chatverlauf öffnen als Schublade statt den Chat nach unten zu drücken.
+- Jeder angemeldete Account behält seine eigenen Chats geräteübergreifend.
+- Doppelte Nachrichten werden gefiltert und schnelles Doppelklicken startet keine doppelte Anfrage.
+- Die KI behauptet nicht mehr, keine Dateien erstellen zu können.
+- PDF, TXT, CSV, JSON, HTML und Markdown können direkt im Browser erstellt und heruntergeladen werden.
+- Bestehende Produktbilder werden kostenlos gesucht; OpenAI-Guthaben wird dafür nicht verbraucht.
+- Bei "Bild von ... als PDF" wird das erste gefundene Bild automatisch in eine PDF eingefügt.
+- Bildquellen und Suchlinks bleiben sichtbar.
+- Der Admin bearbeitet die Ansicht direkt in einer Live-Vorschau: Texte anklicken, Menüpunkte ziehen, verschieben, ausblenden oder wieder hinzufügen.
+- Farben, Seitenleistenbreite, Startansicht, Gastmodus, Wartung und Hinweistexte sind einstellbar.
+- Die echte App verwendet danach dieselben gespeicherten Texte, Reihenfolge und Farben.
+
+1. SUPABASE
+Da dein Supabase-System bereits installiert ist, öffne:
+SUPABASE-V4-EINFACH-OEFFNEN.html
+
+Klicke "Alles kopieren" und füge den Code ein unter:
+Supabase → SQL Editor → New query → Run
+
+Nur bei einer komplett neuen Datenbank verwendest du:
+SUPABASE-ALLES-EINFACH-OEFFNEN.html
+
+2. GITHUB
+- ZIP entpacken.
+- Den entpackten Ordner öffnen.
+- Nur dessen Inhalt in die Hauptseite des GitHub-Projekts hochladen.
+- Vorhandene Dateien ersetzen.
+- Nicht den äußeren Ordner als Unterordner hochladen.
+
+COMMIT-NACHRICHT
+Yildiz AI V4 Mobile Dateien Bildsuche Live Admin Editor
+
+3. VERCEL
+- Warten, bis das neueste Deployment Ready und Production zeigt.
+- Website öffnen.
+- Mac: Cmd + Shift + R
+- Windows: Ctrl + F5
+- iPhone/Safari: Tab schließen und Website erneut öffnen; bei Bedarf Website-Daten für yildiz-ai.vercel.app löschen.
+
+KEINE NEUEN ENVIRONMENT VARIABLES
+Die bisherigen Variablen bleiben:
+OPENAI_API_KEY
+GEMINI_API_KEY
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+
+TESTS
+Kostenloses Produktbild + PDF:
+Gib mir ein Bild von der Egetürk Klasik Sucuk als PDF.
+
+Datei:
+Erstelle mir eine Einkaufsliste als PDF.
+
+Bezahltes neues Bild:
+Erstelle ein fotorealistisches Werbebild für Yildiz AI.
+
+HINWEIS
+Die kostenlose Bildsuche zeigt bestehende Bilder und deren Quelle. Sie kann nicht zuverlässig beweisen, welches Produkt "das beliebteste" ist. Bildrechte müssen vor gewerblicher Nutzung bei der jeweiligen Quelle geprüft werden.
