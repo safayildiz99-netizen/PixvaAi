@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { LogIn, ShieldCheck, UserRound } from 'lucide-react';
 import { api, setToken } from '../api.js';
 
-export default function Login({ onLogin, onGuest }) {
+export default function Login({ onLogin, onGuest, allowGuest = true }) {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('SafaStart2026!');
   const [error, setError] = useState('');
@@ -20,8 +20,8 @@ export default function Login({ onLogin, onGuest }) {
     <div className="brand-badge"><img src="/yildiz-ai-logo.png" alt="Yildiz AI"/></div>
     <h1>Deine KI für alles.</h1>
     <p>Allgemeine KI, Designs, Flyer, Webseiten und Videos – im Browser und ohne lokale GPU.</p>
-    <button className="guest-btn" type="button" onClick={onGuest}><UserRound size={18}/>Ohne Anmeldung starten</button>
-    <div className="login-divider"><span>oder mit Konto</span></div>
+    {allowGuest&&<button className="guest-btn" type="button" onClick={onGuest}><UserRound size={18}/>Ohne Anmeldung starten</button>}
+    {allowGuest&&<div className="login-divider"><span>oder mit Konto</span></div>}
     <form onSubmit={submit}>
       <label>Benutzername<input value={username} onChange={(e)=>setUsername(e.target.value)} autoComplete="username"/></label>
       <label>Passwort<input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} autoComplete="current-password"/></label>

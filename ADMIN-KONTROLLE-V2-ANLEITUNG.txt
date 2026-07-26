@@ -1,0 +1,34 @@
+YILDIZ AI – ADMIN-KONTROLLZENTRUM V2
+
+WICHTIG ZU PASSWÖRTERN
+Passwörter werden absichtlich nicht im Klartext gespeichert. Deshalb kann und darf der Admin bestehende Passwörter nicht sehen.
+Im Adminbereich gibt es stattdessen „Passwort zurücksetzen“. Das neue temporäre Passwort wird einmal angezeigt, kopiert und der Nutzer muss es beim Login ändern.
+
+NEU
+- Hauptansicht bleibt standardmäßig wie bisher.
+- Adminbereich mit Tabs: Übersicht, Konten, Alle Chats, Ansicht, System.
+- Admin kann alle CLOUD-SYNCHRONISIERTEN Chats angemeldeter Konten schreibgeschützt öffnen.
+- Jeder Chat-Zugriff wird protokolliert.
+- Gast-Chats und rein lokale Daten auf fremden Geräten sind nicht zentral sichtbar.
+- Sichere Passwort-Zurücksetzung mit einmal sichtbarem temporärem Passwort.
+- App-Ansicht zentral verwalten: Startansicht, Work-Ziel, Gastmodus, Bereiche ein-/ausblenden, Mitteilung, Wartungshinweis, kompakte Seitenleiste.
+- 1:1 Standard wiederherstellen.
+- KI-Nutzung, Limits, Kosten und Audit-Protokoll im Adminbereich.
+
+INSTALLATION
+1. SUPABASE-ALLES-EINFACH-OEFFNEN.html doppelklicken.
+2. „Alles kopieren“ drücken.
+3. Supabase → SQL Editor → New query.
+4. Einfügen → Run.
+5. Danach den Inhalt dieses kompletten Projektordners in die Hauptseite des GitHub-Repositories hochladen und vorhandene Dateien ersetzen.
+6. Commit-Nachricht:
+   Yildiz AI Admin Kontrollzentrum Chats Ansicht Passwort Reset
+7. Vercel: warten bis Ready + Production.
+8. Mac: Cmd + Shift + R. Windows: Ctrl + F5.
+9. Einmal abmelden und wieder anmelden.
+
+TEST
+- Admin → Konten → Passwort zurücksetzen.
+- Admin → Alle Chats → Konto auswählen.
+- Admin → Ansicht → Einstellung ändern → Ansicht speichern.
+- „1:1 Standard wiederherstellen“ setzt die bisherige Standardansicht zurück.

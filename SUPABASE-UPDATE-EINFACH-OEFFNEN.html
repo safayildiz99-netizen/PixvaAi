@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Yildiz AI – Supabase Update</title>
+<style>body{font-family:Arial,sans-serif;background:#07131c;color:#eaf6ff;margin:0;padding:24px}main{max-width:1100px;margin:auto}h1{margin:0 0 8px}p{color:#9cb7c8}button{background:#ffd400;color:#071018;border:0;border-radius:12px;padding:13px 20px;font-weight:800;cursor:pointer;margin:12px 0}textarea{width:100%;min-height:70vh;background:#02080d;color:#ccecff;border:1px solid #28516a;border-radius:14px;padding:16px;box-sizing:border-box;font-family:monospace;font-size:13px;line-height:1.45}#ok{margin-left:12px;color:#9ff0bd}</style></head>
+<body><main><h1>Yildiz AI – Supabase Admin-Update</h1><p>Auf „Alles kopieren“ klicken, danach in Supabase: SQL Editor → New query → Einfügen → Run.</p><button onclick="copyAll()">Alles kopieren</button><span id="ok"></span><textarea id="sql" readonly>-- Yildiz AI – Admin-Kontrollzentrum V2
+-- EINMAL vollständig im Supabase SQL Editor ausführen.
+-- Enthält: App-Ansicht, sichere Passwort-Zurücksetzung, Admin-Lesezugriff auf Cloud-Chats und Audit-Protokoll.
+
+create table if not exists public.app_global_settings (
+  id smallint primary key default 1 check (id = 1),
+  settings jsonb not null default &#x27;{}&#x27;::jsonb,
+  updated_by uuid references public.app_users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.app_admin_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  admin_id uuid references public.app_users(id) on delete set null,
+  target_user_id uuid references public.app_users(id) on delete set null,
+  action text not null,
+  details jsonb not null default &#x27;{}&#x27;::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists app_admin_audit_created_idx on public.app_admin_audit_log(created_at desc);
+create index if not exists app_admin_audit_target_idx on public.app_admin_audit_log(target_user_id, created_at desc);
+
+alter table public.app_global_settings enable row level security;
+alter table public.app_admin_audit_log enable row level security;
+revoke all on public.app_global_settings from anon, authenticated;
+revoke all on public.app_admin_audit_log from anon, authenticated;
+
+insert into public.app_global_settings(id, settings)
+values (1, jsonb_build_object(
+  &#x27;defaultView&#x27;,&#x27;chat&#x27;,
+  &#x27;workView&#x27;,&#x27;projects&#x27;,
+  &#x27;allowGuest&#x27;,true,
+  &#x27;showFlyer&#x27;,true,
+  &#x27;showImage&#x27;,true,
+  &#x27;showVideo&#x27;,true,
+  &#x27;showWebsite&#x27;,true,
+  &#x27;showProjects&#x27;,true,
+  &#x27;announcement&#x27;,&#x27;&#x27;,
+  &#x27;maintenanceMode&#x27;,false,
+  &#x27;compactSidebar&#x27;,false
+))
+on conflict (id) do nothing;
+
+create or replace function public.app_get_ui_settings()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_settings jsonb;
+begin
+  select settings into v_settings from public.app_global_settings where id = 1;
+  return jsonb_build_object(&#x27;settings&#x27;, coalesce(v_settings, &#x27;{}&#x27;::jsonb));
+end;
+$$;
+
+create or replace function public.app_admin_save_ui_settings(p_token text, p_settings jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_admin uuid;
+  v_clean jsonb;
+  v_default_view text;
+  v_work_view text;
+begin
+  v_admin := private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then
+    return jsonb_build_object(&#x27;error&#x27;, &#x27;Nur für Admins.&#x27;);
+  end if;
+
+  v_default_view := coalesce(p_settings-&gt;&gt;&#x27;defaultView&#x27;, &#x27;chat&#x27;);
+  if v_default_view not in (&#x27;chat&#x27;,&#x27;flyer&#x27;,&#x27;image&#x27;,&#x27;video&#x27;,&#x27;website&#x27;,&#x27;projects&#x27;) then v_default_view := &#x27;chat&#x27;; end if;
+  v_work_view := coalesce(p_settings-&gt;&gt;&#x27;workView&#x27;, &#x27;projects&#x27;);
+  if v_work_view not in (&#x27;flyer&#x27;,&#x27;image&#x27;,&#x27;video&#x27;,&#x27;website&#x27;,&#x27;projects&#x27;) then v_work_view := &#x27;projects&#x27;; end if;
+
+  v_clean := jsonb_build_object(
+    &#x27;defaultView&#x27;, v_default_view,
+    &#x27;workView&#x27;, v_work_view,
+    &#x27;allowGuest&#x27;, coalesce((p_settings-&gt;&gt;&#x27;allowGuest&#x27;)::boolean, true),
+    &#x27;showFlyer&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showFlyer&#x27;)::boolean, true),
+    &#x27;showImage&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showImage&#x27;)::boolean, true),
+    &#x27;showVideo&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showVideo&#x27;)::boolean, true),
+    &#x27;showWebsite&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showWebsite&#x27;)::boolean, true),
+    &#x27;showProjects&#x27;, coalesce((p_settings-&gt;&gt;&#x27;showProjects&#x27;)::boolean, true),
+    &#x27;announcement&#x27;, left(coalesce(p_settings-&gt;&gt;&#x27;announcement&#x27;,&#x27;&#x27;), 500),
+    &#x27;maintenanceMode&#x27;, coalesce((p_settings-&gt;&gt;&#x27;maintenanceMode&#x27;)::boolean, false),
+    &#x27;compactSidebar&#x27;, coalesce((p_settings-&gt;&gt;&#x27;compactSidebar&#x27;)::boolean, false)
+  );
+
+  insert into public.app_global_settings(id, settings, updated_by, updated_at)
+  values (1, v_clean, v_admin, now())
+  on conflict (id) do update
+  set settings = excluded.settings,
+      updated_by = excluded.updated_by,
+      updated_at = excluded.updated_at;
+
+  insert into public.app_admin_audit_log(admin_id, action, details)
+  values (v_admin, &#x27;APP_VIEW_UPDATED&#x27;, jsonb_build_object(&#x27;settings&#x27;, v_clean));
+
+  return jsonb_build_object(&#x27;ok&#x27;, true, &#x27;settings&#x27;, v_clean);
+end;
+$$;
+
+create or replace function public.app_admin_list_chat_accounts(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_admin uuid;
+  v_users jsonb;
+begin
+  v_admin := private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then
+    return jsonb_build_object(&#x27;error&#x27;, &#x27;Nur für Admins.&#x27;);
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    &#x27;id&#x27;, u.id,
+    &#x27;username&#x27;, u.username::text,
+    &#x27;role&#x27;, u.role,
+    &#x27;active&#x27;, u.active,
+    &#x27;chatCount&#x27;, coalesce(jsonb_array_length(case when jsonb_typeof(s.chats)=&#x27;array&#x27; then s.chats else &#x27;[]&#x27;::jsonb end), 0),
+    &#x27;updatedAt&#x27;, s.updated_at
+  ) order by coalesce(s.updated_at, u.created_at) desc), &#x27;[]&#x27;::jsonb)
+  into v_users
+  from public.app_users u
+  left join public.app_chat_state s on s.user_id = u.id;
+
+  return jsonb_build_object(&#x27;users&#x27;, v_users);
+end;
+$$;
+
+create or replace function public.app_admin_get_user_chats(p_token text, p_user_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_admin uuid;
+  v_username text;
+  v_chats jsonb;
+  v_updated timestamptz;
+begin
+  v_admin := private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then
+    return jsonb_build_object(&#x27;error&#x27;, &#x27;Nur für Admins.&#x27;);
+  end if;
+
+  select username::text into v_username from public.app_users where id = p_user_id;
+  if v_username is null then return jsonb_build_object(&#x27;error&#x27;, &#x27;Konto nicht gefunden.&#x27;); end if;
+
+  select chats, updated_at into v_chats, v_updated
+  from public.app_chat_state
+  where user_id = p_user_id;
+
+  insert into public.app_admin_audit_log(admin_id, target_user_id, action, details)
+  values (v_admin, p_user_id, &#x27;USER_CHATS_VIEWED&#x27;, jsonb_build_object(&#x27;chatCount&#x27;, coalesce(jsonb_array_length(case when jsonb_typeof(v_chats)=&#x27;array&#x27; then v_chats else &#x27;[]&#x27;::jsonb end),0)));
+
+  return jsonb_build_object(
+    &#x27;username&#x27;, v_username,
+    &#x27;chats&#x27;, coalesce(v_chats, &#x27;[]&#x27;::jsonb),
+    &#x27;updatedAt&#x27;, v_updated
+  );
+end;
+$$;
+
+create or replace function public.app_admin_reset_password(p_token text, p_user_id uuid, p_new_password text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private, extensions
+as $$
+declare
+  v_admin uuid;
+  v_username text;
+begin
+  v_admin := private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then
+    return jsonb_build_object(&#x27;error&#x27;, &#x27;Nur für Admins.&#x27;);
+  end if;
+  if length(coalesce(p_new_password,&#x27;&#x27;)) &lt; 8 then
+    return jsonb_build_object(&#x27;error&#x27;, &#x27;Das neue Passwort braucht mindestens 8 Zeichen.&#x27;);
+  end if;
+
+  select username::text into v_username from public.app_users where id = p_user_id;
+  if v_username is null then return jsonb_build_object(&#x27;error&#x27;, &#x27;Konto nicht gefunden.&#x27;); end if;
+
+  update public.app_users
+  set password_hash = crypt(p_new_password, gen_salt(&#x27;bf&#x27;, 12)),
+      must_change_password = true
+  where id = p_user_id;
+
+  delete from public.app_sessions where user_id = p_user_id;
+
+  insert into public.app_admin_audit_log(admin_id, target_user_id, action, details)
+  values (v_admin, p_user_id, &#x27;PASSWORD_RESET&#x27;, jsonb_build_object(&#x27;username&#x27;, v_username));
+
+  return jsonb_build_object(&#x27;ok&#x27;, true, &#x27;username&#x27;, v_username);
+end;
+$$;
+
+create or replace function public.app_admin_audit_log(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_admin uuid;
+  v_events jsonb;
+begin
+  v_admin := private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then
+    return jsonb_build_object(&#x27;error&#x27;, &#x27;Nur für Admins.&#x27;);
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    &#x27;id&#x27;, l.id,
+    &#x27;action&#x27;, l.action,
+    &#x27;adminUsername&#x27;, a.username::text,
+    &#x27;targetUsername&#x27;, t.username::text,
+    &#x27;details&#x27;, l.details,
+    &#x27;createdAt&#x27;, l.created_at
+  ) order by l.created_at desc), &#x27;[]&#x27;::jsonb)
+  into v_events
+  from (
+    select * from public.app_admin_audit_log order by created_at desc limit 100
+  ) l
+  left join public.app_users a on a.id = l.admin_id
+  left join public.app_users t on t.id = l.target_user_id;
+
+  return jsonb_build_object(&#x27;events&#x27;, v_events);
+end;
+$$;
+
+grant execute on function public.app_get_ui_settings() to anon, authenticated;
+grant execute on function public.app_admin_save_ui_settings(text,jsonb) to anon, authenticated;
+grant execute on function public.app_admin_list_chat_accounts(text) to anon, authenticated;
+grant execute on function public.app_admin_get_user_chats(text,uuid) to anon, authenticated;
+grant execute on function public.app_admin_reset_password(text,uuid,text) to anon, authenticated;
+grant execute on function public.app_admin_audit_log(text) to anon, authenticated;
+</textarea></main>
+<script>async function copyAll(){const t=document.getElementById('sql');t.select();try{await navigator.clipboard.writeText(t.value)}catch(e){document.execCommand('copy')}document.getElementById('ok').textContent='Kopiert ✓';}</script></body></html>

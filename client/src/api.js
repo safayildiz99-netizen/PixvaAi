@@ -79,6 +79,37 @@ export async function api(path, options = {}) {
     });
   }
 
+
+  if (path === '/api/ui-settings' && method === 'GET') {
+    return rpc('app_get_ui_settings', {});
+  }
+  if (path === '/api/admin/ui-settings' && (method === 'POST' || method === 'PUT')) {
+    return rpc('app_admin_save_ui_settings', {
+      p_token: token,
+      p_settings: body.settings || {}
+    });
+  }
+  if (path === '/api/admin/chat-accounts' && method === 'GET') {
+    return rpc('app_admin_list_chat_accounts', { p_token: token });
+  }
+  const adminChatMatch = path.match(/^\/api\/admin\/user-chats\/([0-9a-f-]+)$/i);
+  if (adminChatMatch && method === 'GET') {
+    return rpc('app_admin_get_user_chats', {
+      p_token: token,
+      p_user_id: adminChatMatch[1]
+    });
+  }
+  if (path === '/api/admin/reset-password' && method === 'POST') {
+    return rpc('app_admin_reset_password', {
+      p_token: token,
+      p_user_id: body.userId,
+      p_new_password: body.newPassword
+    });
+  }
+  if (path === '/api/admin/audit-log' && method === 'GET') {
+    return rpc('app_admin_audit_log', { p_token: token });
+  }
+
   if (path === '/api/chat-state' && method === 'GET') {
     return rpc('app_get_chat_state', { p_token: token });
   }

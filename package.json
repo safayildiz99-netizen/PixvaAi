@@ -1,9 +1,9 @@
 {
   "name": "yildiz-ai-studio",
-  "version": "7.1.0",
+  "version": "8.0.0",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI PRO-KERN V1 mit privaten Chats, GPT Image, Sora, Mediensteuerung und serverseitiger Kostenkontrolle",
+  "description": "Yildiz AI Admin-Kontrollzentrum V2 mit privater Cloud-Synchronisierung, sicherer Passwort-Zurücksetzung, Admin-Chat-Audit und konfigurierbarer 1:1-App-Ansicht",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "vercel-build": "npm run build"
