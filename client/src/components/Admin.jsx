@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ClipboardCopy, Cpu, Eye, EyeOff, GripVertical, Image, KeyRound,
-  LayoutDashboard, MessageSquareText, Monitor, Palette, Plus, RefreshCw, RotateCcw, Save,
-  Search, Shield, ShieldAlert, Trash2, UserRoundCog, Video, XCircle
+  Activity, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ClipboardCopy, Cpu, Eye, EyeOff, GripVertical, Image, KeyRound, Laptop,
+  LayoutDashboard, MessageSquareText, Monitor, Palette, Plus, Redo2, RefreshCw, RotateCcw, Save, Smartphone, Tablet,
+  Search, Shield, ShieldAlert, Trash2, Undo2, UserRoundCog, Video, XCircle
 } from 'lucide-react';
 import { api } from '../api.js';
 
@@ -118,6 +118,10 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [selectedVisualId, setSelectedVisualId] = useState('nav-chat');
   const [dragVisualId, setDragVisualId] = useState('');
   const [auditLog, setAuditLog] = useState([]);
+  const [viewHistory, setViewHistory] = useState({ past: [], future: [] });
+  const [previewDevice, setPreviewDevice] = useState('desktop');
+  const [health, setHealth] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(false);
 
   async function loadCore() {
     try {
@@ -155,11 +159,25 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     }
   }
 
+
+  async function loadHealth() {
+    setHealthLoading(true);
+    try {
+      const response = await api('/api/health');
+      setHealth(response);
+    } catch (error) {
+      setHealth({ ok: false, error: error.message, services: {} });
+      setStatus(error.message);
+    } finally {
+      setHealthLoading(false);
+    }
+  }
+
   useEffect(() => { loadCore(); }, []);
-  useEffect(() => { setSettingsDraft(normalizeSettings(uiSettings)); }, [uiSettings]);
+  useEffect(() => { setSettingsDraft(normalizeSettings(uiSettings)); setViewHistory({ past: [], future: [] }); }, [uiSettings]);
   useEffect(() => {
     if (tab === 'chats') loadChatAccounts();
-    if (tab === 'system') loadAuditLog();
+    if (tab === 'system') { loadAuditLog(); loadHealth(); }
   }, [tab]);
 
   const usageById = useMemo(() => Object.fromEntries(usageUsers.map((item) => [item.id, item])), [usageUsers]);
@@ -244,30 +262,56 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     }
   }
 
+  function applyViewChange(updater) {
+    setSettingsDraft((old) => {
+      const next = typeof updater === 'function' ? updater(old) : { ...old, ...updater };
+      if (JSON.stringify(next) === JSON.stringify(old)) return old;
+      setViewHistory((history) => ({ past: [...history.past.slice(-39), old], future: [] }));
+      return next;
+    });
+  }
+
+  function undoView() {
+    setViewHistory((history) => {
+      if (!history.past.length) return history;
+      const previous = history.past[history.past.length - 1];
+      setSettingsDraft((current) => previous);
+      return { past: history.past.slice(0, -1), future: [settingsDraft, ...history.future].slice(0, 40) };
+    });
+  }
+
+  function redoView() {
+    setViewHistory((history) => {
+      if (!history.future.length) return history;
+      const next = history.future[0];
+      setSettingsDraft(next);
+      return { past: [...history.past, settingsDraft].slice(-40), future: history.future.slice(1) };
+    });
+  }
+
   function patchSettings(patch) {
-    setSettingsDraft((old) => ({ ...old, ...patch }));
+    applyViewChange((old) => ({ ...old, ...patch }));
   }
 
   function resetViewDefaults() {
-    setSettingsDraft(normalizeSettings(DEFAULT_UI_SETTINGS));
+    applyViewChange(() => normalizeSettings(DEFAULT_UI_SETTINGS));
     setSelectedVisualId('nav-chat');
   }
 
-
   function patchText(key, value) {
-    setSettingsDraft((old) => ({ ...old, texts: { ...old.texts, [key]: String(value || '').slice(0, 220) } }));
+    applyViewChange((old) => ({ ...old, texts: { ...old.texts, [key]: String(value || '').slice(0, 220) } }));
   }
 
   function patchTheme(patch) {
-    setSettingsDraft((old) => ({ ...old, theme: { ...old.theme, ...patch } }));
+    applyViewChange((old) => ({ ...old, theme: { ...old.theme, ...patch } }));
   }
 
   function patchNav(id, patch) {
-    setSettingsDraft((old) => ({ ...old, navItems: old.navItems.map((item) => item.id === id ? { ...item, ...patch } : item) }));
+    applyViewChange((old) => ({ ...old, navItems: old.navItems.map((item) => item.id === id ? { ...item, ...patch } : item) }));
   }
 
   function moveNav(id, direction) {
-    setSettingsDraft((old) => {
+    applyViewChange((old) => {
       const next = old.navItems.map((item) => ({ ...item }));
       const index = next.findIndex((item) => item.id === id);
       const target = index + direction;
@@ -279,7 +323,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
 
   function dropNav(targetId) {
     if (!dragVisualId || dragVisualId === targetId) return;
-    setSettingsDraft((old) => {
+    applyViewChange((old) => {
       const next = old.navItems.map((item) => ({ ...item }));
       const sourceIndex = next.findIndex((item) => item.id === dragVisualId);
       const targetIndex = next.findIndex((item) => item.id === targetId);
@@ -316,6 +360,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       });
       const saved = normalizeSettings(response.settings || settingsDraft);
       setSettingsDraft(saved);
+      setViewHistory({ past: [], future: [] });
       onSettingsChanged?.(saved);
       setStatus('App-Ansicht gespeichert. Die Standardansicht bleibt im Yildiz-AI-Layout.');
     } catch (error) {
@@ -326,7 +371,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   return <section className="admin-page admin-control-center">
     <div className="page-heading admin-heading">
       <div><h2><Shield size={22}/> Admin-Kontrollzentrum</h2><p>Konten, private Chat-Prüfung, App-Ansicht, KI-Limits und Systemstatus.</p></div>
-      <button onClick={() => { loadCore(); if (tab === 'chats') loadChatAccounts(); if (tab === 'system') loadAuditLog(); }}><RefreshCw size={16}/>Aktualisieren</button>
+      <button onClick={() => { loadCore(); if (tab === 'chats') loadChatAccounts(); if (tab === 'system') { loadAuditLog(); loadHealth(); } }}><RefreshCw size={16}/>Aktualisieren</button>
     </div>
 
     <div className="admin-tabs" role="tablist">
@@ -392,7 +437,18 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     {tab === 'view' && <div className="admin-visual-view-editor">
       <div className="visual-editor-head">
         <div><h3><Monitor size={19}/> Live-Ansicht bearbeiten</h3><p>Klicke direkt auf einen Text, um ihn zu ändern. Ziehe Menüeinträge an eine neue Position. Ausgewählte Elemente kannst du verschieben, ausblenden oder zurücksetzen.</p></div>
-        <div className="admin-view-actions"><button onClick={resetViewDefaults}><RotateCcw size={16}/>1:1 zurücksetzen</button><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Ansicht speichern</button></div>
+        <div className="admin-view-actions">
+          <button onClick={undoView} disabled={!viewHistory.past.length} title="Rückgängig"><Undo2 size={16}/>Rückgängig</button>
+          <button onClick={redoView} disabled={!viewHistory.future.length} title="Wiederholen"><Redo2 size={16}/>Wiederholen</button>
+          <button onClick={resetViewDefaults}><RotateCcw size={16}/>1:1 zurücksetzen</button>
+          <button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Ansicht speichern</button>
+        </div>
+      </div>
+
+      <div className="visual-device-switcher" aria-label="Vorschaugröße">
+        <button className={previewDevice === 'desktop' ? 'active' : ''} onClick={() => setPreviewDevice('desktop')}><Laptop size={16}/>Desktop</button>
+        <button className={previewDevice === 'tablet' ? 'active' : ''} onClick={() => setPreviewDevice('tablet')}><Tablet size={16}/>Tablet</button>
+        <button className={previewDevice === 'mobile' ? 'active' : ''} onClick={() => setPreviewDevice('mobile')}><Smartphone size={16}/>Handy</button>
       </div>
 
       <div className="visual-editor-switches">
@@ -403,7 +459,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         <label>Work-Ziel<select value={settingsDraft.workView} onChange={(event)=>patchSettings({workView:event.target.value})}><option value="projects">Projekte</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option></select></label>
       </div>
 
-      <div className="live-view-stage" style={{'--preview-sidebar':`${Math.max(210,Math.min(360,Number(settingsDraft.theme.sidebarWidth||255)))}px`,'--preview-blue':settingsDraft.theme.accentBlue,'--preview-yellow':settingsDraft.theme.accentYellow}}>
+      <div className={`live-view-stage device-${previewDevice}`} style={{'--preview-sidebar':`${Math.max(210,Math.min(360,Number(settingsDraft.theme.sidebarWidth||255)))}px`,'--preview-blue':settingsDraft.theme.accentBlue,'--preview-yellow':settingsDraft.theme.accentYellow}}>
         <aside className={settingsDraft.compactSidebar ? 'compact' : ''}>
           <div className="live-logo">yildiz<span>☆</span>AI</div>
           <button className={`live-editable new-design ${selectedVisualId==='text-newDesign'?'selected':''}`} onClick={()=>setSelectedVisualId('text-newDesign')}>
@@ -456,7 +512,16 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     </div>}
 
     {tab === 'system' && <div className="admin-grid admin-grid-two">
-      <article className="admin-card"><h3><Activity size={19}/> Systemstatus</h3><div className="service-row ok"><CheckCircle2/>Supabase Konten & Cloud-Sync</div><div className="service-row ok"><CheckCircle2/>OpenAI Bilder</div><div className="service-row ok"><CheckCircle2/>Sora Videos</div><div className="service-row ok"><CheckCircle2/>Gemini Chat</div><div className="service-row warning"><XCircle/>Status wird bei echten Anfragen endgültig geprüft</div></article>
+      <article className="admin-card"><h3><Activity size={19}/> Systemstatus</h3>
+        {healthLoading && <div className="service-row warning"><RefreshCw className="spin"/>Konfiguration wird kostenlos geprüft …</div>}
+        {!healthLoading && ['supabase','gemini','openai','sora'].map((key) => {
+          const service = health?.services?.[key];
+          const labels = { supabase:'Supabase Konten & Cloud-Sync', gemini:'Gemini Chat', openai:'OpenAI Bilder', sora:'Sora Videos' };
+          return <div className={`service-row ${service?.configured ? 'ok' : 'warning'}`} key={key}>{service?.configured ? <CheckCircle2/> : <XCircle/>}{labels[key]} · {service?.configured ? 'konfiguriert' : 'Schlüssel fehlt'}</div>;
+        })}
+        <div className="info-box">Diese Prüfung kostet 0,00 € und kontrolliert nur die sichere Server-Konfiguration. Eine echte Modellanfrage wird dabei nicht gestartet.</div>
+        <button onClick={loadHealth}><RefreshCw size={15}/>Kostenlos erneut prüfen</button>
+      </article>
       <article className="admin-card"><h3><Shield size={19}/> Letzte Admin-Aktionen</h3><div className="audit-list">{auditLog.length ? auditLog.map((event) => <div key={event.id}><b>{event.action}</b><span>{event.targetUsername || 'System'} · {formatDate(event.createdAt)}</span></div>) : <p>Noch keine protokollierten Aktionen.</p>}</div></article>
     </div>}
   </section>;

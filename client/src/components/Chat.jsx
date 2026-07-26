@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { jsPDF } from 'jspdf';
-import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Menu, MessageSquarePlus, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, Square, Trash2, User, Video, WandSparkles, X } from 'lucide-react';
+import JSZip from 'jszip';
+import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Menu, MessageSquarePlus, Mic, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, ShieldCheck, Square, Trash2, User, Video, Volume2, WandSparkles, X } from 'lucide-react';
 import { api, getToken } from '../api.js';
 
 const quickPrompts = [
@@ -90,6 +91,8 @@ function requestedFileType(text) {
   if (/\b(json)\b/.test(value)) return 'json';
   if (/\b(html?)\b|webseite als datei/.test(value)) return 'html';
   if (/\b(markdown|md-datei)\b/.test(value)) return 'md';
+  if (/\b(docx|word|word-datei)\b/.test(value)) return 'docx';
+  if (/\b(xlsx|excel|excel-datei|tabelle)\b/.test(value)) return 'xlsx';
   if (/\b(txt|textdatei)\b/.test(value)) return 'txt';
   return '';
 }
@@ -177,6 +180,14 @@ async function createFileAttachment(type, content, title = 'Yildiz AI', imageUrl
     blob = pdf.output('blob');
     name = `${base}.pdf`;
     mimeType = 'application/pdf';
+  } else if (type === 'docx') {
+    blob = await createDocxBlob(title, content);
+    name = `${base}.docx`;
+    mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  } else if (type === 'xlsx') {
+    blob = await createXlsxBlob(title, content);
+    name = `${base}.xlsx`;
+    mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   } else {
     const map = {
       csv: ['text/csv;charset=utf-8', 'csv'], json: ['application/json;charset=utf-8', 'json'],
@@ -192,6 +203,60 @@ async function createFileAttachment(type, content, title = 'Yildiz AI', imageUrl
   let data = '';
   if (blob.size < 2300000) data = await blobToDataUrl(blob).catch(() => '');
   return { kind: 'file', name, size: blob.size, mimeType, previewUrl, data, blob };
+}
+
+
+function xmlEscape(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+async function createDocxBlob(title, content) {
+  const zip = new JSZip();
+  const paragraphs = [String(title || 'Yildiz AI'), ...String(content || '').split(/\r?\n/)]
+    .map((line, index) => `<w:p><w:r>${index === 0 ? '<w:rPr><w:b/><w:sz w:val="32"/></w:rPr>' : ''}<w:t xml:space="preserve">${xmlEscape(line || ' ')}</w:t></w:r></w:p>`)
+    .join('');
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`);
+  zip.folder('_rels').file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`);
+  zip.folder('word').file('document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>`);
+  zip.folder('word').folder('_rels').file('document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+  zip.folder('docProps').file('core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/"><dc:title>${xmlEscape(title || 'Yildiz AI')}</dc:title><dc:creator>Yildiz AI</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`);
+  zip.folder('docProps').file('app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Yildiz AI</Application></Properties>`);
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+function spreadsheetColumn(index) {
+  let result = '';
+  let value = index + 1;
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+async function createXlsxBlob(title, content) {
+  const zip = new JSZip();
+  const lines = String(content || '').split(/\r?\n/).filter((line) => line.length > 0);
+  const rows = lines.length ? lines.map((line) => {
+    const delimiter = line.includes('\t') ? '\t' : line.includes(';') ? ';' : line.includes(',') ? ',' : null;
+    return delimiter ? line.split(delimiter).map((cell) => cell.trim()) : [line];
+  }) : [['Yildiz AI']];
+  rows.unshift([String(title || 'Yildiz AI')]);
+  const sheetRows = rows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, cellIndex) => `<c r="${spreadsheetColumn(cellIndex)}${rowIndex + 1}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(cell)}</t></is></c>`).join('')}</row>`).join('');
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`);
+  zip.folder('_rels').file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`);
+  zip.folder('xl').file('workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Yildiz AI" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+  zip.folder('xl').folder('_rels').file('workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
+  zip.folder('xl').folder('worksheets').file('sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`);
+  zip.folder('docProps').file('core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${xmlEscape(title || 'Yildiz AI')}</dc:title><dc:creator>Yildiz AI</dc:creator></cp:coreProperties>`);
+  zip.folder('docProps').file('app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Yildiz AI</Application></Properties>`);
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 function openExternal(url) {
@@ -681,11 +746,16 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   const [videoSettings, setVideoSettings] = useState({ seconds: '4', aspect: 'story', model: 'sora-2', useReference: false });
   const [editingMessageId, setEditingMessageId] = useState('');
   const [editingText, setEditingText] = useState('');
+  const [listening, setListening] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(() => localStorage.getItem(`yildiz_ai_free_only_${accountId || 'guest'}`) === '1');
+  const [costDialog, setCostDialog] = useState(null);
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const cameraImageRef = useRef(null);
   const cameraVideoRef = useRef(null);
   const anyFileRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const costDialogResolverRef = useRef(null);
   const lastSendRef = useRef({ text: '', at: 0 });
   const sendingRef = useRef(false);
   const abortRef = useRef(null);
@@ -697,12 +767,116 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   const cloudEnabled = !isGuest && ownerKey !== 'guest';
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
   useEffect(() => { activeChatIdRef.current = activeChatId; }, [activeChatId]);
+  useEffect(() => { localStorage.setItem(`yildiz_ai_free_only_${ownerKey}`, freeOnly ? '1' : '0'); }, [freeOnly, ownerKey]);
+  useEffect(() => () => { try { recognitionRef.current?.stop?.(); } catch {} try { window.speechSynthesis?.cancel?.(); } catch {} }, []);
   useEffect(() => {
     if (!historyOpen) return undefined;
     const close = (event) => { if (event.key === 'Escape') setHistoryOpen(false); };
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
   }, [historyOpen]);
+
+
+  function requestCostApproval(details) {
+    return new Promise((resolve) => {
+      costDialogResolverRef.current = resolve;
+      setCostDialog(details);
+    });
+  }
+
+  function resolveCostApproval(choice) {
+    const resolver = costDialogResolverRef.current;
+    costDialogResolverRef.current = null;
+    setCostDialog(null);
+    resolver?.(choice);
+  }
+
+  function startVoiceInput() {
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+      setStatus('Spracheingabe wird von diesem Browser nicht unterstützt. Auf iPhone funktioniert alternativ die Mikrofontaste der Tastatur.');
+      return;
+    }
+    try { recognitionRef.current?.stop?.(); } catch {}
+    const recognition = new Recognition();
+    recognition.lang = 'de-DE';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.onstart = () => { setListening(true); setStatus('Ich höre zu … Spracheingabe ist kostenlos.'); };
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results || []).map((result) => result?.[0]?.transcript || '').join(' ').trim();
+      if (transcript) setInput((oldValue) => `${oldValue}${oldValue ? ' ' : ''}${transcript}`.trim());
+    };
+    recognition.onerror = () => setStatus('Spracheingabe konnte nicht gestartet werden.');
+    recognition.onend = () => { setListening(false); recognitionRef.current = null; };
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
+  function speakMessage(message) {
+    if (!window.speechSynthesis) {
+      setStatus('Vorlesen wird von diesem Browser nicht unterstützt.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(String(message?.content || '').slice(0, 5000));
+    utterance.lang = 'de-DE';
+    utterance.rate = 1;
+    window.speechSynthesis.speak(utterance);
+    setStatus('Antwort wird vorgelesen · kostenlos im Browser.');
+  }
+
+  async function generateFreeImageMessage(clean, signal, runId) {
+    if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError');
+    setGenerationStatus(runId, 'Kostenlose Bildversion wird über einen externen Dienst vorbereitet …');
+    const imageUrl = makeDirectImageUrl(clean, imageSettings.aspect);
+    await preloadImage(imageUrl);
+    if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError');
+    appendGenerationMessage(runId, {
+      id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
+      content: 'Kostenlose Bildversion erstellt · 0,00 €. Die Qualität und Verfügbarkeit des externen Gratisdienstes kann schwanken.',
+      attachments: [{ kind: 'image-link', name: 'Kostenlos erzeugtes Bild', title: clean.slice(0, 100) || 'Yildiz AI Bild', previewUrl: imageUrl, imageUrl, sourceUrl: imageUrl, source: 'Kostenloser externer Bilddienst' }]
+    });
+    setGenerationStatus(runId, 'Kostenlose Bildversion fertig · 0,00 €');
+  }
+
+  async function generateFreeVideoMessage(clean, sourceImages, signal, runId) {
+    setGenerationStatus(runId, 'Kostenlose Browser-Video-Version wird vorbereitet …');
+    let sources = sourceImages.filter((value) => String(value || '').startsWith('data:image/'));
+    if (!sources.length) {
+      const urls = [1, 2, 3].map((index) => makeDirectImageUrl(`${clean}, cinematic scene ${index}, consistent visual style`, 'story'));
+      for (const url of urls) {
+        if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError');
+        await preloadImage(url);
+        sources.push(await fetchRemoteImageDataUrl(url));
+      }
+    }
+    const scenes = sources.slice(0, 6).map((imageUrl, index) => ({
+      id: crypto.randomUUID(), title: `SZENE ${index + 1}`, prompt: clean, duration: 3,
+      imageUrl, videoUrl: '', fileName: '', mediaType: 'image', status: 'Kostenlos im Browser vorbereitet',
+      transition: 'fade', animation: 'zoom', textPosition: 'bottom', textColor: '#ffffff', accentColor: '#ffd400',
+      overlayOpacity: 0.3, fontScale: 1, fontFamily: 'Arial', fontWeight: 800, textAlign: 'left', showText: true,
+      trimStart: 0, mediaScale: 1, mediaX: 0, mediaY: 0, mediaRotation: 0, mediaOpacity: 1, textX: 7, textY: 76
+    }));
+    const videoProject = { name: String(clean || 'Kostenloses Video').slice(0, 64), type: 'video', data: { scenes, format: 'story', musicStyle: 'digital', musicVolume: 0.2 } };
+    try {
+      const rendered = await renderGeneratedVideo(sources.slice(0, 4), clean);
+      appendGenerationMessage(runId, {
+        id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
+        content: 'Kostenlose Browser-Video-Version erstellt · 0,00 €. Es handelt sich um ein animiertes Bildvideo, nicht um ein natives Sora-KI-Video.',
+        attachments: [{ kind: 'video', name: `yildiz-ai-kostenlos.${rendered.ext}`, previewUrl: rendered.url, blob: rendered.blob, projectData: videoProject }]
+      });
+      setGenerationStatus(runId, 'Kostenloses Video fertig · 0,00 €');
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error;
+      appendGenerationMessage(runId, {
+        id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
+        content: `Das kostenlose Video-Projekt wurde vorbereitet · 0,00 €. Dieser Browser konnte die Videodatei nicht direkt rendern: ${error.message}`,
+        attachments: [{ kind: 'video', name: 'Kostenloses Video-Projekt', previewUrl: '', projectData: videoProject }]
+      });
+      setGenerationStatus(runId, 'Kostenloses Video-Projekt vorbereitet · 0,00 €');
+    }
+  }
 
   function isCurrentGeneration(runId) {
     return Boolean(runId) && generationRef.current.id === runId && generationRef.current.chatId === activeChatIdRef.current;
@@ -950,6 +1124,18 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setStatus('Chat als TXT gespeichert.');
+  }
+
+  function exportAllChats() {
+    const payload = { exportedAt: new Date().toISOString(), account: ownerKey, chats: cleanForCloudStorage(chatSessions) };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `yildiz-ai-alle-chats-${safeFileName(ownerKey, 'konto')}.json`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Alle Chats wurden als JSON exportiert.');
   }
 
   async function addGenericFile(file) {
@@ -1229,7 +1415,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   async function attachRequestedFile(runId, clean, answer) {
     const type = requestedFileType(clean);
     if (!type) return false;
-    const title = clean.replace(/\b(als|in)\s+(pdf|csv|json|html?|markdown|md-datei|txt|textdatei)\b.*$/i, '').trim().slice(0, 80) || 'Yildiz AI Datei';
+    const title = clean.replace(/\b(als|in)\s+(pdf|csv|json|html?|markdown|md-datei|docx|word|word-datei|xlsx|excel|excel-datei|tabelle|txt|textdatei)\b.*$/i, '').trim().slice(0, 80) || 'Yildiz AI Datei';
     const file = await createFileAttachment(type, answer, title);
     appendGenerationMessage(runId, {
       id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
@@ -1270,6 +1456,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   }
 
   async function sendMessage(text = input, providedAttachments = attachments, options = {}) {
+    if (costDialog) return;
     const clean = String(text || '').trim();
     const selectedAttachments = Array.isArray(providedAttachments) ? providedAttachments : [];
     if (sendingRef.current) return;
@@ -1284,18 +1471,21 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     const videoAction = creationMode === 'video' || (creationMode === 'auto' && clean && looksLikeVideoPrompt(clean));
     const imageSearchAction = !videoAction && clean && looksLikeFreeImageSearchPrompt(clean);
     const imageAction = !videoAction && !imageSearchAction && (creationMode === 'image' || (creationMode === 'auto' && clean && looksLikeImagePrompt(clean)));
-    if ((videoAction || imageAction) && isGuest) {
-      setStatus('Bitte anmelden: Kostenpflichtige OpenAI-Bilder und Sora-Videos sind zum Schutz deines Guthabens nur für Konten freigeschaltet.');
-      return;
-    }
-
-    if (imageAction) {
-      const accepted = window.confirm(`Geschätzte Kosten für dieses Bild: ${formatUsd(estimateImagePrice(imageSettings))}. Jetzt erstellen?`);
-      if (!accepted) return;
-    }
-    if (videoAction) {
-      const accepted = window.confirm(`Geschätzte Kosten für dieses Video: ${formatUsd(estimateVideoPrice(videoSettings))} (${videoSettings.seconds} Sekunden). Jetzt erstellen?`);
-      if (!accepted) return;
+    let paidChoice = '';
+    if (videoAction || imageAction) {
+      if (freeOnly || isGuest) {
+        paidChoice = 'free';
+        if (isGuest) setStatus('Gastmodus: Es wird automatisch nur die kostenlose Alternative verwendet.');
+      } else {
+        paidChoice = await requestCostApproval({
+          kind: videoAction ? 'video' : 'image',
+          estimate: videoAction ? estimateVideoPrice(videoSettings) : estimateImagePrice(imageSettings),
+          details: videoAction
+            ? `${videoSettings.seconds} Sekunden · ${videoSettings.model} · ${videoSettings.aspect === 'landscape' ? 'Querformat' : 'Hochformat'}`
+            : `${imageSettings.quality} · ${imageSettings.aspect} · ${imageSettings.style}`
+        });
+      }
+      if (!paidChoice || paidChoice === 'cancel') return;
     }
 
     sendingRef.current = true;
@@ -1327,6 +1517,9 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     try {
       if (imageSearchAction) {
         await generateFreeImageSearchMessage(clean, controller.signal, runId);
+      } else if (videoAction && paidChoice === 'free') {
+        const freeSources = selectedAttachments.filter((item) => item.kind === 'image').map((item) => item.data || item.previewUrl).filter(Boolean);
+        await generateFreeVideoMessage(clean, freeSources, controller.signal, runId);
       } else if (videoAction) {
         const uploadedImages = selectedAttachments
           .filter((item) => item.kind === 'image')
@@ -1346,6 +1539,8 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
           }
         }
         await generateVideoMessage(clean, videoReferenceImages, controller.signal, requestId, runId);
+      } else if (imageAction && paidChoice === 'free') {
+        await generateFreeImageMessage(clean, controller.signal, runId);
       } else if (imageAction) {
         await generateImageMessage(clean, selectedAttachments, controller.signal, requestId, runId);
       } else {
@@ -1442,7 +1637,8 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
       <aside className={`chat-history-panel ${historyOpen ? 'open' : ''}`}>
         <button className="new-chat-button" onClick={newChat}><MessageSquarePlus size={18}/>Neuer Chat</button>
         <div className="chat-history-top-actions">
-          <button className="chat-export-button" onClick={exportCurrentChat}><Download size={16}/>Speichern</button>
+          <button className="chat-export-button" onClick={exportCurrentChat}><Download size={16}/>Aktuell</button>
+          <button className="chat-export-button" onClick={exportAllChats}><FileDown size={16}/>Alle</button>
           <button className="chat-export-button danger-soft" onClick={deleteAllChats}><Trash2 size={16}/>Alle löschen</button>
         </div>
         <label className="chat-search"><Search size={15}/><input value={chatSearch} onChange={(event) => setChatSearch(event.target.value)} placeholder="Chats suchen" /></label>
@@ -1483,6 +1679,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
 
               <div className="message-actions">
                 <button onClick={() => copyMessage(message)} title="Kopieren"><Copy size={14}/></button>
+                {message.role === 'assistant' && <button onClick={() => speakMessage(message)} title="Vorlesen"><Volume2 size={14}/></button>}
                 {message.role === 'user' && <button onClick={() => startEditMessage(message)} title="Bearbeiten"><Edit3 size={14}/></button>}
                 {message.role === 'assistant' && index > 0 && <button onClick={() => retryAssistant(index)} title="Antwort erneut erstellen"><RotateCcw size={14}/></button>}
                 {message.id !== 'welcome' && <button onClick={() => deleteMessage(message.id)} title="Nachricht löschen"><Trash2 size={14}/></button>}
@@ -1519,7 +1716,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
             <button type="button" className={creationMode === 'video' ? 'active' : ''} onClick={() => { setCreationMode('video'); setShowMediaSettings(true); }}><Video size={14}/>Video</button>
           </div>
           <button type="button" className="media-settings-toggle" onClick={() => setShowMediaSettings((value) => !value)}><Settings2 size={15}/>Einstellungen {showMediaSettings ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</button>
-          <span className="cost-preview">{creationMode === 'video' ? `ca. ${formatUsd(estimateVideoPrice(videoSettings))}` : creationMode === 'image' ? `ca. ${formatUsd(estimateImagePrice(imageSettings))}` : 'Modus automatisch'}</span>
+          <button type="button" className={`free-only-toggle ${freeOnly ? 'active' : ''}`} onClick={() => setFreeOnly((value) => !value)}><ShieldCheck size={14}/>{freeOnly ? 'Nur kostenlos aktiv' : 'Kostenpflichtig möglich'}</button><span className="cost-preview">{freeOnly ? '0,00 € Modus' : creationMode === 'video' ? `ca. ${formatUsd(estimateVideoPrice(videoSettings))}` : creationMode === 'image' ? `ca. ${formatUsd(estimateImagePrice(imageSettings))}` : 'Vor Kosten kommt Bestätigung'}</span>
         </div>
 
         {showMediaSettings && <div className="media-settings-panel">
@@ -1551,6 +1748,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
           <button type="button" className="upload-pill" onClick={() => videoInputRef.current?.click()}><Video size={15}/>Video</button>
           <button type="button" className="upload-pill" onClick={() => cameraImageRef.current?.click()}><Camera size={15}/>Foto machen</button>
           <button type="button" className="upload-pill" onClick={() => cameraVideoRef.current?.click()}><Video size={15}/>Video aufnehmen</button>
+          <button type="button" className={`upload-pill ${listening ? 'active' : ''}`} onClick={startVoiceInput}><Mic size={15}/>{listening ? 'Höre zu …' : 'Sprechen'}</button>
           <button type="button" className="upload-pill" onClick={() => anyFileRef.current?.click()}><Paperclip size={15}/>Datei</button>
           <input ref={imageInputRef} type="file" accept="image/*" onChange={onImageUpload} hidden />
           <input ref={videoInputRef} type="file" accept="video/*" onChange={onVideoUpload} hidden />
@@ -1565,6 +1763,20 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
         <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !hasPayload}><ArrowUp size={20} /></button>
       </div>
       </section>
+      {costDialog && <div className="cost-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Kostenbestätigung">
+        <div className="cost-dialog-card">
+          <div className="cost-dialog-icon"><Coins size={28}/></div>
+          <h3>Diese Erstellung kostet Geld</h3>
+          <p>{costDialog.kind === 'video' ? 'Für dieses echte Sora-Video wird dein OpenAI-Guthaben verwendet.' : 'Für dieses hochwertige OpenAI-Bild wird dein OpenAI-Guthaben verwendet.'}</p>
+          <div className="cost-dialog-amount"><span>Geschätzte Kosten</span><b>{formatUsd(costDialog.estimate)}</b><small>{costDialog.details}</small></div>
+          <div className="cost-dialog-note">Der tatsächliche Preis kann geringfügig abweichen. Ohne deine Bestätigung wird keine kostenpflichtige Anfrage gestartet.</div>
+          <div className="cost-dialog-actions">
+            <button type="button" onClick={() => resolveCostApproval('cancel')}>Abbrechen</button>
+            <button type="button" className="free-alternative" onClick={() => resolveCostApproval('free')}><ShieldCheck size={16}/>Kostenlose Alternative · 0,00 €</button>
+            <button type="button" className="paid-confirm" onClick={() => resolveCostApproval('paid')}><Coins size={16}/>Kostenpflichtig erstellen</button>
+          </div>
+        </div>
+      </div>}
     </section>
   );
 }

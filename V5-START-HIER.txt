@@ -1,0 +1,48 @@
+YILDIZ AI V5 – START HIER
+
+WICHTIG: Dieses V5-Update selbst kostet nichts.
+Für dieses Update musst du KEINEN neuen Supabase-Code ausführen.
+
+Nur diese Vorgänge können später Geld kosten:
+- hochwertige Bilder über OpenAI
+- echte Videos über Sora
+
+Vor jeder kostenpflichtigen Anfrage erscheint IMMER ein großes Fenster mit:
+- geschätztem Preis
+- Abbrechen
+- kostenlose Alternative (0,00 €)
+- kostenpflichtig erstellen
+
+Ohne ausdrückliche Bestätigung wird keine kostenpflichtige Anfrage gestartet.
+
+INSTALLATION
+1. Diesen Ordner öffnen.
+2. Nur den INHALT in die Hauptseite deines GitHub-Projekts hochladen.
+3. Vorhandene Dateien ersetzen.
+4. Commit-Nachricht verwenden:
+   Yildiz AI V5 Kostenwarnung Gratis Modus KI Kern
+5. In Vercel warten, bis Ready + Production erscheint.
+6. Website hart neu laden:
+   Mac: Cmd + Shift + R
+   Windows: Ctrl + F5
+   iPhone: Safari schließen und Seite erneut öffnen.
+
+NEU IN V5
+- zwingende Kostenwarnung vor OpenAI-Bildern und Sora-Videos
+- kostenlose Alternative direkt im Kostenfenster
+- Schalter „Nur kostenlos aktiv“
+- kostenlose externe Bildversion
+- kostenloses Browser-Bildvideo beziehungsweise bearbeitbares Video-Projekt
+- Word-Dateien (.docx)
+- Excel-Dateien (.xlsx)
+- PDF, TXT, CSV, JSON, HTML und Markdown bleiben erhalten
+- Spracheingabe im Browser
+- Antworten vorlesen
+- alle Chats als JSON exportieren
+- Admin-Ansicht mit Rückgängig und Wiederholen
+- Admin-Vorschau für Desktop, Tablet und Handy
+- kostenloser Systemcheck ohne Modellanfrage
+
+SUPABASE
+Die Datei „NUR-BEI-NEUINSTALLATION-SUPABASE-EINFACH-OEFFNEN.html“ ist nur für eine komplett neue Datenbank gedacht.
+Bei deiner bestehenden Yildiz-AI-Installation NICHT erneut ausführen.
