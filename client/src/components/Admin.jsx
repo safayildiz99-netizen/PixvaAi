@@ -31,6 +31,7 @@ const DEFAULT_UI_SETTINGS = {
   maintenanceMode: false,
   compactSidebar: false,
   mobileHistoryDrawer: true,
+  costPromptMode: 'all',
   navItems: DEFAULT_NAV_ITEMS,
   texts: {
     appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
@@ -521,6 +522,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         <button className={settingsDraft.allowGuest ? 'active' : ''} onClick={()=>patchSettings({allowGuest:!settingsDraft.allowGuest})}>{settingsDraft.allowGuest ? <Eye size={15}/> : <EyeOff size={15}/>}Gastmodus</button>
         <button className={settingsDraft.compactSidebar ? 'active' : ''} onClick={()=>patchSettings({compactSidebar:!settingsDraft.compactSidebar})}>Kompakte Seitenleiste</button>
         <button className={settingsDraft.maintenanceMode ? 'active warning' : ''} onClick={()=>patchSettings({maintenanceMode:!settingsDraft.maintenanceMode})}>Wartungshinweis</button>
+        <div className="admin-cost-prompt-control"><span>Kostenabfrage</span><button className={settingsDraft.costPromptMode !== 'none' ? 'active' : ''} onClick={()=>patchSettings({costPromptMode:'all'})}>Für alle</button><button className={settingsDraft.costPromptMode === 'none' ? 'active warning' : ''} onClick={()=>patchSettings({costPromptMode:'none'})}>Für niemanden</button></div>
         <label>Startansicht<select value={settingsDraft.defaultView} onChange={(event)=>patchSettings({defaultView:event.target.value})}><option value="chat">Chat</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option><option value="projects">Projekte</option><option value="plans">Abos & Preise</option></select></label>
         <label>Work-Ziel<select value={settingsDraft.workView} onChange={(event)=>patchSettings({workView:event.target.value})}><option value="projects">Projekte</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option></select></label>
       </div>

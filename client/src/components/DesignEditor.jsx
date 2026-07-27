@@ -16,7 +16,8 @@ import { canUseFeature } from '../plans.js';
 const formats = {
   square: { label: '1:1 · 1080 × 1080', canvas: [650, 650], export: [1080, 1080] },
   post: { label: '4:5 · 1080 × 1350', canvas: [600, 750], export: [1080, 1350] },
-  story: { label: '9:16 · 1080 × 1920', canvas: [450, 800], export: [1080, 1920] }
+  story: { label: '9:16 · 1080 × 1920', canvas: [450, 800], export: [1080, 1920] },
+  landscape: { label: '16:9 · 1920 × 1080', canvas: [800, 450], export: [1920, 1080] }
 };
 
 const fontOptions = ['Arial', 'Inter', 'Helvetica', 'Georgia', 'Times New Roman', 'Verdana', 'Impact'];
@@ -533,6 +534,25 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           setBackground(canvas.backgroundColor || '#f6f0e5');
         } catch {
           mode === 'flyer' ? addOfferTemplate(canvas, canvas.width, canvas.height) : addCreativeTemplate(canvas, canvas.width, canvas.height);
+        }
+      } else if (mode === 'image' && project?.data?.initialImage) {
+        try {
+          canvas.clear();
+          canvas.backgroundColor = '#ffffff';
+          const image = await createFabricImage(project.data.initialImage);
+          const scale = Math.min(canvas.width / Math.max(1, image.width), canvas.height / Math.max(1, image.height));
+          image.set({
+            left: canvas.width / 2, top: canvas.height / 2, originX: 'center', originY: 'center',
+            scaleX: scale, scaleY: scale, dataRole: 'generated-image', displayName: 'KI-Bild'
+          });
+          canvas.add(image);
+          canvas.setActiveObject(image);
+          canvas.requestRenderAll();
+          setBackground('#ffffff');
+          setStatus('KI-Bild geladen. Du kannst es verschieben, skalieren, drehen, zuschneiden, filtern und mit Texten oder Formen ergänzen.');
+        } catch {
+          addCreativeTemplate(canvas, canvas.width, canvas.height);
+          setStatus('Das KI-Bild konnte nicht direkt geladen werden.');
         }
       } else {
         mode === 'flyer' ? addOfferTemplate(canvas, canvas.width, canvas.height) : addCreativeTemplate(canvas, canvas.width, canvas.height);

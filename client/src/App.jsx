@@ -46,6 +46,7 @@ const DEFAULT_UI_SETTINGS = {
   maintenanceMode: false,
   compactSidebar: false,
   mobileHistoryDrawer: true,
+  costPromptMode: 'all',
   navItems: DEFAULT_NAV_ITEMS,
   texts: {
     appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
@@ -182,6 +183,13 @@ export default function App(){
     setSelectedProject(project);setView(project.type);
   }
   function saved(){setRefreshKey((n)=>n+1)}
+  function openGeneratedImageProject(imageProject){
+    if(!imageProject?.data?.initialImage) return;
+    if(!canUseFeature(subscription,'image',activeUser?.role)){setRequestedView('image');setView('plans');return}
+    setSelectedProject({id:`generated-image-${Date.now()}`,type:'image',name:imageProject.name||'KI-Bild bearbeiten',data:imageProject.data});
+    setView('image');
+  }
+
   function openGeneratedVideoProject(videoProject){
     if(!videoProject?.data?.scenes?.length) return;
     if(!canUseFeature(subscription,'video',activeUser?.role)){setRequestedView('video');setView('plans');return}
@@ -218,7 +226,7 @@ export default function App(){
       {activeUser.mustChangePassword&&!guest&&<div className="warning-banner">Das Startpasswort ist noch aktiv. Öffne links „Mein Konto“ und lege dein eigenes Passwort fest.</div>}
       {requestedView&&view==='plans'&&<div className="plan-unlock-banner"><LockKeyhole size={17}/><span>Der Bereich „{titles[requestedView]||requestedView}“ ist in deinem aktuellen Zugang nicht enthalten. Während der Beta kannst du den passenden Zugang kostenlos aktivieren.</span></div>}
       <div className="workspace-content">
-        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')}/>} 
+        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={uiSettings.costPromptMode || 'all'}/>} 
         {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText}/>} 
         {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText}/>} 
         {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText}/>} 

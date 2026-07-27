@@ -308,7 +308,7 @@ function estimateImagePrice(settings) {
 
 function estimateVideoPrice(settings) {
   const seconds = Number(settings.seconds || 4);
-  return seconds * (settings.model === 'sora-2-pro' ? 0.30 : 0.10);
+  return seconds * (settings.model === 'sora-2-pro' ? 0.50 : 0.10);
 }
 
 function delayWithSignal(ms, signal) {
@@ -728,7 +728,7 @@ function hydrateMessages(messages) {
   });
 }
 
-export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest = true, uiText = {}, subscription, userRole = 'user', onOpenPlans }) {
+export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId = 'guest', isGuest = true, uiText = {}, subscription, userRole = 'user', onOpenPlans, costPromptMode = 'all' }) {
   const welcomeMessage = useMemo(() => ({ ...WELCOME_MESSAGE, content: uiText.welcome || WELCOME_MESSAGE.content }), [uiText.welcome]);
   const [messages, setMessages] = useState([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState([]);
@@ -744,7 +744,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   const [creationMode, setCreationMode] = useState('auto');
   const [showMediaSettings, setShowMediaSettings] = useState(false);
   const [imageSettings, setImageSettings] = useState({ aspect: 'post', quality: 'medium', style: 'auto', model: 'gpt-image-2', background: 'auto' });
-  const [videoSettings, setVideoSettings] = useState({ seconds: '4', aspect: 'story', model: 'sora-2', useReference: false });
+  const [videoSettings, setVideoSettings] = useState({ seconds: '4', aspect: 'story', model: 'sora-2-pro', useReference: false });
   const [editingMessageId, setEditingMessageId] = useState('');
   const [editingText, setEditingText] = useState('');
   const [listening, setListening] = useState(false);
@@ -1304,8 +1304,9 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   }
 
   async function generateVideoMessage(clean, sourceImages, signal, requestId, runId) {
-    const targetWidth = videoSettings.aspect === 'landscape' ? 1280 : 720;
-    const targetHeight = videoSettings.aspect === 'landscape' ? 720 : 1280;
+    const pro = videoSettings.model === 'sora-2-pro';
+    const targetWidth = videoSettings.aspect === 'landscape' ? (pro ? 1792 : 1280) : (pro ? 1024 : 720);
+    const targetHeight = videoSettings.aspect === 'landscape' ? (pro ? 1024 : 720) : (pro ? 1792 : 1280);
     const rawReferenceImage = sourceImages.find((value) => String(value || '').startsWith('data:image/')) || '';
     setGenerationStatus(runId, rawReferenceImage ? 'Referenzbild wird exakt für Sora angepasst …' : 'Sora-Videoauftrag wird gestartet …');
     const referenceImage = rawReferenceImage
@@ -1487,6 +1488,9 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
       } else if (freeOnly || isGuest) {
         paidChoice = 'free';
         if (isGuest) setStatus('Gastmodus: Es wird automatisch nur die kostenlose Alternative verwendet.');
+      } else if (costPromptMode === 'none') {
+        paidChoice = 'paid';
+        setStatus(`Kostenabfrage ist vom Admin deaktiviert. Die ${videoAction ? 'Sora-Video' : 'OpenAI-Bild'}-API kann trotzdem Guthaben verbrauchen.`);
       } else {
         paidChoice = await requestCostApproval({
           kind: videoAction ? 'video' : 'image',
@@ -1582,6 +1586,24 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   }
 
 
+  async function openImageInEditor(item) {
+    try {
+      setStatus('Bild wird für den Editor vorbereitet …');
+      let source = item?.data || item?.previewUrl || item?.imageUrl || '';
+      if (!String(source).startsWith('data:image/')) source = await fetchRemoteImageDataUrl(source);
+      if (!String(source).startsWith('data:image/')) throw new Error('Das Bild konnte nicht für den Editor geladen werden.');
+      const format = imageSettings.aspect === 'square' ? 'square' : imageSettings.aspect === 'landscape' ? 'landscape' : 'post';
+      onOpenImageProject?.({
+        name: String(item?.title || item?.name || 'KI-Bild bearbeiten').slice(0, 80),
+        type: 'image',
+        data: { format, initialImage: source, sourcePrompt: item?.prompt || '' }
+      });
+    } catch (error) {
+      setStatus(error.message || 'Bild konnte nicht im Editor geöffnet werden.');
+    }
+  }
+
+
   function renderMessageAttachment(item, index) {
     const key = `${item.name || item.kind}-${index}`;
     if (item.kind === 'image-link') {
@@ -1593,6 +1615,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
           <button onClick={() => openExternal(item.imageUrl)}><ExternalLink size={14}/>Bild öffnen</button>
           {item.sourceUrl && <button onClick={() => openExternal(item.sourceUrl)}><Search size={14}/>Quelle</button>}
           <button onClick={() => createPdfFromSearchResult(item, item.title || item.name)}><FileDown size={14}/>PDF</button>
+          {onOpenImageProject && <button onClick={() => openImageInEditor(item)}><Edit3 size={14}/>Bearbeiten</button>}
         </div>
       </div>;
     }
@@ -1603,6 +1626,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
         <div className="attachment-actions">
           <button onClick={() => downloadMedia(item.previewUrl || item.data, item.name || 'yildiz-ai.png')}><Download size={14}/>Speichern</button>
           <button onClick={() => reuseImage(item)}><ImagePlus size={14}/>Als Referenz</button>
+          {onOpenImageProject && <button onClick={() => openImageInEditor(item)}><Edit3 size={14}/>Im Editor bearbeiten</button>}
         </div>
       </div>;
     }
@@ -1728,7 +1752,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
             <button type="button" className={creationMode === 'video' ? 'active' : ''} onClick={() => { setCreationMode('video'); setShowMediaSettings(true); }}><Video size={14}/>Video</button>
           </div>
           <button type="button" className="media-settings-toggle" onClick={() => setShowMediaSettings((value) => !value)}><Settings2 size={15}/>Einstellungen {showMediaSettings ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</button>
-          <button type="button" className={`free-only-toggle ${freeOnly || (!canPaidImages && !canPaidVideos) ? 'active' : ''}`} onClick={() => { if (!canPaidImages && !canPaidVideos) onOpenPlans?.(); else setFreeOnly((value) => !value); }}><ShieldCheck size={14}/>{!canPaidImages && !canPaidVideos ? `${planName} · nur kostenlos` : freeOnly ? 'Nur kostenlos aktiv' : 'Kostenpflichtig möglich'}</button><span className="cost-preview">{(!canPaidImages && !canPaidVideos) || freeOnly ? '0,00 € Modus' : creationMode === 'video' ? canPaidVideos ? `ca. ${formatUsd(estimateVideoPrice(videoSettings))}` : 'Studio Pro erforderlich' : creationMode === 'image' ? canPaidImages ? `ca. ${formatUsd(estimateImagePrice(imageSettings))}` : 'Creator erforderlich' : 'Vor Kosten kommt Bestätigung'}</span>
+          <button type="button" className={`free-only-toggle ${freeOnly || (!canPaidImages && !canPaidVideos) ? 'active' : ''}`} onClick={() => { if (!canPaidImages && !canPaidVideos) onOpenPlans?.(); else setFreeOnly((value) => !value); }}><ShieldCheck size={14}/>{!canPaidImages && !canPaidVideos ? `${planName} · nur kostenlos` : freeOnly ? 'Nur kostenlos aktiv' : 'Kostenpflichtig möglich'}</button><span className="cost-preview">{(!canPaidImages && !canPaidVideos) || freeOnly ? '0,00 € Modus' : creationMode === 'video' ? canPaidVideos ? `ca. ${formatUsd(estimateVideoPrice(videoSettings))}` : 'Studio Pro erforderlich' : creationMode === 'image' ? canPaidImages ? `ca. ${formatUsd(estimateImagePrice(imageSettings))}` : 'Creator erforderlich' : costPromptMode === 'none' ? 'Admin: keine Kostenabfrage' : 'Vor Kosten kommt Bestätigung'}</span>
         </div>
 
         {showMediaSettings && <div className="media-settings-panel">
@@ -1747,10 +1771,10 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
             <div className="media-settings-grid">
               <label>Länge<select value={videoSettings.seconds} onChange={(event) => setVideoSettings({ ...videoSettings, seconds: event.target.value })}><option value="4">4 Sekunden</option><option value="8">8 Sekunden</option><option value="12">12 Sekunden</option></select></label>
               <label>Format<select value={videoSettings.aspect} onChange={(event) => setVideoSettings({ ...videoSettings, aspect: event.target.value })}><option value="story">Hochformat 9:16</option><option value="landscape">Querformat 16:9</option></select></label>
-              <label>Modell<select value={videoSettings.model} onChange={(event) => setVideoSettings({ ...videoSettings, model: event.target.value })}><option value="sora-2">Sora 2</option><option value="sora-2-pro">Sora 2 Pro</option></select></label>
+              <label>Modell<select value={videoSettings.model} onChange={(event) => setVideoSettings({ ...videoSettings, model: event.target.value })}><option value="sora-2">Sora 2 · günstiger</option><option value="sora-2-pro">Sora 2 Pro · bessere Qualität</option></select></label>
               <label className="checkbox-row"><input type="checkbox" checked={videoSettings.useReference} onChange={(event) => setVideoSettings({ ...videoSettings, useReference: event.target.checked })}/>Angehängtes/letztes Bild verwenden</label>
             </div>
-            <small>Geschätzte Kosten: {formatUsd(estimateVideoPrice(videoSettings))}. Sora 2 Pro ist deutlich teurer.</small>
+            <small>Geschätzte Kosten: {formatUsd(estimateVideoPrice(videoSettings))}. Pro nutzt eine höhere Auflösung und ist deutlich teurer.</small>
           </div>}
           {isGuest && <div className="media-login-note">Chat und Editoren funktionieren als Gast. Für OpenAI-Bilder und Sora-Videos bitte anmelden.</div>}
         </div>}

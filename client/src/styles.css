@@ -572,3 +572,14 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 
 /* V6 admin overview adapts automatically to all statistic cards. */
 .admin-stat-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+
+
+/* V7: Beta-Plan-Test, globale Kostenabfrage und KI-Bildbearbeitung */
+.admin-cost-prompt-control{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid rgba(99,199,255,.22);border-radius:12px;background:rgba(4,16,25,.45)}
+.admin-cost-prompt-control>span{font-size:12px;font-weight:800;color:#c7d8e5;margin-right:2px}
+.admin-cost-prompt-control button{padding:7px 10px}
+.admin-cost-prompt-control button.warning{border-color:rgba(255,188,56,.55);color:#ffd88a}
+.beta-plan-test-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}
+.beta-plan-test-row button{min-height:44px;border:1px solid rgba(99,199,255,.25);border-radius:12px;background:#0c1922;color:#dcebf4;font-weight:750;padding:8px}
+.beta-plan-test-row button.active{background:linear-gradient(100deg,rgba(99,199,255,.24),rgba(255,212,0,.18));border-color:#63c7ff;color:#fff}
+@media(max-width:760px){.beta-plan-test-row{grid-template-columns:1fr}.admin-cost-prompt-control{width:100%;justify-content:space-between;flex-wrap:wrap}}

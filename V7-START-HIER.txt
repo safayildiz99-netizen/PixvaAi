@@ -1,0 +1,38 @@
+YILDIZ AI V7 – INSTALLATION
+===========================
+
+DIESES UPDATE BRAUCHT KEINEN NEUEN SUPABASE-CODE.
+
+1. Diesen Ordner öffnen.
+2. Nur den gesamten Inhalt in die Hauptseite des GitHub-Projekts Yildiz-AI hochladen.
+3. Vorhandene Dateien ersetzen.
+4. Commit-Nachricht:
+   Yildiz AI V7 Video Pro Bildeditor Beta Test Kostensteuerung
+5. In Vercel warten, bis das Deployment Ready + Production zeigt.
+6. Webseite hart neu laden:
+   Mac: Cmd + Shift + R
+   Windows: Ctrl + F5
+   iPhone: Safari schließen und neu öffnen.
+
+NEU IN V7
+---------
+- Sora 2 Pro ist standardmäßig ausgewählt.
+- Pro-Videos werden in 1024 x 1792 beziehungsweise 1792 x 1024 angefordert.
+- Stabilerer Video-Prompt gegen Flackern, Morphing und zufällige Texte.
+- Jeder angemeldete Account kann Free, Creator und Studio Pro in der Beta für 0,00 Euro testen und jederzeit wechseln.
+- Unter Mein Konto gibt es direkte Plan-Test-Buttons.
+- Admin > Ansicht > Kostenabfrage: Für alle oder Für niemanden.
+- Bei Für niemanden wird kein Bestätigungsfenster gezeigt. OpenAI-/Sora-Nutzung kann trotzdem Geld kosten.
+- KI-Bilder und kostenlose Suchbilder haben einen Button Im Editor bearbeiten.
+- Der Bildeditor öffnet das Bild als frei bewegliche Ebene.
+- Querformat 16:9 wurde dem Bildeditor hinzugefügt.
+
+KOSTENHINWEIS
+-------------
+Die Beta-Abos kosten 0,00 Euro.
+Sora 2 Pro und OpenAI-Bilder verwenden jedoch das API-Guthaben des Betreibers.
+Die App zeigt die geschätzten Kosten an. Wenn der Admin die Kostenabfrage auf Für niemanden stellt,
+startet die kostenpflichtige Anfrage ohne zusätzliches Pop-up.
+
+Für eine komplette Neuinstallation ist weiterhin die Datei
+NUR-BEI-NEUINSTALLATION-SUPABASE-EINFACH-OEFFNEN.html vorhanden.

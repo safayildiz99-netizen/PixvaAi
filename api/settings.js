@@ -13,6 +13,11 @@ export default async function handler(req, res) {
       guestPaidMedia: false,
       guestAccess: true,
       betaSubscriptions: true,
+      betaAllPlansTestable: true,
+      defaultVideoModel: 'sora-2-pro',
+      defaultVideoResolution: '1024x1792',
+      costPromptMode: 'admin-controlled',
+      generatedImageEditing: true,
       paymentsEnabled: false,
       plans: ['free','creator','studio']
     });

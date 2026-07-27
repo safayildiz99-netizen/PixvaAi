@@ -46,7 +46,7 @@ export default function Subscriptions({ user, isGuest = false, subscription, onS
       <div>
         <span className="subscription-kicker"><Sparkles size={16}/> Yildiz AI Beta</span>
         <h2>{uiText.plansTitle || 'Wähle den passenden Zugang.'}</h2>
-        <p><strong>{uiText.plansSubtitle || 'Free, Creator und Studio Pro – während der Beta ohne Zahlung.'}</strong><br/>Die Preise sind Beispielpreise für später. Während der Beta aktivierst du jedes Abo ohne Zahlung. Kosten können nur durch echte OpenAI-Bilder oder Sora-Videos entstehen – davor erscheint weiterhin eine deutliche Kostenbestätigung.</p>
+        <p><strong>{uiText.plansSubtitle || 'Free, Creator und Studio Pro – während der Beta ohne Zahlung.'}</strong><br/>Die Preise sind Beispielpreise für später. Jeder angemeldete Account kann während der Beta jederzeit Free, Creator und Studio Pro ohne Zahlung testen und wechseln. Kosten können nur durch echte OpenAI-Bilder oder Sora-Videos entstehen – davor erscheint weiterhin eine deutliche Kostenbestätigung.</p>
       </div>
       <div className="beta-price-card">
         <CircleDollarSign size={28}/>

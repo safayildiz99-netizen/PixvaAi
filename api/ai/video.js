@@ -74,7 +74,7 @@ function imageDimensions(image) {
 function allowedSize(model, requested, aspect) {
   const landscape = aspect === 'landscape';
   if (model === 'sora-2-pro') {
-    const proSizes = ['720x1280', '1280x720', '1024x1792', '1792x1024', '1080x1920', '1920x1080'];
+    const proSizes = ['720x1280', '1280x720', '1024x1792', '1792x1024'];
     return proSizes.includes(requested) ? requested : (landscape ? '1280x720' : '720x1280');
   }
   return landscape ? '1280x720' : '720x1280';
@@ -83,7 +83,6 @@ function allowedSize(model, requested, aspect) {
 function estimatedVideoCost(model, size, seconds) {
   const duration = Number(seconds || 4);
   if (model !== 'sora-2-pro') return duration * 0.10;
-  if (['1080x1920', '1920x1080'].includes(size)) return duration * 0.70;
   if (['1024x1792', '1792x1024'].includes(size)) return duration * 0.50;
   return duration * 0.30;
 }
@@ -110,7 +109,7 @@ async function createVideo(req, res, apiKey) {
   const prompt = String(body?.prompt || '').trim().slice(0, 4000);
   if (!prompt) return send(res, 400, { error: 'Bitte gib einen Video-Prompt ein.' });
 
-  const requestedModel = String(body?.model || process.env.OPENAI_VIDEO_MODEL || 'sora-2').trim();
+  const requestedModel = String(body?.model || process.env.OPENAI_VIDEO_MODEL || 'sora-2-pro').trim();
   const model = ['sora-2', 'sora-2-pro'].includes(requestedModel) ? requestedModel : 'sora-2';
   const size = allowedSize(model, String(body?.size || ''), body?.aspect);
   const seconds = ['4', '8', '12'].includes(String(body?.seconds)) ? String(body.seconds) : '4';
@@ -124,7 +123,7 @@ async function createVideo(req, res, apiKey) {
 
     const form = new FormData();
     form.append('model', model);
-    form.append('prompt', `${prompt}\nCreate a polished commercial-quality video with coherent motion, realistic lighting, strong composition, and synchronized audio. Keep visual continuity. Do not add captions, random letters, watermarks, or logos unless explicitly requested.`);
+    form.append('prompt', `${prompt}\nCreate a premium commercial-quality video with stable subject identity, coherent motion, realistic physics, natural hands and faces, cinematic lighting, controlled camera movement, consistent colors, high detail, and synchronized audio. Avoid flicker, morphing, duplicated objects, random text, subtitles, watermarks, and unwanted logos. Keep visual continuity from the first frame to the last.`);
     form.append('size', size);
     form.append('seconds', seconds);
 

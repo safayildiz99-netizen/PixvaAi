@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, BadgeEuro, CheckCircle2, CloudDownload, Database, Image, KeyRound, LogOut, Save, ShieldCheck, Trash2, UserCircle2, Video } from 'lucide-react';
 import { api, downloadText } from '../api.js';
-import { formatPlanPrice, getPlan, normalizeSubscription } from '../plans.js';
+import { PLAN_CATALOG, formatPlanPrice, getPlan, normalizeSubscription } from '../plans.js';
 
 function money(value) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
@@ -44,6 +44,18 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
     } catch (requestError) {
       setError(requestError.message || 'Das Passwort konnte nicht geändert werden.');
     } finally { setSaving(false); }
+  }
+
+
+  async function testPlan(planId) {
+    if (user.role === 'admin') return;
+    setDataBusy(`plan-${planId}`); setStatus(''); setError('');
+    try {
+      const result = await api('/api/subscription/select', { method: 'POST', body: JSON.stringify({ planId }) });
+      onSubscriptionChanged?.(normalizeSubscription(result.subscription));
+      setStatus(`${getPlan(planId).name} ist jetzt als kostenloser Beta-Test aktiv. Es wurde nichts berechnet.`);
+    } catch (requestError) { setError(requestError.message || 'Der Testzugang konnte nicht aktiviert werden.'); }
+    finally { setDataBusy(''); }
   }
 
   async function cancelSubscription() {
@@ -103,6 +115,7 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
         <h3><BadgeEuro size={19}/> Mein Beta-Abo</h3>
         <div className="account-plan-name"><div><span>Aktiver Zugang</span><b>{user.role === 'admin' ? 'Admin · Vollzugriff' : plan.name}</b></div><strong>{formatPlanPrice(0)}<small>/ Beta</small></strong></div>
         <p>Späterer Beispielpreis: {formatPlanPrice(plan.examplePrice)} pro Monat. Während der Beta gibt es keine Zahlung und keine automatische Verlängerung mit Abbuchung.</p>
+        {user.role !== 'admin' && <div className="beta-plan-test-row">{PLAN_CATALOG.map((entry)=><button key={entry.id} className={currentSubscription.planId===entry.id?'active':''} disabled={Boolean(dataBusy)} onClick={()=>testPlan(entry.id)}>{entry.name} testen · 0,00 €</button>)}</div>}
         <div className="account-plan-actions"><button className="primary-btn" onClick={onOpenPlans}><BadgeEuro size={17}/>Abos vergleichen</button>{user.role !== 'admin' && currentSubscription.planId !== 'free' && <button onClick={cancelSubscription} disabled={dataBusy === 'subscription'}><LogOut size={17}/>Abo kündigen</button>}</div>
       </article>
 

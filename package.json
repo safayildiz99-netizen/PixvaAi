@@ -1,9 +1,9 @@
 {
   "name": "yildiz-ai-studio",
-  "version": "11.0.0",
+  "version": "12.0.0",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI V6: Beta-Abos ohne Zahlung, Planrechte, Kostenwarnungen, Datenkontrolle und Mehrseiten-Admin-Liveeditor",
+  "description": "Yildiz AI V7: Beta-Planwechsel, Sora-Pro-Qualität, globale Kostenabfrage und KI-Bildbearbeitung",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "vercel-build": "npm run build"
