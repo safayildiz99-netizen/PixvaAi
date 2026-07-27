@@ -1,42 +1,24 @@
-# Yildiz AI V10 Production
+# Yildiz AI V10
 
-Eine neue Produktionsgrundlage für Yildiz AI mit sicherem Kontosystem, privaten Nutzerdaten, dauerhaften Medienaufträgen, echtem Editor, Dateierstellung und Zahlungen.
-
-## Kernfunktionen
+Produktionsgrundlage mit:
 
 - Supabase Auth statt eigener Passworttabelle
-- RLS für alle nutzerbezogenen Daten
-- privater Supabase Storage unter der jeweiligen Nutzer-ID
-- dauerhafte OpenAI-Sora-Aufträge mit Webhook
-- serverseitige Abo-, Limit-, Budget-, Kostenwarnungs- und Idempotenzprüfung
-- Stripe-Kartencheckout und PayPal
-- einmalige kostenpflichtige Update-ZIPs
-- echtes PDF, Word/DOCX und Excel/XLSX
-- Bildeditor mit Text-Ebenen, Schriften, Ebenen, KI-Maske und Versionen
-- Produktbildsuche mit Quelle und Rechtehinweis
-- Systemstatus, Fehlerprotokoll, Meldungen, Audit und Nutzer-Sperren
+- RLS für Profile, Chats, Projekte, Medien, Designs, Websites, KI-Aufträge, Abos, Käufe, Kosten, Meldungen und Fehler
+- privatem Supabase Storage unter `nutzer-id/bilder`, `videos`, `pdf`, `designs` und `uploads`
+- dauerhaften OpenAI-Sora-Aufträgen plus Webhook
+- serverseitiger Abo-, Limit-, Budget-, Kostenwarnungs- und Idempotenzprüfung
+- Stripe Checkout und PayPal; Preise können sichtbar, aber nicht kaufbar sein
+- echtem PDF-, DOCX- und XLSX-Export
+- Bildeditor mit Textobjekten, Schriftarten, Ebenen, Zuschneiden, KI-Bereichsbearbeitung, Versionen, Vergleich und Export
+- Systemstatus, Fehlerprotokoll, Audit-Protokoll, Sperren, Rate Limits und Meldesystem
 
-## Start
+## Wichtige Sicherheitsentscheidung
 
-1. `V10-START-HIER.txt` lesen.
-2. `V10-SUPABASE-EINFACH-OEFFNEN.html` öffnen und den SQL-Code in Supabase ausführen.
-3. Werte aus `.env.example` in Vercel eintragen.
-4. Stripe-, PayPal- und OpenAI-Webhooks konfigurieren.
-5. `npm run check` und `npm test` ausführen.
-6. `tests/MANUELLER-ABNAHMETEST.md` vollständig abarbeiten.
+Yildiz AI nimmt keine rohe Kreditkartennummer im eigenen Formular oder Server entgegen. Karten werden über Stripe Checkout bzw. PayPal eingegeben. Dadurch bleiben Kartendaten beim Zahlungsanbieter.
 
-## Kreditkarten
+## Einschränkung bei Schrift in Bildern
 
-V10 nimmt absichtlich keine vollständige Kreditkartennummer auf der eigenen Webseite entgegen. Bei Stripe wird ausschließlich ein gehosteter Kartencheckout geöffnet. PayPal wird ebenfalls beim Zahlungsanbieter bestätigt. Yildiz AI speichert deshalb keine vollständigen Karteninformationen.
+Schrift, die bereits als Pixel in einem JPG/PNG eingebrannt ist, ist kein editierbares Textobjekt. V10 bietet daher zwei Wege:
 
-## Zahlungsziel
-
-Der Admin wählt in Yildiz AI Stripe oder PayPal als aktiven Anbieter. Das Geld geht an das Händlerkonto, das serverseitig über die zugehörigen Vercel-Zugangsdaten konfiguriert wurde. Eine Kontobezeichnung kann im Adminbereich angezeigt werden; geheime Händlerzugänge bleiben ausschließlich in Vercel.
-
-## Kostenpflichtige Updates
-
-Ein Admin lädt die Update-ZIP unter **Admin → Zahlungen → Produkte** hoch, setzt den Preis und aktiviert `Kaufbar`. Wird `Kaufbar` oder der globale Zahlungsschalter deaktiviert, bleibt der Preis auf Wunsch sichtbar, aber ein Kauf ist nicht möglich. Nur ein bezahltes Konto erhält einen kurz gültigen privaten Download-Link.
-
-## Schrift in vorhandenen Bildern
-
-Bereits in JPG/PNG eingebrannte Schrift ist nur noch Pixelinhalt. V10 kann den Bereich per KI entfernen oder ersetzen und danach eine neue echte Text-Ebene hinzufügen. Diese Text-Ebene lässt sich doppelklicken, ändern und mit einer anderen Schriftart formatieren.
+1. neue Text-Ebene hinzufügen und Schriftart frei ändern;
+2. alten Textbereich markieren, per KI entfernen/ersetzen und anschließend als echte Text-Ebene neu setzen.

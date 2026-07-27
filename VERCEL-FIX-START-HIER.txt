@@ -1,0 +1,31 @@
+YILDIZ AI V10.0.1 – VERCEL BUILD-FIX
+====================================
+
+FEHLER
+------
+Vercel meldete:
+The pattern "api/webhooks/openai.js" defined in "functions" doesn't match any Serverless Functions inside the "api" directory.
+
+URSACHE
+-------
+Die V10-vercel.json enthielt neben der allgemeinen Regel api/**/*.js zwei zusätzliche Einzelregeln:
+- api/webhooks/openai.js
+- api/ai/video.js
+
+Diese Einzelregeln wurden bei deinem Deployment nicht als passende Funktionen erkannt. Da beide Dateien bereits von api/**/*.js erfasst werden, sind die Einzelregeln unnötig.
+
+SCHNELLSTE LÖSUNG
+-----------------
+Nur die neue Datei vercel.json in die Hauptseite deines GitHub-Projekts hochladen und die vorhandene vercel.json ersetzen.
+
+Commit-Nachricht:
+Yildiz AI V10.0.1 Vercel Functions Fix
+
+Danach startet Vercel automatisch ein neues Deployment.
+
+NICHT ÄNDERN
+------------
+- api-Ordner muss in der GitHub-Hauptseite bleiben.
+- client-Ordner muss in der GitHub-Hauptseite bleiben.
+- package.json und vercel.json müssen ebenfalls in der Hauptseite liegen.
+- In Vercel darf Root Directory nicht auf client gestellt sein. Es soll leer beziehungsweise Projektstamm sein.

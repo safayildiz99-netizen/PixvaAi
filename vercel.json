@@ -1,10 +1,11 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "client/dist",
   "functions": {
-    "api/**/*.js": { "maxDuration": 60 },
-    "api/webhooks/openai.js": { "maxDuration": 300 },
-    "api/ai/video.js": { "maxDuration": 60 }
+    "api/**/*.js": {
+      "maxDuration": 60
+    }
   },
   "routes": [
     { "handle": "filesystem" },
