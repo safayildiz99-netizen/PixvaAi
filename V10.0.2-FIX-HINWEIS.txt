@@ -1,0 +1,12 @@
+YILDIZ AI V10.0.2 – STRIPE NPM FIX
+=================================
+
+Behoben:
+- stripe@^18.6.0 war keine veröffentlichte npm-Version und verursachte ETARGET.
+- package.json verwendet jetzt die fest gepinnte Version stripe@22.3.2.
+- Der Vercel Functions Pattern Fix aus V10.0.1 bleibt enthalten.
+
+Commit-Nachricht:
+Yildiz AI V10.0.2 Stripe NPM Fix
+
+Supabase muss nicht erneut installiert werden.
