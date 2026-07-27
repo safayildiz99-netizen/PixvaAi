@@ -11,7 +11,10 @@ export default async function handler(req, res) {
       usageLimits: true,
       accountPrivateMediaJobs: true,
       guestPaidMedia: false,
-      guestAccess: true
+      guestAccess: true,
+      betaSubscriptions: true,
+      paymentsEnabled: false,
+      plans: ['free','creator','studio']
     });
   } catch (error) {
     return send(res, 401, { error: error.message });

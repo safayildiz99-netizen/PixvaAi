@@ -138,6 +138,35 @@ export async function api(path, options = {}) {
     });
   }
 
+  if (path === '/api/subscription' && method === 'GET') {
+    return rpc('app_my_subscription', { p_token: token });
+  }
+  if (path === '/api/subscription/select' && method === 'POST') {
+    return rpc('app_beta_select_plan', { p_token: token, p_plan_id: body.planId });
+  }
+  if (path === '/api/subscription/cancel' && method === 'POST') {
+    return rpc('app_cancel_subscription', { p_token: token });
+  }
+  if (path === '/api/admin/subscriptions' && method === 'GET') {
+    return rpc('app_admin_subscription_overview', { p_token: token });
+  }
+  if (path === '/api/admin/subscriptions' && (method === 'POST' || method === 'PUT')) {
+    return rpc('app_admin_set_subscription', {
+      p_token: token,
+      p_user_id: body.userId,
+      p_plan_id: body.planId
+    });
+  }
+  if (path === '/api/account/export' && method === 'GET') {
+    return rpc('app_export_my_data', { p_token: token });
+  }
+  if (path === '/api/account/delete-chats' && method === 'POST') {
+    return rpc('app_delete_my_chats', { p_token: token });
+  }
+  if (path === '/api/account/delete-projects' && method === 'POST') {
+    return rpc('app_delete_my_projects', { p_token: token });
+  }
+
   if (path === '/api/projects' && method === 'GET') {
     return rpc('app_list_projects', { p_token: token });
   }

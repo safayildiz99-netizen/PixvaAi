@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ClipboardCopy, Cpu, Eye, EyeOff, GripVertical, Image, KeyRound, Laptop,
+  Activity, ArrowDown, ArrowUp, BadgeEuro, BarChart3, CheckCircle2, ClipboardCopy, Cpu, Crown, Eye, EyeOff, GripVertical, Image, KeyRound, Laptop,
   LayoutDashboard, MessageSquareText, Monitor, Palette, Plus, Redo2, RefreshCw, RotateCcw, Save, Smartphone, Tablet,
   Search, Shield, ShieldAlert, Trash2, Undo2, UserRoundCog, Video, XCircle
 } from 'lucide-react';
 import { api } from '../api.js';
+import { PLAN_CATALOG, formatPlanPrice, getPlan } from '../plans.js';
 
 const DEFAULT_NAV_ITEMS = [
   { id:'chat', label:'Chat', visible:true },
@@ -12,7 +13,8 @@ const DEFAULT_NAV_ITEMS = [
   { id:'image', label:'Motive & Editor', visible:true },
   { id:'video', label:'Video-Studio', visible:true },
   { id:'website', label:'Website-Builder', visible:true },
-  { id:'projects', label:'Projekte', visible:true }
+  { id:'projects', label:'Projekte', visible:true },
+  { id:'plans', label:'Abos & Preise', visible:true }
 ];
 
 const DEFAULT_UI_SETTINGS = {
@@ -24,6 +26,7 @@ const DEFAULT_UI_SETTINGS = {
   showVideo: true,
   showWebsite: true,
   showProjects: true,
+  showPlans: true,
   announcement: '',
   maintenanceMode: false,
   compactSidebar: false,
@@ -33,7 +36,13 @@ const DEFAULT_UI_SETTINGS = {
     appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
     statusTitle:'Yildiz AI · Gemini + OpenAI + Sora',
     welcome:'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und hochladen.',
-    composer:'Frag Yildiz AI …'
+    composer:'Frag Yildiz AI …',
+    flyerTitle:'Angebote & Flyer', flyerSubtitle:'Bearbeitbare Vorlagen für Angebote, Produkte und Preise.',
+    imageTitle:'Motive & Editor', imageSubtitle:'Bilder, Motive, Texte und Ebenen direkt bearbeiten.',
+    videoTitle:'Video-Studio', videoSubtitle:'Szenen, Texte, Musik und Videos in einem Projekt.',
+    websiteTitle:'Website-Builder', websiteSubtitle:'Webseiten gestalten und als HTML oder ZIP exportieren.',
+    projectsTitle:'Projekte', projectsSubtitle:'Deine gespeicherten Designs, Videos und Webseiten.',
+    plansTitle:'Abos & Preise', plansSubtitle:'Free, Creator und Studio Pro – während der Beta ohne Zahlung.'
   },
   theme: { sidebarWidth:255, accentBlue:'#63c7ff', accentYellow:'#ffd400' }
 };
@@ -59,7 +68,8 @@ function withLegacyVisibility(settings) {
     showImage:visibility.image!==false,
     showVideo:visibility.video!==false,
     showWebsite:visibility.website!==false,
-    showProjects:visibility.projects!==false
+    showProjects:visibility.projects!==false,
+    showPlans:visibility.plans!==false
   };
 }
 
@@ -99,7 +109,7 @@ function copyText(value) {
   return navigator.clipboard?.writeText(String(value || ''));
 }
 
-export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettingsChanged }) {
+export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettingsChanged, onOpenView }) {
   const [tab, setTab] = useState('overview');
   const [users, setUsers] = useState([]);
   const [usageUsers, setUsageUsers] = useState([]);
@@ -122,6 +132,9 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [previewDevice, setPreviewDevice] = useState('desktop');
   const [health, setHealth] = useState(null);
   const [healthLoading, setHealthLoading] = useState(false);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [subscriptionSummary, setSubscriptionSummary] = useState({ free:0, creator:0, studio:0 });
+  const [previewPage, setPreviewPage] = useState('chat');
 
   async function loadCore() {
     try {
@@ -136,6 +149,13 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       setUsageUsers(usage.users || []);
       setTotalMonthlyCost(Number(usage.totalMonthlyCostUsd || 0));
       setDrafts(Object.fromEntries((usage.users || []).map((item) => [item.id, normalizeLimitUser(item)])));
+      try {
+        const subscriptionData = await api('/api/admin/subscriptions');
+        setSubscriptions(subscriptionData.users || []);
+        setSubscriptionSummary(subscriptionData.summary || { free:0, creator:0, studio:0 });
+      } catch (subscriptionError) {
+        setStatus(`Abos konnten nicht geladen werden: ${subscriptionError.message}`);
+      }
     } catch (error) {
       setStatus(error.message);
     }
@@ -177,10 +197,12 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   useEffect(() => { setSettingsDraft(normalizeSettings(uiSettings)); setViewHistory({ past: [], future: [] }); }, [uiSettings]);
   useEffect(() => {
     if (tab === 'chats') loadChatAccounts();
+    if (tab === 'subscriptions') loadCore();
     if (tab === 'system') { loadAuditLog(); loadHealth(); }
   }, [tab]);
 
   const usageById = useMemo(() => Object.fromEntries(usageUsers.map((item) => [item.id, item])), [usageUsers]);
+  const subscriptionById = useMemo(() => Object.fromEntries(subscriptions.map((item) => [item.id, item])), [subscriptions]);
   const filteredChatAccounts = useMemo(() => {
     const query = chatSearch.trim().toLowerCase();
     return chatAccounts.filter((item) => !query || String(item.username || '').toLowerCase().includes(query));
@@ -216,6 +238,19 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         body: JSON.stringify({ userId: target.id, ...draft })
       });
       setStatus(`Limits für ${target.username} gespeichert.`);
+      loadCore();
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
+  async function saveSubscription(target, planId) {
+    try {
+      await api('/api/admin/subscriptions', {
+        method: 'POST',
+        body: JSON.stringify({ userId: target.id, planId })
+      });
+      setStatus(`Beta-Abo für ${target.username} auf ${getPlan(planId).name} gesetzt.`);
       loadCore();
     } catch (error) {
       setStatus(error.message);
@@ -368,6 +403,11 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     }
   }
 
+  const previewTitleKey = previewPage === 'chat' ? 'appTitle' : `${previewPage}Title`;
+  const previewSubtitleKey = previewPage === 'chat' ? 'welcome' : `${previewPage}Subtitle`;
+  const previewTitle = settingsDraft.texts[previewTitleKey] || DEFAULT_UI_SETTINGS.texts[previewTitleKey] || settingsDraft.navItems.find((item)=>item.id===previewPage)?.label || 'Yildiz AI';
+  const previewSubtitle = settingsDraft.texts[previewSubtitleKey] || DEFAULT_UI_SETTINGS.texts[previewSubtitleKey] || '';
+
   return <section className="admin-page admin-control-center">
     <div className="page-heading admin-heading">
       <div><h2><Shield size={22}/> Admin-Kontrollzentrum</h2><p>Konten, private Chat-Prüfung, App-Ansicht, KI-Limits und Systemstatus.</p></div>
@@ -378,6 +418,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       <button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}><LayoutDashboard size={16}/>Übersicht</button>
       <button className={tab === 'accounts' ? 'active' : ''} onClick={() => setTab('accounts')}><UserRoundCog size={16}/>Konten</button>
       <button className={tab === 'chats' ? 'active' : ''} onClick={() => setTab('chats')}><MessageSquareText size={16}/>Alle Chats</button>
+      <button className={tab === 'subscriptions' ? 'active' : ''} onClick={() => setTab('subscriptions')}><BadgeEuro size={16}/>Abos</button>
       <button className={tab === 'view' ? 'active' : ''} onClick={() => setTab('view')}><Palette size={16}/>Ansicht</button>
       <button className={tab === 'system' ? 'active' : ''} onClick={() => setTab('system')}><Activity size={16}/>System</button>
     </div>
@@ -390,6 +431,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         <article><Image/><span>Bilder heute</span><strong>{usageUsers.reduce((sum, item) => sum + Number(item?.usage?.dailyImages || 0), 0)}</strong><small>über OpenAI</small></article>
         <article><Video/><span>Video heute</span><strong>{usageUsers.reduce((sum, item) => sum + Number(item?.usage?.dailyVideoSeconds || 0), 0)} s</strong><small>über Sora</small></article>
         <article><BarChart3/><span>Kosten Monat</span><strong>{money(totalMonthlyCost)}</strong><small>geschätzte Nutzung</small></article>
+        <article><BadgeEuro/><span>Beta-Abos</span><strong>{(subscriptionSummary.creator || 0) + (subscriptionSummary.studio || 0)}</strong><small>{subscriptionSummary.creator || 0} Creator · {subscriptionSummary.studio || 0} Pro</small></article>
       </div>
       <div className="admin-grid admin-grid-two">
         <article className="admin-card"><h3><Cpu size={19}/> KI-Dienste</h3><div className="service-row ok"><CheckCircle2/>Gemini Chat verbunden</div><div className="service-row ok"><CheckCircle2/>OpenAI Bildroute aktiv</div><div className="service-row ok"><CheckCircle2/>Sora-Videoroute aktiv</div><p>Die API-Schlüssel bleiben ausschließlich serverseitig in Vercel.</p></article>
@@ -414,6 +456,25 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
           <div className="limit-editor-grid"><label>Bilder pro Tag<input type="number" min="-1" value={draft.dailyImageLimit} onChange={(event)=>patchDraft(account.id,{dailyImageLimit:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label>Videosekunden pro Tag<input type="number" min="-1" value={draft.dailyVideoSecondsLimit} onChange={(event)=>patchDraft(account.id,{dailyVideoSecondsLimit:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label>Monatsbudget in US-Dollar<input type="number" min="-1" step="0.01" value={draft.monthlyBudgetUsd} onChange={(event)=>patchDraft(account.id,{monthlyBudgetUsd:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label className="checkbox-row"><input type="checkbox" checked={draft.allowImages} onChange={(event)=>patchDraft(account.id,{allowImages:event.target.checked})}/>Bilder erlauben</label><label className="checkbox-row"><input type="checkbox" checked={draft.allowVideos} onChange={(event)=>patchDraft(account.id,{allowVideos:event.target.checked})}/>Videos erlauben</label><button className="primary-btn" onClick={()=>saveLimits(account)}><Save size={16}/>Limits speichern</button></div>
         </div>})}</div>
     </>}
+
+    {tab === 'subscriptions' && <div className="admin-subscriptions-panel">
+      <div className="admin-stat-grid subscription-admin-stats">
+        <article><Shield size={20}/><span>Free</span><strong>{subscriptionSummary.free || 0}</strong><small>kostenloser Zugang</small></article>
+        <article><BadgeEuro size={20}/><span>Creator</span><strong>{subscriptionSummary.creator || 0}</strong><small>später z. B. {formatPlanPrice(getPlan('creator').examplePrice)}</small></article>
+        <article><Crown size={20}/><span>Studio Pro</span><strong>{subscriptionSummary.studio || 0}</strong><small>später z. B. {formatPlanPrice(getPlan('studio').examplePrice)}</small></article>
+      </div>
+      <article className="admin-card beta-admin-note"><h3><BadgeEuro size={19}/> Beta-Modus ohne Zahlung</h3><p>Die Auswahl schaltet Funktionen sofort frei. Es gibt noch keinen Zahlungsanbieter, keine Kreditkarte und keine Abbuchung. OpenAI- und Sora-API-Nutzung kann trotzdem Betreiber-Guthaben verbrauchen und bleibt durch Kostenwarnungen und Limits geschützt.</p></article>
+      <div className="subscription-user-list">
+        {users.map((account) => {
+          const entry = subscriptionById[account.id] || { planId: account.role === 'admin' ? 'studio' : 'free', status:'active' };
+          const planId = account.role === 'admin' ? 'studio' : (entry.planId || 'free');
+          return <article key={account.id} className="subscription-user-row">
+            <div><b>{account.username}</b><span>{account.role === 'admin' ? 'Admin · Vollzugriff' : `${getPlan(planId).name} · ${entry.status || 'active'}`}</span></div>
+            <label>Beta-Abo<select value={planId} disabled={account.role === 'admin'} onChange={(event)=>saveSubscription(account,event.target.value)}>{PLAN_CATALOG.map((plan)=><option key={plan.id} value={plan.id}>{plan.name} · Beta 0,00 €</option>)}</select></label>
+          </article>;
+        })}
+      </div>
+    </div>}
 
     {tab === 'chats' && <div className="admin-chat-audit">
       <aside className="admin-chat-users">
@@ -441,6 +502,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
           <button onClick={undoView} disabled={!viewHistory.past.length} title="Rückgängig"><Undo2 size={16}/>Rückgängig</button>
           <button onClick={redoView} disabled={!viewHistory.future.length} title="Wiederholen"><Redo2 size={16}/>Wiederholen</button>
           <button onClick={resetViewDefaults}><RotateCcw size={16}/>1:1 zurücksetzen</button>
+          <button onClick={()=>onOpenView?.(previewPage)}><Eye size={16}/>Echte Seite öffnen</button>
           <button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Ansicht speichern</button>
         </div>
       </div>
@@ -451,11 +513,15 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         <button className={previewDevice === 'mobile' ? 'active' : ''} onClick={() => setPreviewDevice('mobile')}><Smartphone size={16}/>Handy</button>
       </div>
 
+      <div className="visual-page-switcher" aria-label="Seite in der Vorschau">
+        {settingsDraft.navItems.filter((item)=>item.visible!==false).map((item)=><button key={item.id} className={previewPage===item.id?'active':''} onClick={()=>{setPreviewPage(item.id);setSelectedVisualId(`nav-${item.id}`)}}>{item.label}</button>)}
+      </div>
+
       <div className="visual-editor-switches">
         <button className={settingsDraft.allowGuest ? 'active' : ''} onClick={()=>patchSettings({allowGuest:!settingsDraft.allowGuest})}>{settingsDraft.allowGuest ? <Eye size={15}/> : <EyeOff size={15}/>}Gastmodus</button>
         <button className={settingsDraft.compactSidebar ? 'active' : ''} onClick={()=>patchSettings({compactSidebar:!settingsDraft.compactSidebar})}>Kompakte Seitenleiste</button>
         <button className={settingsDraft.maintenanceMode ? 'active warning' : ''} onClick={()=>patchSettings({maintenanceMode:!settingsDraft.maintenanceMode})}>Wartungshinweis</button>
-        <label>Startansicht<select value={settingsDraft.defaultView} onChange={(event)=>patchSettings({defaultView:event.target.value})}><option value="chat">Chat</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option><option value="projects">Projekte</option></select></label>
+        <label>Startansicht<select value={settingsDraft.defaultView} onChange={(event)=>patchSettings({defaultView:event.target.value})}><option value="chat">Chat</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option><option value="projects">Projekte</option><option value="plans">Abos & Preise</option></select></label>
         <label>Work-Ziel<select value={settingsDraft.workView} onChange={(event)=>patchSettings({workView:event.target.value})}><option value="projects">Projekte</option><option value="flyer">Angebote & Flyer</option><option value="image">Motive & Editor</option><option value="video">Video-Studio</option><option value="website">Website-Builder</option></select></label>
       </div>
 
@@ -473,23 +539,29 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
               onDragOver={(event)=>event.preventDefault()}
               onDrop={()=>dropNav(item.id)}
               className={`live-editable ${selectedVisualId===`nav-${item.id}`?'selected':''}`}
-              onClick={()=>setSelectedVisualId(`nav-${item.id}`)}
+              onClick={()=>{setSelectedVisualId(`nav-${item.id}`);setPreviewPage(item.id)}}
             ><GripVertical size={13}/><span contentEditable suppressContentEditableWarning onBlur={(event)=>patchNav(item.id,{label:event.currentTarget.textContent})}>{item.label}</span></button>)}
           </nav>
           <div className="live-sidebar-footer"><span>Mein Konto</span><span>Admin</span></div>
         </aside>
         <main>
           <header>
-            <b className={`live-editable text-only ${selectedVisualId==='text-appTitle'?'selected':''}`} onClick={()=>setSelectedVisualId('text-appTitle')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('appTitle',event.currentTarget.textContent)}>{settingsDraft.texts.appTitle}</b>
+            <b className={`live-editable text-only ${selectedVisualId===`text-${previewTitleKey}`?'selected':''}`} onClick={()=>setSelectedVisualId(`text-${previewTitleKey}`)} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText(previewTitleKey,event.currentTarget.textContent)}>{previewTitle}</b>
             <div className="live-tabs"><span className={`live-editable text-only ${selectedVisualId==='text-chatTab'?'selected':''}`} onClick={()=>setSelectedVisualId('text-chatTab')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('chatTab',event.currentTarget.textContent)}>{settingsDraft.texts.chatTab}</span><span className={`live-editable text-only ${selectedVisualId==='text-workTab'?'selected':''}`} onClick={()=>setSelectedVisualId('text-workTab')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('workTab',event.currentTarget.textContent)}>{settingsDraft.texts.workTab}</span></div>
           </header>
           {settingsDraft.announcement && <div className={`live-announcement live-editable ${selectedVisualId==='text-announcement'?'selected':''}`} onClick={()=>setSelectedVisualId('text-announcement')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchSettings({announcement:event.currentTarget.textContent})}>{settingsDraft.announcement}</div>}
-          <section>
+          {previewPage === 'chat' ? <section>
             <div className={`live-status live-editable ${selectedVisualId==='text-statusTitle'?'selected':''}`} onClick={()=>setSelectedVisualId('text-statusTitle')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('statusTitle',event.currentTarget.textContent)}>{settingsDraft.texts.statusTitle}</div>
             <div className={`live-welcome live-editable ${selectedVisualId==='text-welcome'?'selected':''}`} onClick={()=>setSelectedVisualId('text-welcome')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('welcome',event.currentTarget.textContent)}>{settingsDraft.texts.welcome}</div>
             <div className="live-spacer"/>
             <div className={`live-composer live-editable ${selectedVisualId==='text-composer'?'selected':''}`} onClick={()=>setSelectedVisualId('text-composer')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('composer',event.currentTarget.textContent)}>{settingsDraft.texts.composer}</div>
-          </section>
+          </section> : <section className={`live-page-preview page-${previewPage}`}>
+            <div className="live-page-heading">
+              <h2 className={`live-editable ${selectedVisualId===`text-${previewTitleKey}`?'selected':''}`} onClick={()=>setSelectedVisualId(`text-${previewTitleKey}`)} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText(previewTitleKey,event.currentTarget.textContent)}>{previewTitle}</h2>
+              <p className={`live-editable ${selectedVisualId===`text-${previewSubtitleKey}`?'selected':''}`} onClick={()=>setSelectedVisualId(`text-${previewSubtitleKey}`)} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText(previewSubtitleKey,event.currentTarget.textContent)}>{previewSubtitle}</p>
+            </div>
+            {previewPage === 'plans' ? <div className="live-plan-cards">{PLAN_CATALOG.map((plan)=><article key={plan.id}><b>{plan.name}</b><strong>{formatPlanPrice(0)}</strong><span>Beta</span></article>)}</div> : previewPage === 'projects' ? <div className="live-project-cards"><article/><article/><article/></div> : previewPage === 'website' ? <div className="live-website-preview"><aside/><main><div/><div/><div/></main></div> : previewPage === 'video' ? <div className="live-video-preview"><aside/><main>▶</main><aside/></div> : <div className="live-editor-preview"><aside/><main><div className="live-canvas-sheet">{previewPage === 'flyer' ? 'ANGEBOTE' : 'MOTIV'}</div></main><aside/></div>}
+          </section>}
         </main>
 
         <div className="visual-floating-tools">

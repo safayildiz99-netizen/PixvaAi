@@ -1,0 +1,39 @@
+YILDIZ AI V6 – BETA-ABOS & AI-KERN
+
+WICHTIG: Dieses Update selbst kostet 0,00 €.
+Die drei Abo-Karten sind während der Beta nur Funktionsschalter. Es wird kein Geld eingezogen und keine Zahlungsart abgefragt.
+
+ECHTE API-KOSTEN:
+- OpenAI-Bilder können Betreiber-Guthaben verbrauchen.
+- Sora-Videos können Betreiber-Guthaben verbrauchen.
+- Vor jeder solchen Aktion bleibt eine deutliche Kostenbestätigung aktiv.
+
+INSTALLATION BEI BESTEHENDER WEBSITE:
+1. V6-SUPABASE-EINFACH-OEFFNEN.html doppelklicken.
+2. Auf „Alles kopieren“ drücken.
+3. Supabase → SQL Editor → New query.
+4. Einfügen und Run drücken.
+5. Danach den INHALT dieses Ordners in die Hauptseite des GitHub-Repositories hochladen und vorhandene Dateien ersetzen.
+6. Vercel-Deployment abwarten und die Website hart neu laden.
+
+COMMIT-NACHRICHT:
+Yildiz AI V6 Beta Abos Planrechte Admin Mehrseiten Editor
+
+NEU:
+- Abos-&-Preise-Seite mit Free, Creator und Studio Pro.
+- Beispielpreise; in der Beta alle 0,00 € und ohne Zahlungsanbieter.
+- Abo sofort aktivieren und unter „Mein Konto“ kündigen.
+- Free: Chat, Produktsuche, Dateien und kostenlose Alternativen.
+- Creator: Flyer, Motive, OpenAI-Bilder und Cloud-Projekte.
+- Studio Pro: Video-Studio, Sora-Videos, Website-Builder und alle Bereiche.
+- Admin kann Beta-Abos pro Konto ändern.
+- Serverseitige Planprüfung verhindert Umgehung.
+- Konto-Datenexport und Löschen von Cloud-Chats/Cloud-Projekten.
+- Admin-Liveeditor kann zwischen Chat, Flyer, Motive, Video, Website, Projekte und Abos wechseln.
+- Direkte Bearbeitung der Seitentitel und Beschreibungen in der Vorschau.
+- Button „Echte Seite öffnen“ im Admin-Liveeditor.
+- Kostenwarnung auch bei KI-Bildern im Design- und Video-Studio.
+- Login-crypt-Fix ist im V6-Supabase-Update enthalten.
+
+NEUINSTALLATION:
+Nur bei einem komplett neuen Supabase-Projekt die Datei NUR-BEI-NEUINSTALLATION-SUPABASE-EINFACH-OEFFNEN.html verwenden.

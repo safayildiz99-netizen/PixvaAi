@@ -1,6 +1,6 @@
 {
   "name": "yildiz-ai-studio-client",
-  "version": "10.0.0",
+  "version": "11.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -26,5 +26,5 @@
   "engines": {
     "node": ">=20.19"
   },
-  "description": "Yildiz AI V5: stabile Mobilansicht, kontogetrennte Chats, direkte Admin-Liveansicht, kostenlose Produktbildsuche und PDF/Dateierstellung"
+  "description": "Yildiz AI V6: Beta-Abos ohne Zahlung, Planrechte, Kostenwarnungen, Datenkontrolle und Mehrseiten-Admin-Liveeditor"
 }

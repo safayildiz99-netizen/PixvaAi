@@ -11,6 +11,7 @@ import {
   Type, Undo2, Unlock, Upload, WandSparkles, ZoomIn
 } from 'lucide-react';
 import { api } from '../api.js';
+import { canUseFeature } from '../plans.js';
 
 const formats = {
   square: { label: '1:1 · 1080 × 1080', canvas: [650, 650], export: [1080, 1080] },
@@ -367,7 +368,7 @@ function sourceElementToBlob(imageObject) {
   });
 }
 
-export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true }) {
+export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {} }) {
   const elementRef = useRef(null);
   const fabricRef = useRef(null);
   const historyRef = useRef([]);
@@ -1020,6 +1021,13 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   }
 
   async function generateAiImage() {
+    if (!canUseFeature(subscription, 'paidImages', userRole)) {
+      setStatus('OpenAI-Bilder sind ab Creator enthalten. Während der Beta kannst du Creator für 0,00 € aktivieren.');
+      onOpenPlans?.();
+      return;
+    }
+    const approved = window.confirm('Kostenhinweis: Dieses echte OpenAI-Bild kann ungefähr 0,02–0,20 US-Dollar API-Guthaben verbrauchen. Wirklich erstellen?');
+    if (!approved) { setStatus('Kostenpflichtige Bilderstellung abgebrochen.'); return; }
     setGenerating(true);
     setStatus('KI-Bild wird erstellt …');
     try {
@@ -1069,7 +1077,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   }
 
   return (
-    <section className="editor-pro-shell">
+    <section className="editor-pro-page">
+      <div className="editor-page-heading"><div><h2>{mode === 'image' ? (uiText.imageTitle || 'Motive & Editor') : (uiText.flyerTitle || 'Angebote & Flyer')}</h2><p>{mode === 'image' ? (uiText.imageSubtitle || 'Bilder, Motive, Texte und Ebenen direkt bearbeiten.') : (uiText.flyerSubtitle || 'Bearbeitbare Vorlagen für Angebote, Produkte und Preise.')}</p></div></div>
+      <div className="editor-pro-shell">
       <aside className="tool-panel editor-tools-pro">
         <div className="panel-section">
           <label>Projektname<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
@@ -1216,6 +1226,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           <label>Hintergrund<input type="color" value={background} onChange={(event) => setBackgroundColor(event.target.value)}/></label>
         </div>
       </aside>
+      </div>
     </section>
   );
 }

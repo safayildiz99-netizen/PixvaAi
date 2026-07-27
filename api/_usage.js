@@ -26,7 +26,7 @@ async function rpc(name, args) {
   if (!response.ok) {
     const message = data?.message || data?.error || `Supabase RPC ${name} fehlgeschlagen.`;
     if (/does not exist|could not find the function|schema cache/i.test(message)) {
-      throw new Error('Bitte zuerst PRO-KERN-UPDATE.sql vollständig in Supabase ausführen.');
+      throw new Error('Bitte zuerst die V6-Supabase-Browserdatei vollständig in Supabase ausführen.');
     }
     throw new Error(message);
   }
@@ -37,6 +37,8 @@ async function rpc(name, args) {
 export async function authorizeUsage(req, { requestId, kind, model, units, estimatedCostUsd }) {
   const token = readToken(req);
   if (!token) throw new Error('Für kostenpflichtige Bilder und Videos musst du dich anmelden.');
+  const access = await rpc('app_plan_access', { p_token: token, p_kind: String(kind || '') });
+  if (!access?.allowed) throw new Error(access?.error || 'Diese kostenpflichtige KI-Funktion ist in deinem aktuellen Beta-Abo nicht enthalten.');
   return rpc('app_authorize_ai_usage', {
     p_token: token,
     p_request_id: requestId,

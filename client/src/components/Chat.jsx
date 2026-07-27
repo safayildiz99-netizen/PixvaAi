@@ -3,6 +3,7 @@ import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Menu, MessageSquarePlus, Mic, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, ShieldCheck, Square, Trash2, User, Video, Volume2, WandSparkles, X } from 'lucide-react';
 import { api, getToken } from '../api.js';
+import { canUseFeature, getPlan } from '../plans.js';
 
 const quickPrompts = [
   'Erkläre mir ein schwieriges Thema ganz einfach.',
@@ -727,7 +728,7 @@ function hydrateMessages(messages) {
   });
 }
 
-export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest = true, uiText = {} }) {
+export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest = true, uiText = {}, subscription, userRole = 'user', onOpenPlans }) {
   const welcomeMessage = useMemo(() => ({ ...WELCOME_MESSAGE, content: uiText.welcome || WELCOME_MESSAGE.content }), [uiText.welcome]);
   const [messages, setMessages] = useState([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState([]);
@@ -749,6 +750,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   const [listening, setListening] = useState(false);
   const [freeOnly, setFreeOnly] = useState(() => localStorage.getItem(`yildiz_ai_free_only_${accountId || 'guest'}`) === '1');
   const [costDialog, setCostDialog] = useState(null);
+  const [planNotice, setPlanNotice] = useState('');
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const cameraImageRef = useRef(null);
@@ -765,6 +767,9 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
   const cloudUpdatedAtRef = useRef(0);
   const ownerKey = useMemo(() => String(accountId || 'guest'), [accountId]);
   const cloudEnabled = !isGuest && ownerKey !== 'guest';
+  const canPaidImages = canUseFeature(subscription, 'paidImages', userRole);
+  const canPaidVideos = canUseFeature(subscription, 'paidVideos', userRole);
+  const planName = userRole === 'admin' ? 'Admin' : getPlan(subscription?.planId).name;
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
   useEffect(() => { activeChatIdRef.current = activeChatId; }, [activeChatId]);
   useEffect(() => { localStorage.setItem(`yildiz_ai_free_only_${ownerKey}`, freeOnly ? '1' : '0'); }, [freeOnly, ownerKey]);
@@ -1473,7 +1478,13 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
     const imageAction = !videoAction && !imageSearchAction && (creationMode === 'image' || (creationMode === 'auto' && clean && looksLikeImagePrompt(clean)));
     let paidChoice = '';
     if (videoAction || imageAction) {
-      if (freeOnly || isGuest) {
+      const planAllowsPaid = videoAction ? canPaidVideos : canPaidImages;
+      if (!planAllowsPaid) {
+        paidChoice = 'free';
+        const neededPlan = videoAction ? 'Studio Pro' : 'Creator';
+        setPlanNotice(`${planName} enthält keine kostenpflichtige ${videoAction ? 'Sora-Video' : 'OpenAI-Bild'}erstellung. Yildiz AI verwendet automatisch die kostenlose Alternative. ${neededPlan} kannst du während der Beta für 0,00 € aktivieren.`);
+        setStatus(`Kostenlose Alternative aktiv · dein aktueller Zugang: ${planName}`);
+      } else if (freeOnly || isGuest) {
         paidChoice = 'free';
         if (isGuest) setStatus('Gastmodus: Es wird automatisch nur die kostenlose Alternative verwendet.');
       } else {
@@ -1702,6 +1713,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
         </div>
       )}
 
+      {planNotice && <div className="chat-plan-notice"><div><ShieldCheck size={17}/><span>{planNotice}</span></div><button type="button" onClick={()=>onOpenPlans?.()}>Abos ansehen</button><button type="button" className="icon-only" aria-label="Hinweis schließen" onClick={()=>setPlanNotice('')}><X size={15}/></button></div>}
       <div className="quick-row">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => sendMessage(prompt)}><WandSparkles size={14} />{prompt}</button>)}</div>
       <div
         className={`chat-input-wrap dropzone ${dragActive ? 'drag-active' : ''}`}
@@ -1716,7 +1728,7 @@ export default function Chat({ onOpenVideoProject, accountId = 'guest', isGuest 
             <button type="button" className={creationMode === 'video' ? 'active' : ''} onClick={() => { setCreationMode('video'); setShowMediaSettings(true); }}><Video size={14}/>Video</button>
           </div>
           <button type="button" className="media-settings-toggle" onClick={() => setShowMediaSettings((value) => !value)}><Settings2 size={15}/>Einstellungen {showMediaSettings ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</button>
-          <button type="button" className={`free-only-toggle ${freeOnly ? 'active' : ''}`} onClick={() => setFreeOnly((value) => !value)}><ShieldCheck size={14}/>{freeOnly ? 'Nur kostenlos aktiv' : 'Kostenpflichtig möglich'}</button><span className="cost-preview">{freeOnly ? '0,00 € Modus' : creationMode === 'video' ? `ca. ${formatUsd(estimateVideoPrice(videoSettings))}` : creationMode === 'image' ? `ca. ${formatUsd(estimateImagePrice(imageSettings))}` : 'Vor Kosten kommt Bestätigung'}</span>
+          <button type="button" className={`free-only-toggle ${freeOnly || (!canPaidImages && !canPaidVideos) ? 'active' : ''}`} onClick={() => { if (!canPaidImages && !canPaidVideos) onOpenPlans?.(); else setFreeOnly((value) => !value); }}><ShieldCheck size={14}/>{!canPaidImages && !canPaidVideos ? `${planName} · nur kostenlos` : freeOnly ? 'Nur kostenlos aktiv' : 'Kostenpflichtig möglich'}</button><span className="cost-preview">{(!canPaidImages && !canPaidVideos) || freeOnly ? '0,00 € Modus' : creationMode === 'video' ? canPaidVideos ? `ca. ${formatUsd(estimateVideoPrice(videoSettings))}` : 'Studio Pro erforderlich' : creationMode === 'image' ? canPaidImages ? `ca. ${formatUsd(estimateImagePrice(imageSettings))}` : 'Creator erforderlich' : 'Vor Kosten kommt Bestätigung'}</span>
         </div>
 
         {showMediaSettings && <div className="media-settings-panel">

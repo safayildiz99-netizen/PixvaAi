@@ -6,6 +6,7 @@ import {
   ImagePlus, LoaderCircle, Music2, Plus, Save, Sparkles, Trash2, Upload
 } from 'lucide-react';
 import { api } from '../api.js';
+import { canUseFeature } from '../plans.js';
 
 const formats = {
   story: { label: '9:16 · Story/Reel', width: 720, height: 1280 },
@@ -243,7 +244,7 @@ function createGeneratedMusic(audioContext, destination, totalDuration, style, v
   return nodes;
 }
 
-export default function VideoStudio({ project, onSaved, canSave = true }) {
+export default function VideoStudio({ project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {} }) {
   const [projectName, setProjectName] = useState(project?.name || 'Neues KI-Werbevideo');
   const [projectId, setProjectId] = useState(project?.id || '');
   const [scenes, setScenes] = useState(project?.data?.scenes?.length ? project.data.scenes : [newScene(0), newScene(1), newScene(2)]);
@@ -364,7 +365,16 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
     event.target.value = '';
   }
 
-  async function generateSceneImage(scene) {
+  async function generateSceneImage(scene, skipConfirm = false) {
+    if (!canUseFeature(subscription, 'paidImages', userRole)) {
+      updateScene(scene.id, { status: 'OpenAI-Bilder sind ab Creator enthalten. Beta-Abo kann kostenlos aktiviert werden.' });
+      onOpenPlans?.();
+      return false;
+    }
+    if (!skipConfirm) {
+      const approved = window.confirm('Kostenhinweis: Dieses Szenenbild nutzt die OpenAI-Bild-API und kann ungefähr 0,02–0,20 US-Dollar kosten. Wirklich erstellen?');
+      if (!approved) { updateScene(scene.id, { status: 'Kostenpflichtige Bilderstellung abgebrochen.' }); return false; }
+    }
     updateScene(scene.id, { status: 'KI-Bild wird erstellt …' });
     try {
       const result = await api('/api/ai/image', {
@@ -378,17 +388,28 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
         fileName: `${safeName(scene.title, 'szene')}.png`,
         status: result.fallback ? 'Lokales Ersatzmotiv erstellt.' : `KI-Bild erstellt · ${result.provider || 'Bildmodell'}`
       });
+      return true;
     } catch (error) {
       updateScene(scene.id, { status: error.message });
+      return false;
     }
   }
 
   async function generateAllImages() {
+    if (!canUseFeature(subscription, 'paidImages', userRole)) {
+      setStatus('OpenAI-Szenenbilder sind ab Creator enthalten. Während der Beta kannst du den Zugang kostenlos aktivieren.');
+      onOpenPlans?.();
+      return;
+    }
+    const missingCount = scenes.filter((scene) => !scene.imageUrl && !scene.videoUrl).length;
+    if (!missingCount) { setStatus('Alle Szenen haben bereits ein Bild oder Video.'); return; }
+    const approved = window.confirm(`Kostenhinweis: ${missingCount} echte OpenAI-Szenenbilder können zusammen ungefähr ${(missingCount * 0.04).toFixed(2)}–${(missingCount * 0.20).toFixed(2)} US-Dollar kosten. Wirklich starten?`);
+    if (!approved) { setStatus('Kostenpflichtige Stapelerstellung abgebrochen.'); return; }
     setGeneratingAll(true);
     setStatus('Yildiz AI erstellt die Szenenbilder nacheinander …');
     try {
       for (const scene of scenes) {
-        if (!scene.imageUrl && !scene.videoUrl) await generateSceneImage(scene);
+        if (!scene.imageUrl && !scene.videoUrl) await generateSceneImage(scene, true);
       }
       setStatus('Alle fehlenden Szenenbilder wurden erstellt. Jetzt kannst du das Video rendern.');
     } finally {
@@ -624,7 +645,7 @@ export default function VideoStudio({ project, onSaved, canSave = true }) {
   return (
     <section className="video-editor-pro">
       <div className="studio-header">
-        <div><h2><Film size={22}/> Video-Editor</h2><p>Canva-inspirierte Arbeitsfläche mit Szenen, Text, Übergängen, Animationen, Musik und Export.</p></div>
+        <div><h2><Film size={22}/> {uiText.videoTitle || 'Video-Studio'}</h2><p>{uiText.videoSubtitle || 'Szenen, Texte, Musik und Videos in einem Projekt.'}</p></div>
         <div className="header-actions"><input value={projectName} onChange={(event) => setProjectName(event.target.value)}/><button onClick={saveProject}><Save size={17}/>{canSave ? 'Speichern' : 'Anmelden'}</button><button className="primary-btn" onClick={addScene}><Plus size={17}/>Szene</button></div>
       </div>
 
