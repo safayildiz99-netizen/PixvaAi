@@ -1,186 +1,86 @@
-import { readJson, send } from '../_lib.js';
+import { randomUUID } from 'node:crypto';
+import { env, finishJob, handleApiError, logError, readJson, requireUser, reserveJob, send, serviceClient } from '../_lib.js';
+import { moderate } from '../_moderation.js';
 
-const SYSTEM_PROMPT = `Du bist Yildiz AI, ein freundlicher, präziser und vielseitiger KI-Assistent. Du hilfst bei Alltag, Lernen, Schreiben, Übersetzen, Programmieren, Unternehmen, Kreativität und Planung. Zusätzlich kennst du dich mit Werbetechnik, Angeboten, Flyern, Druckdaten, Social Media und Webseiten aus. Antworte immer in der Sprache des Nutzers, klar, direkt und praktisch. Die Yildiz-AI-Oberfläche besitzt Werkzeuge für Bildgenerierung, kostenlose Produktbildsuche, Videoerstellung und herunterladbare Dateien wie PDF, Word/DOCX, Excel/XLSX, TXT, CSV, JSON, HTML und Markdown. Behaupte deshalb niemals, du seist nur textbasiert oder könntest grundsätzlich keine Bilder, Videos oder Dateien liefern. Wenn der Nutzer eine Datei verlangt, erstelle den vollständigen verwendbaren Inhalt ohne Anleitungen zum manuellen Speichern; die Oberfläche übernimmt die Dateierstellung. Behaupte niemals, dass keine PDF-, Word-, Excel- oder andere Datei erstellt werden könne. Wenn ein Nutzer ein vorhandenes Marken- oder Produktbild sucht, erfinde kein Produkt und behaupte nicht ungeprüft, welches das beliebteste ist. Die Oberfläche übernimmt die kostenlose Bildsuche und zeigt Quellenlinks. Vor jeder kostenpflichtigen OpenAI-Bild- oder Sora-Videoanfrage zeigt die Oberfläche immer eine Kostenwarnung und startet erst nach ausdrücklicher Bestätigung; erwähne keine angeblich bereits entstandenen Kosten, solange kein Ergebnis vorliegt. Nutze übersichtliche Absätze und kurze Listen statt unnötiger Sternchen. Wenn Bilder angehängt sind, beschreibe sie hilfreich. Wenn nur eine Videodatei als Anhang vorhanden ist und keine Frames übertragen wurden, erkläre ehrlich, dass nur die Datei vorliegt und keine Bildanalyse der Videoinhalte möglich ist.`;
+const SYSTEM = `Du bist Yildiz AI. Antworte in der Sprache des Nutzers, klar und praktisch. Bei aktuellen Fakten, Produkten, Beliebtheit, Preisen oder externen Behauptungen darfst du nicht raten: Nutze die aktivierte Websuche und gib Quellen aus. Erfundene Quellen sind verboten. Bei Dateiwünschen weist du die Oberfläche an, eine echte Datei zu erzeugen. Behaupte nicht, dass du nur textbasiert bist.`;
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function cleanHistory(history) {
-  if (!Array.isArray(history)) return [];
-  return history
-    .filter((item) => item && ['user', 'assistant', 'model'].includes(item.role))
-    .slice(-12)
-    .map((item) => ({
-      role: item.role === 'assistant' ? 'model' : item.role,
-      parts: [{ text: String(item.content || '').slice(0, 9000) }]
-    }))
-    .filter((item) => item.parts[0].text.trim());
-}
-
-function extractText(data) {
-  return (data?.candidates?.[0]?.content?.parts || [])
-    .map((part) => part?.text || '')
-    .join('')
-    .trim();
-}
-
-function normalizeAttachments(input) {
-  if (!Array.isArray(input)) return [];
-  return input
-    .slice(0, 4)
-    .map((item) => ({
-      kind: item?.kind === 'video' ? 'video' : item?.kind === 'file' ? 'file' : 'image',
-      name: String(item?.name || '').slice(0, 120),
-      mimeType: String(item?.mimeType || '').slice(0, 80),
-      data: String(item?.data || ''),
-      size: Number(item?.size || 0),
-      frames: Array.isArray(item?.frames) ? item.frames.slice(0, 4).map((frame) => String(frame || '')) : [],
-      text: String(item?.text || '').slice(0, 30000)
-    }))
-    .filter((item) => item.name || item.data);
-}
-
-function createUserParts(message, attachments) {
-  const parts = [];
-  const videoAttachments = attachments.filter((item) => item.kind === 'video');
-  const imageAttachments = attachments.filter((item) => item.kind === 'image');
-  const fileAttachments = attachments.filter((item) => item.kind === 'file');
-
-  let intro = String(message || '').trim();
-  if (videoAttachments.length) {
-    const videoInfo = videoAttachments.map((item) => {
-      const sizeMb = item.size ? `${(item.size / 1024 / 1024).toFixed(1)} MB` : 'unbekannte Größe';
-      const frameInfo = item.frames?.length ? `${item.frames.length} Vorschaubilder wurden angehängt` : 'keine Vorschaubilder verfügbar';
-      return `- ${item.name || 'Video'} (${item.mimeType || 'video/*'}, ${sizeMb}; ${frameInfo})`;
-    }).join('\n');
-    intro += `\n\nVideo-Anhänge:\n${videoInfo}\nAnalysiere die angehängten Vorschaubilder als Stichprobe und erwähne, dass sie nicht jeden Moment des Videos zeigen.`;
-  }
-  if (fileAttachments.length) {
-    const fileInfo = fileAttachments.map((item) => `- ${item.name || 'Datei'} (${item.mimeType || 'unbekannter Typ'}, ${item.size || 0} Bytes)`).join('\n');
-    const textContents = fileAttachments.filter((item) => item.text).map((item) => `\n--- Inhalt von ${item.name} ---\n${item.text}`).join('');
-    intro += `\n\nDatei-Anhänge:\n${fileInfo}${textContents}`;
-  }
-
-  parts.push({ text: intro || 'Bitte hilf mir mit diesem Anhang.' });
-
-  for (const image of imageAttachments) {
-    const match = image.data.match(/^data:(.+?);base64,(.+)$/);
-    if (!match) continue;
-    parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-  }
-
-  for (const file of fileAttachments) {
-    if (file.mimeType !== 'application/pdf') continue;
-    const match = file.data.match(/^data:(.+?);base64,(.+)$/);
-    if (!match) continue;
-    parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-  }
-
-  for (const video of videoAttachments) {
-    for (const frame of video.frames || []) {
-      const match = frame.match(/^data:(.+?);base64,(.+)$/);
-      if (!match) continue;
-      parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-    }
-  }
-  return parts;
-}
-
-async function callGemini({ apiKey, model, message, history, attachments }) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 22000);
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [
-            ...cleanHistory(history),
-            { role: 'user', parts: createUserParts(message, attachments) }
-          ],
-          generationConfig: { maxOutputTokens: 4096 }
-        })
-      }
-    );
-    const data = await response.json().catch(() => ({}));
-    return { response, data };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function shouldTryAnotherModel(status, message = '') {
-  return [400, 404, 408, 429, 500, 502, 503, 504].includes(status) ||
-    /high demand|overload|temporar|resource exhausted|unavailable/i.test(message);
-}
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return send(res, 405, { error: 'Nur POST-Anfragen sind erlaubt.' });
-
-  try {
-    const body = await readJson(req);
-    const message = String(body?.message || '').trim().slice(0, 16000);
-    const history = body?.history || [];
-    const attachments = normalizeAttachments(body?.attachments);
-    const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-
-    if (!message && !attachments.length) return send(res, 400, { error: 'Bitte gib eine Nachricht oder einen Anhang ein.' });
-    if (!apiKey) return send(res, 500, { error: 'Der Gemini API-Key fehlt in Vercel.' });
-
-    const configured = String(process.env.GEMINI_MODEL || '').trim();
-    const models = [...new Set([
-      configured,
-      'gemini-3.6-flash',
-      'gemini-3.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash'
-    ].filter(Boolean))];
-
-    let lastStatus = 503;
-    let lastMessage = '';
-
-    for (const model of models) {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        if (attempt) await sleep(700 + Math.floor(Math.random() * 500));
-        try {
-          const { response, data } = await callGemini({ apiKey, model, message, history, attachments });
-          const apiMessage = data?.error?.message || '';
-          lastStatus = response.status;
-          lastMessage = apiMessage;
-
-          if (response.ok) {
-            const answer = extractText(data);
-            if (answer) return send(res, 200, { answer, model });
-            lastMessage = 'Gemini hat keine Textantwort geliefert.';
-            break;
+function extractInteraction(data) {
+  let text = '';
+  const sources = [];
+  for (const step of data?.steps || []) {
+    if (step?.type !== 'model_output') continue;
+    for (const block of step?.content || []) {
+      if (block?.type === 'text') {
+        text += block.text || '';
+        for (const annotation of block.annotations || []) {
+          if (annotation?.type === 'url_citation' && annotation.url) {
+            sources.push({ url: annotation.url, title: annotation.title || annotation.url, startIndex: annotation.start_index, endIndex: annotation.end_index });
           }
-
-          if (response.status === 401 || response.status === 403) {
-            return send(res, response.status, { error: 'Der Gemini API-Key ist ungültig oder nicht freigegeben.' });
-          }
-          if (!shouldTryAnotherModel(response.status, apiMessage)) break;
-        } catch (error) {
-          lastStatus = error?.name === 'AbortError' ? 504 : 503;
-          lastMessage = error?.name === 'AbortError' ? 'Zeitüberschreitung beim KI-Dienst.' : String(error?.message || 'Verbindungsfehler');
         }
       }
     }
+  }
+  if (!text) text = data?.output_text || '';
+  const unique = [...new Map(sources.map((s) => [s.url, s])).values()];
+  return { text: text.trim(), sources: unique };
+}
 
-    if (lastStatus === 429) {
-      return send(res, 429, { error: 'Das kostenlose Gemini-Limit ist gerade erreicht. Bitte warte kurz und versuche es erneut.' });
-    }
-    return send(res, 503, {
-      error: 'Gemini ist gerade stark ausgelastet. Bitte versuche es gleich noch einmal.',
-      technical: lastMessage || undefined
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'Nur POST ist erlaubt.' });
+  let auth; let jobId = null; let model = '';
+  try {
+    auth = await requireUser(req);
+    const body = await readJson(req);
+    const message = String(body.message || '').trim().slice(0, 16000);
+    if (!message) return send(res, 400, { error: 'Bitte gib eine Nachricht ein.' });
+    const requestId = String(body.requestId || randomUUID());
+    model = env('GEMINI_MODEL','gemini-3.6-flash');
+    const estimated = Math.max(0, Number(env('CHAT_COST_USD_PER_REQUEST','0')) || 0);
+    const reservation = await reserveJob(req, {
+      requestId, kind: 'chat', model, prompt: message, units: 1, format: 'text', quality: '', estimatedCostUsd: estimated,
+      costConfirmed: body.costConfirmed, metadata: { webSearch: Boolean(body.webSearch), chatId: body.chatId || null }
     });
+    jobId = reservation.job.id;
+    if (reservation.duplicate && ['completed','in_progress','queued'].includes(reservation.job.status)) {
+      return send(res, 200, { duplicate: true, job: reservation.job });
+    }
+    await moderate({ text: message });
+    await finishJob({ jobId, status: 'in_progress', progress: 10 });
+
+    const apiKey = env('GEMINI_API_KEY');
+    if (!apiKey) throw new Error('GEMINI_API_KEY fehlt in Vercel.');
+    const history = Array.isArray(body.history) ? body.history.slice(-12).map((m) => `${m.role === 'assistant' ? 'ASSISTENT' : 'NUTZER'}: ${String(m.content || '').slice(0,5000)}`).join('\n') : '';
+    const input = `${SYSTEM}\n\n${history ? `Bisheriger Verlauf:\n${history}\n\n` : ''}Nutzer: ${message}`;
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      method: 'POST',
+      headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, input, tools: body.webSearch ? [{ type: 'google_search' }] : undefined, store: false })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data?.error?.message || `Gemini HTTP ${response.status}`), { status: response.status });
+    const result = extractInteraction(data);
+    if (!result.text) throw new Error('Gemini hat keine Antwort geliefert.');
+
+    const db = serviceClient();
+    let chatId = String(body.chatId || '');
+    if (!chatId) {
+      const { data: chat, error } = await db.from('chats').insert({ user_id: auth.user.id, title: message.slice(0,70) }).select('*').single();
+      if (error) throw error;
+      chatId = chat.id;
+    } else {
+      const { data: chat } = await db.from('chats').select('id').eq('id', chatId).eq('user_id', auth.user.id).single();
+      if (!chat) throw Object.assign(new Error('Chat gehört nicht zu diesem Konto.'), { status: 403 });
+    }
+    await db.from('chat_messages').insert([
+      { user_id: auth.user.id, chat_id: chatId, role: 'user', content: message },
+      { user_id: auth.user.id, chat_id: chatId, role: 'assistant', content: result.text, sources: result.sources, model }
+    ]);
+    await db.from('chats').update({ updated_at: new Date().toISOString() }).eq('id', chatId);
+    await finishJob({ jobId, status: 'completed', progress: 100, actualCostUsd: estimated, metadataPatch: { chatId, sourceCount: result.sources.length } });
+    return send(res, 200, { answer: result.text, sources: result.sources, model, chatId, jobId, estimatedCostUsd: estimated });
   } catch (error) {
-    console.error('Yildiz AI Gemini error:', error);
-    return send(res, 500, { error: error?.message || 'Die Verbindung zu Gemini ist fehlgeschlagen.' });
+    if (jobId) await finishJob({ jobId, status: 'failed', progress: 100, actualCostUsd: 0, errorMessage: error.message }).catch(() => {});
+    await logError({ userId: auth?.user?.id, jobId, functionName: 'ai/chat', model, publicMessage: error.message || 'Chat fehlgeschlagen.', technicalMessage: error.stack || error.message, retryable: true });
+    return handleApiError(res, error, 'Chat fehlgeschlagen.');
   }
 }

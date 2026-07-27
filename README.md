@@ -1,20 +1,42 @@
-# Yildiz AI – PRO-KERN V1
+# Yildiz AI V10 Production
 
-Vollständige React/Vite- und Vercel-Version mit privater Kontosynchronisierung, Gemini-Chat, OpenAI-Bildern, Sora-Videos, Mediensteuerung und serverseitiger Kostenkontrolle.
+Eine neue Produktionsgrundlage für Yildiz AI mit sicherem Kontosystem, privaten Nutzerdaten, dauerhaften Medienaufträgen, echtem Editor, Dateierstellung und Zahlungen.
 
-## Installation
+## Kernfunktionen
 
-1. `PRO-KERN-UPDATE-ZUM-KOPIEREN.txt` vollständig im Supabase SQL Editor ausführen.
-2. Den Inhalt dieses Projektordners in das GitHub-Repository hochladen und vorhandene Dateien ersetzen.
-3. Auf das neue Vercel-Deployment warten und die Website hart neu laden.
+- Supabase Auth statt eigener Passworttabelle
+- RLS für alle nutzerbezogenen Daten
+- privater Supabase Storage unter der jeweiligen Nutzer-ID
+- dauerhafte OpenAI-Sora-Aufträge mit Webhook
+- serverseitige Abo-, Limit-, Budget-, Kostenwarnungs- und Idempotenzprüfung
+- Stripe-Kartencheckout und PayPal
+- einmalige kostenpflichtige Update-ZIPs
+- echtes PDF, Word/DOCX und Excel/XLSX
+- Bildeditor mit Text-Ebenen, Schriften, Ebenen, KI-Maske und Versionen
+- Produktbildsuche mit Quelle und Rechtehinweis
+- Systemstatus, Fehlerprotokoll, Meldungen, Audit und Nutzer-Sperren
 
-Commit-Nachricht: `Yildiz AI Pro Kern Chat Medien Kostenkontrolle`
+## Start
 
-## Pflichtvariablen in Vercel
+1. `V10-START-HIER.txt` lesen.
+2. `V10-SUPABASE-EINFACH-OEFFNEN.html` öffnen und den SQL-Code in Supabase ausführen.
+3. Werte aus `.env.example` in Vercel eintragen.
+4. Stripe-, PayPal- und OpenAI-Webhooks konfigurieren.
+5. `npm run check` und `npm test` ausführen.
+6. `tests/MANUELLER-ABNAHMETEST.md` vollständig abarbeiten.
 
-- `OPENAI_API_KEY`
-- `GEMINI_API_KEY`
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
+## Kreditkarten
 
-API-Schlüssel niemals in Client-Dateien oder als `VITE_OPENAI_API_KEY` speichern.
+V10 nimmt absichtlich keine vollständige Kreditkartennummer auf der eigenen Webseite entgegen. Bei Stripe wird ausschließlich ein gehosteter Kartencheckout geöffnet. PayPal wird ebenfalls beim Zahlungsanbieter bestätigt. Yildiz AI speichert deshalb keine vollständigen Karteninformationen.
+
+## Zahlungsziel
+
+Der Admin wählt in Yildiz AI Stripe oder PayPal als aktiven Anbieter. Das Geld geht an das Händlerkonto, das serverseitig über die zugehörigen Vercel-Zugangsdaten konfiguriert wurde. Eine Kontobezeichnung kann im Adminbereich angezeigt werden; geheime Händlerzugänge bleiben ausschließlich in Vercel.
+
+## Kostenpflichtige Updates
+
+Ein Admin lädt die Update-ZIP unter **Admin → Zahlungen → Produkte** hoch, setzt den Preis und aktiviert `Kaufbar`. Wird `Kaufbar` oder der globale Zahlungsschalter deaktiviert, bleibt der Preis auf Wunsch sichtbar, aber ein Kauf ist nicht möglich. Nur ein bezahltes Konto erhält einen kurz gültigen privaten Download-Link.
+
+## Schrift in vorhandenen Bildern
+
+Bereits in JPG/PNG eingebrannte Schrift ist nur noch Pixelinhalt. V10 kann den Bereich per KI entfernen oder ersetzen und danach eine neue echte Text-Ebene hinzufügen. Diese Text-Ebene lässt sich doppelklicken, ändern und mit einer anderen Schriftart formatieren.

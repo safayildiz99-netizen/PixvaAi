@@ -1,6 +1,6 @@
 {
-  "name": "yildiz-ai-studio-client",
-  "version": "13.0.0",
+  "name": "yildiz-ai-v10-client",
+  "version": "10.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,22 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "fabric": "^7.4.0",
-    "lucide-react": "^0.468.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
     "@supabase/supabase-js": "^2.57.4",
-    "jszip": "^3.10.1",
+    "fabric": "^6.7.1",
     "jspdf": "^3.0.2",
-    "@imgly/background-removal": "^1.7.0",
-    "onnxruntime-web": "^1.21.0"
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.2",
-    "vite": "^7.1.5"
-  },
-  "engines": {
-    "node": ">=20.19"
-  },
-  "description": "Yildiz AI V9: Vollbild-Bildeditor, Instagram-Teilen, flexible Beta-Abos, Tages-/Monatskosten und Kostenabfrage je Konto"
+    "@vitejs/plugin-react": "^5.0.4",
+    "vite": "^7.1.7"
+  }
 }

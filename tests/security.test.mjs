@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+const root=resolve(new URL('..',import.meta.url).pathname);
+const sql=readFileSync(resolve(root,'supabase/V10-COMPLETE.sql'),'utf8').toLowerCase();
+const userTables=['profiles','subscriptions','purchases','chats','chat_messages','projects','media_assets','designs','design_versions','websites','account_limits','ai_jobs','usage_events','reports','system_errors'];
+test('RLS ist für alle nutzerbezogenen Tabellen aktiviert',()=>{for(const table of userTables)assert.ok(sql.includes(`alter table public.${table} enable row level security`),table)});
+test('privater Storage nutzt Nutzer-ID im ersten Pfadsegment',()=>{assert.match(sql,/storage\.foldername\(name\).*auth\.uid\(\)::text/s);assert.match(sql,/values\('user-media','user-media',false/)});
+test('serverseitige Reservierung prüft Kosten, Limits und Idempotenz',()=>{for(const token of ['cost_confirmation_required','daily_image_limit','monthly_budget_usd','request_id'])assert.ok(sql.includes(token),token)});

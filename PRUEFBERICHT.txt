@@ -1,0 +1,28 @@
+YILDIZ AI V10 – PRÜFBERICHT
+Datum: 27.07.2026
+
+ERGEBNIS
+--------
+- JavaScript-API-Syntax geprüft: bestanden
+- React/JSX-Parsing geprüft: bestanden
+- SQL-Pflichtstruktur geprüft: bestanden
+- Geheimnis-Scan geprüft: bestanden
+- Automatische Node-Tests: 6 von 6 bestanden
+- Private Storage-Pfadbindung: vorhanden
+- RLS für nutzerbezogene Tabellen: vorhanden
+- Stripe-Kartencheckout: gehostet, keine rohe Kartennummer in Yildiz AI
+- PayPal-Kauf und Abos: vorhanden
+- Kostenpflichtige Update-ZIP: Kaufprüfung und privater Signed Download vorhanden
+
+NICHT LIVE GETESTET
+-------------------
+Ein echter End-to-End-Test gegen Supabase, OpenAI, Gemini, Stripe und PayPal ist ohne die Zugangsdaten des Zielprojekts nicht möglich. Der npm-Paketdownload im Arbeitscontainer lief in ein Netzwerk-Timeout. Die Paketdefinitionen sind vollständig; Vercel installiert sie beim Deployment.
+
+VOR PRODUKTION
+--------------
+1. Staging-Supabase verwenden.
+2. Vercel-Testdeployment erstellen.
+3. Stripe Test Mode und PayPal Sandbox konfigurieren.
+4. Alle Webhooks testen.
+5. tests/MANUELLER-ABNAHMETEST.md vollständig abhaken.
+6. Erst danach Produktionszugänge aktivieren.

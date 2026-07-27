@@ -1,0 +1,70 @@
+YILDIZ AI V10 – PRODUKTIONSGRUNDLAGE
+====================================
+
+WICHTIG
+-------
+V10 ersetzt das selbst gebaute Passwortsystem durch Supabase Auth.
+Alte V9-Passwörter können nicht sicher übernommen werden. Bestehende Benutzer
+müssen über Supabase Auth neu eingeladen oder mit einem temporären Passwort
+angelegt werden.
+
+1. SUPABASE
+-----------
+1. Supabase Dashboard öffnen.
+2. SQL Editor → New query.
+3. supabase/V10-COMPLETE.sql vollständig einfügen und Run drücken.
+4. Authentication → URL Configuration:
+   Site URL und Redirect URLs auf die eigene Domain setzen.
+5. Storage prüfen: Der private Bucket user-media wird durch SQL angelegt.
+
+2. ERSTEN ADMIN FESTLEGEN
+-------------------------
+1. In Supabase Authentication einen Benutzer anlegen.
+2. Seine UUID kopieren.
+3. Im SQL Editor ausführen:
+   update public.profiles set role='admin' where id='UUID-HIER';
+
+3. VERCEL ENVIRONMENT VARIABLES
+-------------------------------
+Alle Werte aus .env.example in Vercel eintragen.
+SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY, STRIPE_SECRET_KEY und
+PAYPAL_CLIENT_SECRET dürfen niemals mit VITE_ beginnen.
+
+4. ZAHLUNGEN
+------------
+Admin → Zahlungen:
+- Stripe oder PayPal auswählen.
+- Zahlungen global ein- oder ausschalten.
+- Produkte können sichtbar bleiben, obwohl „Kaufbar“ ausgeschaltet ist.
+- Preise werden dann weiter angezeigt, der Kaufknopf bleibt gesperrt.
+
+Bei Stripe werden Kreditkartendaten auf der Stripe-Checkout-Seite eingegeben.
+Yildiz AI speichert und verarbeitet keine vollständige Kreditkartennummer.
+Das Geld geht an das Stripe-Konto des STRIPE_SECRET_KEY oder optional an das
+STRIPE_CONNECTED_ACCOUNT_ID.
+
+Bei PayPal geht das Geld an das Händlerkonto, zu dem PAYPAL_CLIENT_ID und
+PAYPAL_CLIENT_SECRET gehören.
+
+5. WEBHOOKS
+-----------
+Stripe Webhook:
+  https://DEINE-DOMAIN/api/webhooks/stripe
+PayPal Webhook:
+  https://DEINE-DOMAIN/api/webhooks/paypal
+OpenAI Webhook:
+  https://DEINE-DOMAIN/api/webhooks/openai
+
+OpenAI Ereignisse: video.completed und video.failed.
+Stripe mindestens: checkout.session.completed, customer.subscription.updated,
+customer.subscription.deleted, invoice.payment_failed, charge.refunded.
+PayPal mindestens: BILLING.SUBSCRIPTION.ACTIVATED,
+BILLING.SUBSCRIPTION.CANCELLED, BILLING.SUBSCRIPTION.SUSPENDED,
+PAYMENT.SALE.COMPLETED und PAYMENT.SALE.REFUNDED.
+
+6. TESTEN
+---------
+- npm run check
+- npm test
+- tests/MANUELLER-ABNAHMETEST.md vollständig durchgehen.
+- Stripe und PayPal zuerst im Test-/Sandboxmodus verwenden.
