@@ -7,7 +7,7 @@ const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const failures = [];
 const files = [];
 function walk(dir){for(const name of readdirSync(dir)){const path=join(dir,name);const stat=statSync(path);if(stat.isDirectory())walk(path);else files.push(path)}}
-walk(join(root,'api'));walk(join(root,'client','src'));
+walk(join(root,'api'));walk(join(root,'server','api'));walk(join(root,'client','src'));
 
 for(const file of files.filter(f=>f.endsWith('.js'))){
   try{execFileSync(process.execPath,['--check',file],{stdio:'pipe'})}
@@ -27,6 +27,31 @@ try{
     }
   }
 }catch(error){failures.push(`JSX-Prüfung konnte nicht ausgeführt werden: ${error.message}`)}
+
+
+const apiFunctions=files.filter(f=>f.endsWith('.js')&&f.includes('/api/')&&!f.includes('/server/api/'));
+if(apiFunctions.length!==1||!apiFunctions[0].endsWith('/api/index.js')){
+  failures.push(`Vercel Hobby benötigt genau eine öffentliche API-Funktion; gefunden: ${apiFunctions.map(f=>relative(root,f)).join(', ')}`);
+}
+
+for(const file of files.filter(f=>/\.(js|jsx)$/.test(f))){
+  const source=readFileSync(file,'utf8');
+  for(const match of source.matchAll(/from\s+['\"](\.{1,2}\/[^'\"]+)['\"]/g)){
+    const spec=match[1];
+    const candidate=join(file,'..',spec);
+    const checks=[candidate,candidate+'.js',candidate+'.jsx',join(candidate,'index.js')];
+    if(!checks.some(p=>{try{return statSync(p).isFile()}catch{return false}})){
+      failures.push(`${relative(root,file)}: lokaler Import fehlt: ${spec}`);
+    }
+  }
+}
+
+const router=readFileSync(join(root,'api','index.js'),'utf8');
+const routeKeys=[...router.matchAll(/\['([^']+)',\s*[A-Za-z0-9_]+\]/g)].map(m=>m[1]);
+const handlerFiles=files.filter(f=>f.includes('/server/api/')&&f.endsWith('.js')&&!f.split('/').pop().startsWith('_'));
+if(routeKeys.length!==handlerFiles.length){
+  failures.push(`API-Router enthält ${routeKeys.length} Routen, aber ${handlerFiles.length} Handlerdateien wurden gefunden.`);
+}
 
 const sql=readFileSync(join(root,'supabase','V10-COMPLETE.sql'),'utf8');
 const required=[

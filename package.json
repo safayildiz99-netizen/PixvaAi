@@ -1,9 +1,9 @@
 {
   "name": "yildiz-ai-v10-production",
-  "version": "10.0.2",
+  "version": "10.0.3",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI V10.0.2: Vercel Functions Fix und gültige Stripe-NPM-Version, Supabase Auth, RLS, Storage, Medienjobs, Kostenkontrolle und Zahlungen",
+  "description": "Yildiz AI V10.0.3: Vercel Hobby-kompatibel mit einer einzigen gebündelten API-Funktion, Supabase Auth, RLS, Storage, Medienjobs, Kostenkontrolle und Zahlungen",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "vercel-build": "npm run build",
@@ -20,7 +20,7 @@
     "sharp": "^0.34.3"
   },
   "engines": {
-    "node": ">=20.19"
+    "node": "20.x"
   },
   "devDependencies": {
     "typescript": "^5.9.2"

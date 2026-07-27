@@ -1,26 +1,47 @@
-# Yildiz AI V10 – Umsetzungsbericht
+# Yildiz AI V10.0.3 – Umsetzungsbericht
 
-## Umgesetzt
+## Behobener Vercel-Hobby-Fehler
 
-1. **Supabase Auth**: E-Mail/Passwort, sichere Sitzungen, Abmeldung, Gerätewechsel, Passwortänderung, temporäres Admin-Passwort nur einmal sichtbar.
-2. **Datentrennung und RLS**: Profile, Chats, Nachrichten, Projekte, Medien, Designs, Versionen, Websites, KI-Aufträge, Nutzung, Abos, Käufe, Meldungen und Fehler besitzen Nutzerzuordnung und RLS.
-3. **Privater Storage**: `nutzer-id/bilder`, `videos`, `pdf`, `designs`, `uploads`; Signed URLs, Typ- und Größenkontrolle.
-4. **Dauerhafte Sora-Aufträge**: Datenbankjob, Provider-ID, Status, Fortschritt, Dauer, Format, Kosten, Fehler, Webhook und private Ergebnisdatei.
-5. **Bildeditor**: Vollbild, Zuschneide-Rahmen, KI-Maske, Bild erweitern, Hintergrund ersetzen, echte Text-Ebenen mit Schriftwechsel, Ebenenliste, Original, Versionen, Vergleich, PNG/JPG/PDF.
-6. **Serverseitige Kostenkontrolle**: Abo, Funktionen, Tageslimits, Monatsbudget, globales Budget, Kostenwarnung, Rate Limit und Idempotenz vor der Provider-Anfrage.
-7. **Kostenübersicht**: heute/Monat nach Chat/Bild/Video/Dokument, Modell, Einheiten, Qualität, Status, berechnet/nicht berechnet/erstattet.
-8. **Echte Dateierstellung**: PDF, DOCX, XLSX mit privater Speicherung und Prüfung vor Signed Download.
-9. **Web- und Produktsuche**: getrennte kostenlose Bildsuche und KI-Generierung; Quelle, Anbieter und Rechtehinweis; Google-Suche mit Zitaten für Faktenfragen.
-10. **Sicherheit**: Uploadlimits, erlaubte Typen, Moderation, Doppelklickschutz, Nutzer sperren, Meldesystem, Audit-Protokoll, Redaction von Secrets, Registrierungs-Rate-Limit.
-11. **Systemseite**: Supabase Auth/DB/Storage, Gemini, OpenAI, Sora, Stripe, PayPal, letzter Fehler und Fehlerstatus.
-12. **Tests und Sicherung**: automatische Struktur-/Sicherheitstests, manueller Abnahmetest und Backupplan.
-13. **Zahlungen**: Stripe-Kartencheckout oder PayPal, Webhooks, Abos, Kündigung, einmalige kostenpflichtige Updates, private Update-ZIP-Auslieferung.
-14. **Admin-Zahlungsschalter**: Anbieter wählen, Zahlungen global abschalten, Preis sichtbar lassen, Produkt einzeln kaufbar/nicht kaufbar schalten.
+Die V10.0.2 enthielt 31 JavaScript-Dateien im Top-Level-Ordner `api`. Vercel behandelte diese als getrennte Serverless Functions und brach das Hobby-Deployment ab.
 
-## Sicherheitsentscheidung zu Kreditkarten
+V10.0.3 verwendet diese Struktur:
 
-Yildiz AI enthält absichtlich kein eigenes Eingabefeld für rohe Kartennummern. Bei Stripe öffnet sich ein gehosteter Kartencheckout. Das verhindert, dass vollständige Kreditkartennummern in Browsercode, Datenbank oder Fehlerlogs von Yildiz AI landen.
+```text
+api/index.js          eine öffentliche Vercel Function
+server/api/**         interne Handler und Hilfsdateien
+```
 
-## Noch live zu prüfen
+`vercel.json` leitet alle bisherigen `/api/...`-Adressen an `api/index.js` weiter. Der Router ruft danach den passenden internen Handler auf. Die Oberfläche und Webhook-Adressen müssen deshalb nicht geändert werden.
 
-Die statischen Prüfungen und sechs automatischen Tests sind bestanden. Ein echter End-to-End-Test kann erst mit einem Supabase-Projekt sowie OpenAI-, Gemini-, Stripe- und PayPal-Testzugängen stattfinden. Der Paketdownload im Arbeitscontainer ist wegen eines Netzwerk-Timeouts nicht abgeschlossen worden; Vercel installiert die in `package.json` definierten Pakete beim Deployment.
+## Öffentliche API-Routen
+
+Der zentrale Router enthält 28 Routen für:
+
+- Admin, Nutzer und Systemstatus
+- Gemini-Chat, OpenAI-Bilder und Sora-Videos
+- Supabase-Dateien und echte Dokumenterstellung
+- Bild- und Websuche
+- Stripe und PayPal
+- OpenAI-, Stripe- und PayPal-Webhooks
+- Kosten- und Nutzungsübersichten
+
+## Sicherheit
+
+Die Webhook-Signaturprüfung bleibt erhalten. Der zentrale Router deaktiviert die automatische Body-Verarbeitung, damit Stripe- und OpenAI-Signaturen auf dem unveränderten Request-Body geprüft werden können. Normale JSON-Endpunkte lesen und begrenzen ihren Body weiterhin selbst.
+
+## Wichtig beim Update eines bestehenden GitHub-Repositories
+
+Ein Datei-Upload ersetzt vorhandene Dateien, löscht aber keine alten Dateien. Vor dem Upload muss der bisherige Ordner `api` vollständig gelöscht werden. Danach wird der neue Ordner `api` aus V10.0.3 hochgeladen; er enthält nur `index.js`.
+
+## Prüfungen
+
+- genau eine JavaScript-Datei unter dem öffentlichen Ordner `api`
+- 28 Router-Einträge für 28 interne Handler
+- lokale Importpfade geprüft
+- JavaScript-Syntax geprüft
+- React/JSX transpiliert und geprüft
+- 8 automatische Sicherheits- und Strukturtests bestanden
+- SQL-RLS-, Storage-, Kosten- und Idempotenzbausteine geprüft
+- Geheimnis-Scan ohne eingebettete produktive Schlüssel
+
+Ein echter Live-End-to-End-Test mit den privaten Supabase-, OpenAI-, Gemini-, Stripe- und PayPal-Zugängen des Zielprojekts ist außerhalb des Zielprojekts nicht möglich.

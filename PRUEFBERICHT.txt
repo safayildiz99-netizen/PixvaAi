@@ -1,28 +1,44 @@
-YILDIZ AI V10 – PRÜFBERICHT
+YILDIZ AI V10.0.3 – PRÜFBERICHT
 Datum: 27.07.2026
 
-ERGEBNIS
---------
-- JavaScript-API-Syntax geprüft: bestanden
-- React/JSX-Parsing geprüft: bestanden
-- SQL-Pflichtstruktur geprüft: bestanden
-- Geheimnis-Scan geprüft: bestanden
-- Automatische Node-Tests: 6 von 6 bestanden
-- Private Storage-Pfadbindung: vorhanden
-- RLS für nutzerbezogene Tabellen: vorhanden
-- Stripe-Kartencheckout: gehostet, keine rohe Kartennummer in Yildiz AI
-- PayPal-Kauf und Abos: vorhanden
-- Kostenpflichtige Update-ZIP: Kaufprüfung und privater Signed Download vorhanden
+VERCEL-HOBBY-STRUKTUR
+---------------------
+Öffentliche JavaScript-Dateien unter /api: 1
+Öffentliche Funktion: api/index.js
+Interne API-Code-Dateien unter /server/api: 31
+Interne Endpunkt-Handler: 28
+Router-Einträge: 28
+Ergebnis: BESTANDEN
 
-NICHT LIVE GETESTET
--------------------
-Ein echter End-to-End-Test gegen Supabase, OpenAI, Gemini, Stripe und PayPal ist ohne die Zugangsdaten des Zielprojekts nicht möglich. Der npm-Paketdownload im Arbeitscontainer lief in ein Netzwerk-Timeout. Die Paketdefinitionen sind vollständig; Vercel installiert sie beim Deployment.
+CODEPRÜFUNG
+-----------
+JavaScript-Syntax: BESTANDEN
+React/JSX-Parsing: BESTANDEN
+Lokale Importpfade: BESTANDEN
+vercel.json JSON-Syntax: BESTANDEN
+package.json JSON-Syntax: BESTANDEN
 
-VOR PRODUKTION
---------------
-1. Staging-Supabase verwenden.
-2. Vercel-Testdeployment erstellen.
-3. Stripe Test Mode und PayPal Sandbox konfigurieren.
-4. Alle Webhooks testen.
-5. tests/MANUELLER-ABNAHMETEST.md vollständig abhaken.
-6. Erst danach Produktionszugänge aktivieren.
+SICHERHEIT UND DATEN
+--------------------
+RLS-Pflichtstruktur: BESTANDEN
+Privater Storage-Pfad mit Nutzer-ID: BESTANDEN
+Serverseitige Kosten-, Limit- und Idempotenzprüfung: BESTANDEN
+Client-Geheimnis-Scan: BESTANDEN
+Webhook-Rohdatenmodus: VORHANDEN
+
+AUTOMATISCHE TESTS
+------------------
+8 von 8 Tests bestanden.
+
+PAKETINSTALLATION
+-----------------
+Der npm-Paketdownload im Arbeitscontainer konnte wegen eines Netzwerk-Timeouts
+nicht vollständig wiederholt werden. Der vorherige Vercel-Log des Zielprojekts
+zeigte jedoch, dass die Abhängigkeiten der V10.0.2 erfolgreich installiert wurden.
+V10.0.3 ändert keine Abhängigkeit, sondern nur die API-Struktur und das Routing.
+
+WICHTIG BEIM GITHUB-UPDATE
+--------------------------
+Der alte /api-Ordner muss vollständig gelöscht werden. Danach den neuen /api-
+Ordner hochladen. Wenn alte .js-Dateien unter /api verbleiben, zählt Vercel sie
+weiterhin als zusätzliche Funktionen.
