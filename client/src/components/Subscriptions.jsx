@@ -5,11 +5,13 @@ import { PLAN_CATALOG, formatPlanPrice, getPlan, normalizeSubscription } from '.
 
 const planIcons = { free: ShieldCheck, creator: WandSparkles, studio: Crown };
 
-export default function Subscriptions({ user, isGuest = false, subscription, onSubscriptionChanged, onRequireLogin, uiText = {} }) {
+export default function Subscriptions({ user, isGuest = false, subscription, onSubscriptionChanged, onRequireLogin, uiText = {}, planPrices = {}, betaPlanPrices = {} }) {
   const current = normalizeSubscription(subscription);
   const [busyPlan, setBusyPlan] = useState('');
   const [status, setStatus] = useState('');
   const currentPlan = useMemo(() => getPlan(current.planId), [current.planId]);
+  const displayPrice = (plan) => Number(planPrices?.[plan.id] ?? plan.examplePrice ?? 0);
+  const betaPrice = (plan) => Number(betaPlanPrices?.[plan.id] ?? plan.betaPrice ?? 0);
 
   async function choosePlan(planId) {
     setStatus('');
@@ -67,8 +69,8 @@ export default function Subscriptions({ user, isGuest = false, subscription, onS
           <div className="plan-title-row"><div className="plan-icon"><Icon size={22}/></div><div><span>{plan.eyebrow}</span><h3>{plan.name}</h3></div></div>
           <p>{plan.description}</p>
           <div className="plan-price">
-            <span className="example-price">später z. B. {formatPlanPrice(plan.examplePrice)} / Monat</span>
-            <strong>{formatPlanPrice(plan.betaPrice)}</strong>
+            <span className="example-price">später z. B. {formatPlanPrice(displayPrice(plan))} / Monat</span>
+            <strong>{formatPlanPrice(betaPrice(plan))}</strong>
             <small>während der Beta</small>
           </div>
           <ul>{plan.features.map((feature) => <li key={feature}><Check size={16}/><span>{feature}</span></li>)}</ul>

@@ -1,0 +1,37 @@
+YILDIZ AI V8 – ABO-PREISE UND DIREKTER TEXTEDITOR
+=================================================
+
+DIESES UPDATE BRAUCHT KEINEN NEUEN SUPABASE-CODE.
+DAS UPDATE SELBST KOSTET 0,00 EURO.
+
+1. ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Nur den gesamten Inhalt in die Hauptseite des GitHub-Projekts Yildiz-AI hochladen.
+4. Vorhandene Dateien ersetzen.
+5. Commit-Nachricht:
+   Yildiz AI V8 Abo Preise und direkter Texteditor
+6. In Vercel warten, bis das Deployment Ready + Production zeigt.
+7. Webseite hart neu laden:
+   Mac: Cmd + Shift + R
+   Windows: Ctrl + F5
+   iPhone: Safari vollständig schließen und neu öffnen.
+
+NEU IN V8
+---------
+- Admin > Abos: Free-, Creator- und Studio-Pro-Preise frei ändern.
+- Späteren Monatspreis und Beta-Preis getrennt einstellen.
+- Preise mit dem Button "Preise speichern" dauerhaft speichern.
+- Geänderte Preise erscheinen direkt auf der öffentlichen Abo-Seite.
+- Geänderte Preise erscheinen in der Admin-Livevorschau.
+- Admin > Ansicht: Text einmal anklicken und direkt in einem sichtbaren Eingabefeld bearbeiten.
+- Funktioniert für Seitentitel, Untertitel, Chattexte, Tabs, Mitteilungen und Menüpunkte.
+- Enter speichert kurze Texte; Klick außerhalb speichert ebenfalls.
+- Escape verwirft die aktuelle Texteingabe.
+- Im Flyer-/Bildeditor reicht ein einzelner Klick auf eine Textebene, um direkt zu tippen.
+- Keine neue Datenbankinstallation erforderlich.
+
+KOSTENHINWEIS
+-------------
+Das Ändern von Texten und Abo-Preisen kostet 0,00 Euro.
+OpenAI-Bilder und Sora-Videos können weiterhin API-Guthaben verbrauchen.
+Die bestehende Kostenabfrage und die Admin-Einstellung bleiben erhalten.

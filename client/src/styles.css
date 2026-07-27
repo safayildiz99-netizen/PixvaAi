@@ -583,3 +583,54 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 .beta-plan-test-row button{min-height:44px;border:1px solid rgba(99,199,255,.25);border-radius:12px;background:#0c1922;color:#dcebf4;font-weight:750;padding:8px}
 .beta-plan-test-row button.active{background:linear-gradient(100deg,rgba(99,199,255,.24),rgba(255,212,0,.18));border-color:#63c7ff;color:#fff}
 @media(max-width:760px){.beta-plan-test-row{grid-template-columns:1fr}.admin-cost-prompt-control{width:100%;justify-content:space-between;flex-wrap:wrap}}
+
+/* V8: direkt bearbeitbare Texte und frei änderbare Abo-Preise */
+.live-view-stage aside .new-design,
+.live-view-stage aside .live-nav-item{
+  width:100%;display:flex;align-items:center;gap:6px;text-align:left;border:1px solid transparent;
+  background:transparent;color:#b8cedb;border-radius:8px;padding:9px 8px;min-width:0
+}
+.live-view-stage aside .new-design{border-color:#2c6685;background:linear-gradient(90deg,rgba(47,152,209,.18),rgba(255,212,0,.12));color:#fff}
+.live-view-stage aside .new-design:hover,.live-view-stage aside .live-nav-item:hover{background:#102734}
+.live-view-stage aside .live-nav-item>span,.live-view-stage aside .new-design>span{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live-inline-editor{
+  display:block;width:100%;min-width:0;box-sizing:border-box;margin:0;padding:5px 7px;
+  border:1px solid var(--preview-yellow,#ffd400)!important;border-radius:7px!important;
+  background:#07131b!important;color:#fff!important;font:inherit!important;line-height:1.35!important;
+  outline:none!important;box-shadow:0 0 0 3px rgba(255,212,0,.15)!important
+}
+.live-inline-editor.multiline{min-height:64px;resize:vertical;white-space:pre-wrap}
+.live-tabs .live-inline-editor{min-width:78px;width:auto;padding:6px 9px!important}
+.live-view-stage>main>header>.live-inline-editor{max-width:58%}
+.live-page-heading .live-inline-editor{width:100%}
+.live-view-stage aside .live-inline-editor{padding:4px 5px!important}
+.live-editable{user-select:text}
+.live-nav-item{user-select:none}
+.live-nav-item .live-inline-editor{user-select:text}
+
+.plan-price-admin-card{display:grid;gap:15px}
+.plan-price-admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.plan-price-admin-head h3{margin:0 0 5px;display:flex;align-items:center;gap:8px}
+.plan-price-admin-head p{margin:0;color:#91a9b8;line-height:1.5}
+.plan-price-editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.plan-price-editor-card{display:grid;gap:11px;padding:14px;border:1px solid #2a536a;border-radius:14px;background:linear-gradient(150deg,#0d202c,#07141c)}
+.plan-price-editor-card>div{display:grid;gap:3px}.plan-price-editor-card>div span{font-size:.72rem;color:#8ca5b5}
+.plan-price-editor-card label{display:grid;gap:5px;font-size:.74rem;color:#bcd0db}
+.plan-price-editor-card input{width:100%;padding:10px 11px;border:1px solid #315e7c;border-radius:9px;background:#07131b;color:#fff;font-weight:800}
+.plan-price-editor-card small{color:#ffd968;line-height:1.4}
+
+.live-plan-cards article{padding:10px;align-content:start!important;place-items:stretch!important}
+.live-plan-cards article>b{text-align:center;margin-bottom:3px}
+.live-plan-cards article label{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;gap:5px}
+.live-plan-cards article label span{font-size:.58rem;color:#8da7b8}
+.live-plan-cards article input{width:100%;min-width:0;padding:5px 6px;border:1px solid #3d6984;border-radius:6px;background:#06131b;color:#ffd400;font-size:.7rem;font-weight:900;text-align:right}
+
+@media(max-width:900px){
+  .plan-price-editor-grid{grid-template-columns:1fr}
+  .plan-price-admin-head{flex-direction:column}
+}
+@media(max-width:760px){
+  .live-view-stage aside .new-design,.live-view-stage aside .live-nav-item{padding:8px 5px;font-size:.62rem}
+  .live-inline-editor{font-size:.68rem!important;padding:4px 5px!important}
+  .live-inline-editor.multiline{min-height:78px}
+}

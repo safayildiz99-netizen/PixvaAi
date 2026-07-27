@@ -515,6 +515,15 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     canvas.on('selection:cleared', () => syncSelected(null));
     canvas.on('object:modified', onChanged);
     canvas.on('text:changed', onChanged);
+    canvas.on('mouse:up', (event) => {
+      const target = event.target;
+      if (!target || typeof target.enterEditing !== 'function' || target.isEditing) return;
+      canvas.setActiveObject(target);
+      target.enterEditing();
+      target.setCursorByClick?.(event.e);
+      syncSelected(target);
+      canvas.requestRenderAll();
+    });
     canvas.on('mouse:dblclick', (event) => {
       const target = event.target;
       if (target && typeof target.enterEditing === 'function') {
@@ -1193,7 +1202,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         </div>
         <div className="canvas-footer-pro">
           <label><ZoomIn size={15}/><input type="range" min="35" max="140" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}/><span>{zoom}%</span></label>
-          <div className="status-line">{status || 'Text anklicken und direkt tippen. Cmd/Ctrl+C, V, Z, D sowie Pfeiltasten funktionieren. Canva/Photoshop exportieren das bearbeitete Design oder die reine Vorlage.'}</div>
+          <div className="status-line">{status || 'Text einmal anklicken und direkt tippen. Cmd/Ctrl+C, V, Z, D sowie Pfeiltasten funktionieren. Canva/Photoshop exportieren das bearbeitete Design oder die reine Vorlage.'}</div>
         </div>
       </div>
 

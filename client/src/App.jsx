@@ -60,7 +60,9 @@ const DEFAULT_UI_SETTINGS = {
     projectsTitle:'Projekte', projectsSubtitle:'Deine gespeicherten Designs, Videos und Webseiten.',
     plansTitle:'Abos & Preise', plansSubtitle:'Free, Creator und Studio Pro – während der Beta ohne Zahlung.'
   },
-  theme: { sidebarWidth:255, accentBlue:'#63c7ff', accentYellow:'#ffd400' }
+  theme: { sidebarWidth:255, accentBlue:'#63c7ff', accentYellow:'#ffd400' },
+  planPrices: { free:0, creator:9.99, studio:24.99 },
+  betaPlanPrices: { free:0, creator:0, studio:0 }
 };
 
 const guestUser = { id:'guest', username:'Gast', role:'guest', active:true, mustChangePassword:false };
@@ -102,7 +104,14 @@ export default function App(){
     let cancelled=false;
     api('/api/ui-settings').then((result)=>{
       if(cancelled) return;
-      setUiSettings({...DEFAULT_UI_SETTINGS,...(result?.settings||{}),texts:{...DEFAULT_UI_SETTINGS.texts,...(result?.settings?.texts||{})}});
+      setUiSettings({
+        ...DEFAULT_UI_SETTINGS,
+        ...(result?.settings||{}),
+        texts:{...DEFAULT_UI_SETTINGS.texts,...(result?.settings?.texts||{})},
+        theme:{...DEFAULT_UI_SETTINGS.theme,...(result?.settings?.theme||{})},
+        planPrices:{...DEFAULT_UI_SETTINGS.planPrices,...(result?.settings?.planPrices||{})},
+        betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(result?.settings?.betaPlanPrices||{})}
+      });
     }).catch(()=>{});
     return ()=>{cancelled=true};
   },[]);
@@ -232,7 +241,7 @@ export default function App(){
         {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText}/>} 
         {view==='website'&&featureAllowed('website')&&<WebsiteBuilder key={selectedProject?.id||'new-site'} project={selectedProject?.type==='website'?selectedProject:null} onSaved={saved} canSave={!guest} uiText={uiText}/>} 
         {view==='projects'&&featureAllowed('projects')&&!guest&&<Projects onOpen={openProject} refreshKey={refreshKey} uiText={uiText}/>} 
-        {view==='plans'&&<Subscriptions user={activeUser} isGuest={guest} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onRequireLogin={exit} uiText={uiText}/>} 
+        {view==='plans'&&<Subscriptions user={activeUser} isGuest={guest} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onRequireLogin={exit} uiText={uiText} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices}/>} 
         {view==='account'&&!guest&&<AccountSettings user={activeUser} onUserChanged={setUser} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onOpenPlans={()=>changeView('plans')}/>} 
         {view==='admin'&&activeUser.role==='admin'&&<Admin user={activeUser} uiSettings={uiSettings} onSettingsChanged={setUiSettings} onOpenView={changeView}/>} 
       </div>

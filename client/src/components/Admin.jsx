@@ -45,7 +45,9 @@ const DEFAULT_UI_SETTINGS = {
     projectsTitle:'Projekte', projectsSubtitle:'Deine gespeicherten Designs, Videos und Webseiten.',
     plansTitle:'Abos & Preise', plansSubtitle:'Free, Creator und Studio Pro – während der Beta ohne Zahlung.'
   },
-  theme: { sidebarWidth:255, accentBlue:'#63c7ff', accentYellow:'#ffd400' }
+  theme: { sidebarWidth:255, accentBlue:'#63c7ff', accentYellow:'#ffd400' },
+  planPrices: { free:0, creator:9.99, studio:24.99 },
+  betaPlanPrices: { free:0, creator:0, studio:0 }
 };
 
 function normalizeSettings(value = {}) {
@@ -57,7 +59,9 @@ function normalizeSettings(value = {}) {
     ...value,
     navItems,
     texts:{...DEFAULT_UI_SETTINGS.texts,...(value.texts||{})},
-    theme:{...DEFAULT_UI_SETTINGS.theme,...(value.theme||{})}
+    theme:{...DEFAULT_UI_SETTINGS.theme,...(value.theme||{})},
+    planPrices:{...DEFAULT_UI_SETTINGS.planPrices,...(value.planPrices||{})},
+    betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(value.betaPlanPrices||{})}
   };
 }
 
@@ -110,6 +114,31 @@ function copyText(value) {
   return navigator.clipboard?.writeText(String(value || ''));
 }
 
+function InlineTextEditor({ as = 'span', value = '', active = false, multiline = false, className = '', placeholder = 'Text anklicken', onActivate, onCommit, onCancel }) {
+  const [draft, setDraft] = useState(String(value || ''));
+  useEffect(() => { setDraft(String(value || '')); }, [value, active]);
+  const Tag = as;
+  const finish = () => { onCommit?.(draft); };
+  if (active) {
+    const common = {
+      className: `live-inline-editor ${multiline ? 'multiline' : ''} ${className}`, 
+      value: draft,
+      autoFocus: true,
+      onFocus: (event) => event.currentTarget.select(),
+      onChange: (event) => setDraft(event.target.value),
+      onBlur: finish,
+      onClick: (event) => event.stopPropagation(),
+      onKeyDown: (event) => {
+        if (event.key === 'Escape') { event.preventDefault(); setDraft(String(value || '')); onCancel?.(); }
+        if (!multiline && event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
+        if (multiline && event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); event.currentTarget.blur(); }
+      }
+    };
+    return multiline ? <textarea {...common}/> : <input type="text" {...common}/>;
+  }
+  return <Tag className={className} onClick={(event) => { event.stopPropagation(); onActivate?.(); }} title="Zum Bearbeiten anklicken">{String(value || '') || placeholder}</Tag>;
+}
+
 export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettingsChanged, onOpenView }) {
   const [tab, setTab] = useState('overview');
   const [users, setUsers] = useState([]);
@@ -136,6 +165,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionSummary, setSubscriptionSummary] = useState({ free:0, creator:0, studio:0 });
   const [previewPage, setPreviewPage] = useState('chat');
+  const [editingTextKey, setEditingTextKey] = useState('');
 
   async function loadCore() {
     try {
@@ -342,6 +372,12 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     applyViewChange((old) => ({ ...old, theme: { ...old.theme, ...patch } }));
   }
 
+  function patchPlanPrice(planId, value, beta = false) {
+    const numeric = Math.max(0, Number(String(value).replace(',', '.')) || 0);
+    const key = beta ? 'betaPlanPrices' : 'planPrices';
+    applyViewChange((old) => ({ ...old, [key]: { ...(old[key] || {}), [planId]: numeric } }));
+  }
+
   function patchNav(id, patch) {
     applyViewChange((old) => ({ ...old, navItems: old.navItems.map((item) => item.id === id ? { ...item, ...patch } : item) }));
   }
@@ -398,7 +434,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       setSettingsDraft(saved);
       setViewHistory({ past: [], future: [] });
       onSettingsChanged?.(saved);
-      setStatus('App-Ansicht gespeichert. Die Standardansicht bleibt im Yildiz-AI-Layout.');
+      setStatus('Ansicht und Abo-Preise gespeichert. Die Änderungen sind sofort in Yildiz AI aktiv.');
     } catch (error) {
       setStatus(error.message);
     }
@@ -460,10 +496,23 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
 
     {tab === 'subscriptions' && <div className="admin-subscriptions-panel">
       <div className="admin-stat-grid subscription-admin-stats">
-        <article><Shield size={20}/><span>Free</span><strong>{subscriptionSummary.free || 0}</strong><small>kostenloser Zugang</small></article>
-        <article><BadgeEuro size={20}/><span>Creator</span><strong>{subscriptionSummary.creator || 0}</strong><small>später z. B. {formatPlanPrice(getPlan('creator').examplePrice)}</small></article>
-        <article><Crown size={20}/><span>Studio Pro</span><strong>{subscriptionSummary.studio || 0}</strong><small>später z. B. {formatPlanPrice(getPlan('studio').examplePrice)}</small></article>
+        <article><Shield size={20}/><span>Free</span><strong>{subscriptionSummary.free || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices.free)} / Monat</small></article>
+        <article><BadgeEuro size={20}/><span>Creator</span><strong>{subscriptionSummary.creator || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices.creator)} / Monat</small></article>
+        <article><Crown size={20}/><span>Studio Pro</span><strong>{subscriptionSummary.studio || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices.studio)} / Monat</small></article>
       </div>
+
+      <article className="admin-card plan-price-admin-card">
+        <div className="plan-price-admin-head"><div><h3><BadgeEuro size={19}/> Abo-Preise ändern</h3><p>Die Preise werden direkt auf der Abo-Seite und in der Admin-Vorschau übernommen. In der Beta kannst du den Beta-Preis weiterhin auf 0,00 € lassen.</p></div><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Preise speichern</button></div>
+        <div className="plan-price-editor-grid">
+          {PLAN_CATALOG.map((plan) => <div className="plan-price-editor-card" key={plan.id}>
+            <div><b>{plan.name}</b><span>{plan.eyebrow}</span></div>
+            <label>Späterer Monatspreis (€)<input type="number" min="0" step="0.01" value={settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,false)}/></label>
+            <label>Beta-Preis (€)<input type="number" min="0" step="0.01" value={settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,true)}/></label>
+            <small>Vorschau: {formatPlanPrice(settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice)} jetzt · später {formatPlanPrice(settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice)}</small>
+          </div>)}
+        </div>
+      </article>
+
       <article className="admin-card beta-admin-note"><h3><BadgeEuro size={19}/> Beta-Modus ohne Zahlung</h3><p>Die Auswahl schaltet Funktionen sofort frei. Es gibt noch keinen Zahlungsanbieter, keine Kreditkarte und keine Abbuchung. OpenAI- und Sora-API-Nutzung kann trotzdem Betreiber-Guthaben verbrauchen und bleibt durch Kostenwarnungen und Limits geschützt.</p></article>
       <div className="subscription-user-list">
         {users.map((account) => {
@@ -471,7 +520,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
           const planId = account.role === 'admin' ? 'studio' : (entry.planId || 'free');
           return <article key={account.id} className="subscription-user-row">
             <div><b>{account.username}</b><span>{account.role === 'admin' ? 'Admin · Vollzugriff' : `${getPlan(planId).name} · ${entry.status || 'active'}`}</span></div>
-            <label>Beta-Abo<select value={planId} disabled={account.role === 'admin'} onChange={(event)=>saveSubscription(account,event.target.value)}>{PLAN_CATALOG.map((plan)=><option key={plan.id} value={plan.id}>{plan.name} · Beta 0,00 €</option>)}</select></label>
+            <label>Beta-Abo<select value={planId} disabled={account.role === 'admin'} onChange={(event)=>saveSubscription(account,event.target.value)}>{PLAN_CATALOG.map((plan)=><option key={plan.id} value={plan.id}>{plan.name} · Beta {formatPlanPrice(settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice)}</option>)}</select></label>
           </article>;
         })}
       </div>
@@ -530,39 +579,41 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       <div className={`live-view-stage device-${previewDevice}`} style={{'--preview-sidebar':`${Math.max(210,Math.min(360,Number(settingsDraft.theme.sidebarWidth||255)))}px`,'--preview-blue':settingsDraft.theme.accentBlue,'--preview-yellow':settingsDraft.theme.accentYellow}}>
         <aside className={settingsDraft.compactSidebar ? 'compact' : ''}>
           <div className="live-logo">yildiz<span>☆</span>AI</div>
-          <button className={`live-editable new-design ${selectedVisualId==='text-newDesign'?'selected':''}`} onClick={()=>setSelectedVisualId('text-newDesign')}>
-            <span contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('newDesign',event.currentTarget.textContent)}>{settingsDraft.texts.newDesign}</span>
-          </button>
+          <div role="button" tabIndex={0} className={`live-editable new-design ${selectedVisualId==='text-newDesign'?'selected':''}`} onClick={()=>{setSelectedVisualId('text-newDesign');setEditingTextKey('newDesign')}}>
+            <InlineTextEditor value={settingsDraft.texts.newDesign} active={editingTextKey==='newDesign'} onActivate={()=>{setSelectedVisualId('text-newDesign');setEditingTextKey('newDesign')}} onCommit={(value)=>{patchText('newDesign',value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
+          </div>
           <nav>
-            {settingsDraft.navItems.filter((item)=>item.visible!==false).map((item)=><button
+            {settingsDraft.navItems.filter((item)=>item.visible!==false).map((item)=><div
+              role="button"
+              tabIndex={0}
               key={item.id}
-              draggable
+              draggable={editingTextKey !== `nav-${item.id}`}
               onDragStart={()=>setDragVisualId(item.id)}
               onDragOver={(event)=>event.preventDefault()}
               onDrop={()=>dropNav(item.id)}
-              className={`live-editable ${selectedVisualId===`nav-${item.id}`?'selected':''}`}
+              className={`live-editable live-nav-item ${selectedVisualId===`nav-${item.id}`?'selected':''}`}
               onClick={()=>{setSelectedVisualId(`nav-${item.id}`);setPreviewPage(item.id)}}
-            ><GripVertical size={13}/><span contentEditable suppressContentEditableWarning onBlur={(event)=>patchNav(item.id,{label:event.currentTarget.textContent})}>{item.label}</span></button>)}
+            ><GripVertical size={13}/><InlineTextEditor value={item.label} active={editingTextKey===`nav-${item.id}`} onActivate={()=>{setSelectedVisualId(`nav-${item.id}`);setPreviewPage(item.id);setEditingTextKey(`nav-${item.id}`)}} onCommit={(value)=>{patchNav(item.id,{label:value});setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/></div>)}
           </nav>
           <div className="live-sidebar-footer"><span>Mein Konto</span><span>Admin</span></div>
         </aside>
         <main>
           <header>
-            <b className={`live-editable text-only ${selectedVisualId===`text-${previewTitleKey}`?'selected':''}`} onClick={()=>setSelectedVisualId(`text-${previewTitleKey}`)} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText(previewTitleKey,event.currentTarget.textContent)}>{previewTitle}</b>
-            <div className="live-tabs"><span className={`live-editable text-only ${selectedVisualId==='text-chatTab'?'selected':''}`} onClick={()=>setSelectedVisualId('text-chatTab')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('chatTab',event.currentTarget.textContent)}>{settingsDraft.texts.chatTab}</span><span className={`live-editable text-only ${selectedVisualId==='text-workTab'?'selected':''}`} onClick={()=>setSelectedVisualId('text-workTab')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('workTab',event.currentTarget.textContent)}>{settingsDraft.texts.workTab}</span></div>
+            <InlineTextEditor as="b" className={`live-editable text-only ${selectedVisualId===`text-${previewTitleKey}`?'selected':''}`} value={previewTitle} active={editingTextKey===previewTitleKey} onActivate={()=>{setSelectedVisualId(`text-${previewTitleKey}`);setEditingTextKey(previewTitleKey)}} onCommit={(value)=>{patchText(previewTitleKey,value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
+            <div className="live-tabs"><InlineTextEditor className={`live-editable text-only ${selectedVisualId==='text-chatTab'?'selected':''}`} value={settingsDraft.texts.chatTab} active={editingTextKey==='chatTab'} onActivate={()=>{setSelectedVisualId('text-chatTab');setEditingTextKey('chatTab')}} onCommit={(value)=>{patchText('chatTab',value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/><InlineTextEditor className={`live-editable text-only ${selectedVisualId==='text-workTab'?'selected':''}`} value={settingsDraft.texts.workTab} active={editingTextKey==='workTab'} onActivate={()=>{setSelectedVisualId('text-workTab');setEditingTextKey('workTab')}} onCommit={(value)=>{patchText('workTab',value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/></div>
           </header>
-          {settingsDraft.announcement && <div className={`live-announcement live-editable ${selectedVisualId==='text-announcement'?'selected':''}`} onClick={()=>setSelectedVisualId('text-announcement')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchSettings({announcement:event.currentTarget.textContent})}>{settingsDraft.announcement}</div>}
+          {settingsDraft.announcement && <InlineTextEditor as="div" multiline className={`live-announcement live-editable ${selectedVisualId==='text-announcement'?'selected':''}`} value={settingsDraft.announcement} active={editingTextKey==='announcement'} onActivate={()=>{setSelectedVisualId('text-announcement');setEditingTextKey('announcement')}} onCommit={(value)=>{patchSettings({announcement:value});setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>}
           {previewPage === 'chat' ? <section>
-            <div className={`live-status live-editable ${selectedVisualId==='text-statusTitle'?'selected':''}`} onClick={()=>setSelectedVisualId('text-statusTitle')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('statusTitle',event.currentTarget.textContent)}>{settingsDraft.texts.statusTitle}</div>
-            <div className={`live-welcome live-editable ${selectedVisualId==='text-welcome'?'selected':''}`} onClick={()=>setSelectedVisualId('text-welcome')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('welcome',event.currentTarget.textContent)}>{settingsDraft.texts.welcome}</div>
+            <InlineTextEditor as="div" className={`live-status live-editable ${selectedVisualId==='text-statusTitle'?'selected':''}`} value={settingsDraft.texts.statusTitle} active={editingTextKey==='statusTitle'} onActivate={()=>{setSelectedVisualId('text-statusTitle');setEditingTextKey('statusTitle')}} onCommit={(value)=>{patchText('statusTitle',value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
+            <InlineTextEditor as="div" multiline className={`live-welcome live-editable ${selectedVisualId==='text-welcome'?'selected':''}`} value={settingsDraft.texts.welcome} active={editingTextKey==='welcome'} onActivate={()=>{setSelectedVisualId('text-welcome');setEditingTextKey('welcome')}} onCommit={(value)=>{patchText('welcome',value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
             <div className="live-spacer"/>
-            <div className={`live-composer live-editable ${selectedVisualId==='text-composer'?'selected':''}`} onClick={()=>setSelectedVisualId('text-composer')} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText('composer',event.currentTarget.textContent)}>{settingsDraft.texts.composer}</div>
+            <InlineTextEditor as="div" className={`live-composer live-editable ${selectedVisualId==='text-composer'?'selected':''}`} value={settingsDraft.texts.composer} active={editingTextKey==='composer'} onActivate={()=>{setSelectedVisualId('text-composer');setEditingTextKey('composer')}} onCommit={(value)=>{patchText('composer',value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
           </section> : <section className={`live-page-preview page-${previewPage}`}>
             <div className="live-page-heading">
-              <h2 className={`live-editable ${selectedVisualId===`text-${previewTitleKey}`?'selected':''}`} onClick={()=>setSelectedVisualId(`text-${previewTitleKey}`)} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText(previewTitleKey,event.currentTarget.textContent)}>{previewTitle}</h2>
-              <p className={`live-editable ${selectedVisualId===`text-${previewSubtitleKey}`?'selected':''}`} onClick={()=>setSelectedVisualId(`text-${previewSubtitleKey}`)} contentEditable suppressContentEditableWarning onBlur={(event)=>patchText(previewSubtitleKey,event.currentTarget.textContent)}>{previewSubtitle}</p>
+              <InlineTextEditor as="h2" className={`live-editable ${selectedVisualId===`text-${previewTitleKey}`?'selected':''}`} value={previewTitle} active={editingTextKey===previewTitleKey} onActivate={()=>{setSelectedVisualId(`text-${previewTitleKey}`);setEditingTextKey(previewTitleKey)}} onCommit={(value)=>{patchText(previewTitleKey,value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
+              <InlineTextEditor as="p" multiline className={`live-editable ${selectedVisualId===`text-${previewSubtitleKey}`?'selected':''}`} value={previewSubtitle} active={editingTextKey===previewSubtitleKey} onActivate={()=>{setSelectedVisualId(`text-${previewSubtitleKey}`);setEditingTextKey(previewSubtitleKey)}} onCommit={(value)=>{patchText(previewSubtitleKey,value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
             </div>
-            {previewPage === 'plans' ? <div className="live-plan-cards">{PLAN_CATALOG.map((plan)=><article key={plan.id}><b>{plan.name}</b><strong>{formatPlanPrice(0)}</strong><span>Beta</span></article>)}</div> : previewPage === 'projects' ? <div className="live-project-cards"><article/><article/><article/></div> : previewPage === 'website' ? <div className="live-website-preview"><aside/><main><div/><div/><div/></main></div> : previewPage === 'video' ? <div className="live-video-preview"><aside/><main>▶</main><aside/></div> : <div className="live-editor-preview"><aside/><main><div className="live-canvas-sheet">{previewPage === 'flyer' ? 'ANGEBOTE' : 'MOTIV'}</div></main><aside/></div>}
+            {previewPage === 'plans' ? <div className="live-plan-cards">{PLAN_CATALOG.map((plan)=><article key={plan.id}><b>{plan.name}</b><label><span>Monat</span><input aria-label={`${plan.name} Monatspreis`} type="number" min="0" step="0.01" value={settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,false)}/></label><label><span>Beta</span><input aria-label={`${plan.name} Beta-Preis`} type="number" min="0" step="0.01" value={settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,true)}/></label></article>)}</div> : previewPage === 'projects' ? <div className="live-project-cards"><article/><article/><article/></div> : previewPage === 'website' ? <div className="live-website-preview"><aside/><main><div/><div/><div/></main></div> : previewPage === 'video' ? <div className="live-video-preview"><aside/><main>▶</main><aside/></div> : <div className="live-editor-preview"><aside/><main><div className="live-canvas-sheet">{previewPage === 'flyer' ? 'ANGEBOTE' : 'MOTIV'}</div></main><aside/></div>}
           </section>}
         </main>
 
