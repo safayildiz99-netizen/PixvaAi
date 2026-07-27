@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, BadgeEuro, CheckCircle2, CloudDownload, Database, Image, KeyRound, LogOut, Save, ShieldCheck, Trash2, UserCircle2, Video } from 'lucide-react';
 import { api, downloadText } from '../api.js';
-import { PLAN_CATALOG, formatPlanPrice, getPlan, normalizeSubscription } from '../plans.js';
+import { formatPlanPrice, getPlan, getPlanCatalog, normalizeSubscription } from '../plans.js';
 
 function money(value) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
@@ -12,7 +12,7 @@ function limitText(value, suffix = '') {
   return number < 0 ? 'Unbegrenzt' : `${number}${suffix}`;
 }
 
-export default function AccountSettings({ user, onUserChanged, subscription, onSubscriptionChanged, onOpenPlans }) {
+export default function AccountSettings({ user, onUserChanged, subscription, onSubscriptionChanged, onOpenPlans, customPlans = [], planPrices = {}, betaPlanPrices = {} }) {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -20,8 +20,9 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
   const [usage, setUsage] = useState(null);
   const [usageError, setUsageError] = useState('');
   const [dataBusy, setDataBusy] = useState('');
-  const currentSubscription = normalizeSubscription(subscription);
-  const plan = useMemo(() => getPlan(user.role === 'admin' ? 'studio' : currentSubscription.planId), [currentSubscription.planId, user.role]);
+  const catalog = useMemo(() => getPlanCatalog(customPlans), [customPlans]);
+  const currentSubscription = normalizeSubscription(subscription, customPlans);
+  const plan = useMemo(() => getPlan(currentSubscription.planId, customPlans), [currentSubscription.planId, customPlans]);
 
   useEffect(() => {
     api('/api/usage/me')
@@ -48,23 +49,22 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
 
 
   async function testPlan(planId) {
-    if (user.role === 'admin') return;
     setDataBusy(`plan-${planId}`); setStatus(''); setError('');
     try {
       const result = await api('/api/subscription/select', { method: 'POST', body: JSON.stringify({ planId }) });
-      onSubscriptionChanged?.(normalizeSubscription(result.subscription));
-      setStatus(`${getPlan(planId).name} ist jetzt als kostenloser Beta-Test aktiv. Es wurde nichts berechnet.`);
+      onSubscriptionChanged?.(normalizeSubscription(result.subscription, customPlans));
+      setStatus(`${getPlan(planId, customPlans).name} ist jetzt als kostenloser Beta-Test aktiv. Es wurde nichts berechnet.`);
     } catch (requestError) { setError(requestError.message || 'Der Testzugang konnte nicht aktiviert werden.'); }
     finally { setDataBusy(''); }
   }
 
   async function cancelSubscription() {
-    if (user.role === 'admin' || currentSubscription.planId === 'free') return;
+    if (currentSubscription.planId === 'free') return;
     if (!window.confirm(`${plan.name} wirklich kündigen? Dein Konto wechselt sofort auf Free. In der Beta wird nichts berechnet.`)) return;
     setDataBusy('subscription'); setStatus(''); setError('');
     try {
       const result = await api('/api/subscription/cancel', { method: 'POST' });
-      onSubscriptionChanged?.(normalizeSubscription(result.subscription));
+      onSubscriptionChanged?.(normalizeSubscription(result.subscription, customPlans));
       setStatus('Abo gekündigt. Dein Konto verwendet jetzt Free.');
     } catch (requestError) { setError(requestError.message); }
     finally { setDataBusy(''); }
@@ -113,10 +113,10 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
 
       <article className="account-card subscription-account-card">
         <h3><BadgeEuro size={19}/> Mein Beta-Abo</h3>
-        <div className="account-plan-name"><div><span>Aktiver Zugang</span><b>{user.role === 'admin' ? 'Admin · Vollzugriff' : plan.name}</b></div><strong>{formatPlanPrice(0)}<small>/ Beta</small></strong></div>
-        <p>Späterer Beispielpreis: {formatPlanPrice(plan.examplePrice)} pro Monat. Während der Beta gibt es keine Zahlung und keine automatische Verlängerung mit Abbuchung.</p>
-        {user.role !== 'admin' && <div className="beta-plan-test-row">{PLAN_CATALOG.map((entry)=><button key={entry.id} className={currentSubscription.planId===entry.id?'active':''} disabled={Boolean(dataBusy)} onClick={()=>testPlan(entry.id)}>{entry.name} testen · 0,00 €</button>)}</div>}
-        <div className="account-plan-actions"><button className="primary-btn" onClick={onOpenPlans}><BadgeEuro size={17}/>Abos vergleichen</button>{user.role !== 'admin' && currentSubscription.planId !== 'free' && <button onClick={cancelSubscription} disabled={dataBusy === 'subscription'}><LogOut size={17}/>Abo kündigen</button>}</div>
+        <div className="account-plan-name"><div><span>Aktiver Zugang</span><b>{plan.name}{user.role === 'admin' ? ' · Admin' : ''}</b></div><strong>{formatPlanPrice(betaPlanPrices?.[plan.id] ?? plan.betaPrice ?? 0)}<small>/ Beta</small></strong></div>
+        <p>Späterer Beispielpreis: {formatPlanPrice(planPrices?.[plan.id] ?? plan.examplePrice)} pro Monat. Während der Beta gibt es keine Zahlung und keine automatische Verlängerung mit Abbuchung.</p>
+        <div className="beta-plan-test-row">{catalog.map((entry)=><button key={entry.id} className={currentSubscription.planId===entry.id?'active':''} disabled={Boolean(dataBusy)} onClick={()=>testPlan(entry.id)}>{entry.name} testen · {formatPlanPrice(betaPlanPrices?.[entry.id] ?? entry.betaPrice ?? 0)}</button>)}</div>
+        <div className="account-plan-actions"><button className="primary-btn" onClick={onOpenPlans}><BadgeEuro size={17}/>Abos vergleichen</button>{currentSubscription.planId !== 'free' && <button onClick={cancelSubscription} disabled={dataBusy === 'subscription'}><LogOut size={17}/>Abo kündigen</button>}</div>
       </article>
 
       <article className="account-card">
@@ -134,10 +134,11 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
     {usageError && <article className="account-card usage-card"><div className="info-box">KI-Nutzung konnte nicht geladen werden: {usageError}</div></article>}
     {usage && <article className="account-card usage-card">
       <h3><BarChart3 size={19}/> Meine KI-Nutzung</h3>
-      <div className="usage-metrics">
-        <div><Image size={18}/><span>Bilder heute</span><b>{usage.usage?.dailyImages || 0} / {limitText(usage.limits?.dailyImageLimit)}</b></div>
-        <div><Video size={18}/><span>Videosekunden heute</span><b>{usage.usage?.dailyVideoSeconds || 0} / {limitText(usage.limits?.dailyVideoSecondsLimit, ' s')}</b></div>
-        <div><BarChart3 size={18}/><span>API-Kosten diesen Monat</span><b>{money(usage.usage?.monthlyCostUsd)} / {Number(usage.limits?.monthlyBudgetUsd) < 0 ? 'Unbegrenzt' : money(usage.limits?.monthlyBudgetUsd)}</b></div>
+      <div className="usage-metrics usage-metrics-expanded">
+        <div><Image size={18}/><span>Bilder heute</span><b>{usage.usage?.dailyImages || 0} / {limitText(usage.limits?.dailyImageLimit)}</b><small>{money(usage.usage?.dailyImageCostUsd)} heute · {money(usage.usage?.monthlyImageCostUsd)} Monat</small></div>
+        <div><Video size={18}/><span>Videosekunden heute</span><b>{usage.usage?.dailyVideoSeconds || 0} / {limitText(usage.limits?.dailyVideoSecondsLimit, ' s')}</b><small>{money(usage.usage?.dailyVideoCostUsd)} heute · {money(usage.usage?.monthlyVideoCostUsd)} Monat</small></div>
+        <div><BarChart3 size={18}/><span>API-Kosten heute</span><b>{money(usage.usage?.dailyCostUsd)}</b><small>Bild und Video zusammen</small></div>
+        <div><BarChart3 size={18}/><span>API-Kosten diesen Monat</span><b>{money(usage.usage?.monthlyCostUsd)} / {Number(usage.limits?.monthlyBudgetUsd) < 0 ? 'Unbegrenzt' : money(usage.limits?.monthlyBudgetUsd)}</b><small>Nur abgeschlossene Aufträge</small></div>
       </div>
       <div className="info-box">Das Beta-Abo kostet dich 0,00 €. Diese Anzeige betrifft nur mögliches OpenAI-/Sora-API-Guthaben des Betreibers.</div>
     </article>}

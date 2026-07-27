@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
-import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Menu, MessageSquarePlus, Mic, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, ShieldCheck, Square, Trash2, User, Video, Volume2, WandSparkles, X } from 'lucide-react';
+import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Instagram, Menu, MessageSquarePlus, Mic, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, ShieldCheck, Square, Trash2, User, Video, Volume2, WandSparkles, X } from 'lucide-react';
 import { api, getToken } from '../api.js';
 import { canUseFeature, getPlan } from '../plans.js';
 
@@ -263,6 +263,20 @@ async function createXlsxBlob(title, content) {
 function openExternal(url) {
   if (!url) return;
   window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+async function mediaSourceToFile(source, fallbackName = 'yildiz-ai.png') {
+  if (!source) throw new Error('Keine Mediendatei vorhanden.');
+  let response;
+  try { response = await fetch(source); } catch { response = null; }
+  if (!response?.ok && /^https?:/i.test(String(source))) {
+    response = await fetch(`/api/ai/image-proxy?url=${encodeURIComponent(source)}`);
+  }
+  if (!response?.ok) throw new Error('Die Datei konnte nicht für Instagram vorbereitet werden.');
+  const blob = await response.blob();
+  const extension = blob.type.includes('video') ? 'mp4' : blob.type.includes('jpeg') ? 'jpg' : blob.type.includes('webp') ? 'webp' : 'png';
+  const base = safeFileName(fallbackName.replace(/\.[^.]+$/, ''), 'yildiz-ai');
+  return new File([blob], `${base}.${extension}`, { type: blob.type || (extension === 'mp4' ? 'video/mp4' : 'image/png') });
 }
 
 function MessageContent({ text }) {
@@ -728,7 +742,7 @@ function hydrateMessages(messages) {
   });
 }
 
-export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId = 'guest', isGuest = true, uiText = {}, subscription, userRole = 'user', onOpenPlans, costPromptMode = 'all' }) {
+export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId = 'guest', isGuest = true, uiText = {}, subscription, userRole = 'user', onOpenPlans, costPromptMode = 'all', customPlans = [] }) {
   const welcomeMessage = useMemo(() => ({ ...WELCOME_MESSAGE, content: uiText.welcome || WELCOME_MESSAGE.content }), [uiText.welcome]);
   const [messages, setMessages] = useState([welcomeMessage]);
   const [chatSessions, setChatSessions] = useState([]);
@@ -767,9 +781,9 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
   const cloudUpdatedAtRef = useRef(0);
   const ownerKey = useMemo(() => String(accountId || 'guest'), [accountId]);
   const cloudEnabled = !isGuest && ownerKey !== 'guest';
-  const canPaidImages = canUseFeature(subscription, 'paidImages', userRole);
-  const canPaidVideos = canUseFeature(subscription, 'paidVideos', userRole);
-  const planName = userRole === 'admin' ? 'Admin' : getPlan(subscription?.planId).name;
+  const canPaidImages = canUseFeature(subscription, 'paidImages', userRole, customPlans);
+  const canPaidVideos = canUseFeature(subscription, 'paidVideos', userRole, customPlans);
+  const planName = getPlan(subscription?.planId, customPlans).name;
   const hasPayload = useMemo(() => Boolean(String(input || '').trim() || attachments.length), [input, attachments.length]);
   useEffect(() => { activeChatIdRef.current = activeChatId; }, [activeChatId]);
   useEffect(() => { localStorage.setItem(`yildiz_ai_free_only_${ownerKey}`, freeOnly ? '1' : '0'); }, [freeOnly, ownerKey]);
@@ -1586,6 +1600,28 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
   }
 
 
+  async function shareToInstagram(item) {
+    const source = item?.previewUrl || item?.data || item?.imageUrl || '';
+    try {
+      setStatus('Datei wird für Instagram vorbereitet …');
+      const file = await mediaSourceToFile(source, item?.name || item?.title || 'yildiz-ai');
+      const payload = { files:[file], title:item?.title || 'Yildiz AI', text:item?.caption || item?.title || 'Erstellt mit Yildiz AI' };
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files:[file] }))) {
+        await navigator.share(payload);
+        setStatus('Teilen geöffnet. Wähle jetzt Instagram aus.');
+      } else {
+        const url = URL.createObjectURL(file);
+        downloadMedia(url, file.name);
+        setTimeout(()=>URL.revokeObjectURL(url),5000);
+        window.open('https://www.instagram.com/', '_blank', 'noopener,noreferrer');
+        setStatus('Datei heruntergeladen und Instagram geöffnet. Auf dem Handy funktioniert die direkte Teilen-Auswahl am besten.');
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') setStatus('Instagram-Teilen abgebrochen.');
+      else setStatus(error.message || 'Instagram-Teilen war nicht möglich.');
+    }
+  }
+
   async function openImageInEditor(item) {
     try {
       setStatus('Bild wird für den Editor vorbereitet …');
@@ -1614,7 +1650,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
         <div className="attachment-actions">
           <button onClick={() => openExternal(item.imageUrl)}><ExternalLink size={14}/>Bild öffnen</button>
           {item.sourceUrl && <button onClick={() => openExternal(item.sourceUrl)}><Search size={14}/>Quelle</button>}
-          <button onClick={() => createPdfFromSearchResult(item, item.title || item.name)}><FileDown size={14}/>PDF</button>
+          <button onClick={() => createPdfFromSearchResult(item, item.title || item.name)}><FileDown size={14}/>PDF</button><button onClick={() => shareToInstagram(item)}><Instagram size={14}/>Instagram</button>
           {onOpenImageProject && <button onClick={() => openImageInEditor(item)}><Edit3 size={14}/>Bearbeiten</button>}
         </div>
       </div>;
@@ -1625,7 +1661,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
         <span>{item.name}</span>
         <div className="attachment-actions">
           <button onClick={() => downloadMedia(item.previewUrl || item.data, item.name || 'yildiz-ai.png')}><Download size={14}/>Speichern</button>
-          <button onClick={() => reuseImage(item)}><ImagePlus size={14}/>Als Referenz</button>
+          <button onClick={() => reuseImage(item)}><ImagePlus size={14}/>Als Referenz</button><button onClick={() => shareToInstagram(item)}><Instagram size={14}/>Instagram</button>
           {onOpenImageProject && <button onClick={() => openImageInEditor(item)}><Edit3 size={14}/>Im Editor bearbeiten</button>}
         </div>
       </div>;
@@ -1635,7 +1671,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
         {item.previewUrl ? <video src={item.previewUrl} controls playsInline /> : <div className="video-placeholder"><Video size={24}/><small>{item.cloudMediaMissing ? 'Videodatei war nur lokal verfügbar' : 'Keine Vorschau'}</small></div>}
         <span>{item.name} {item.size ? `· ${formatSize(item.size)}` : ''}</span>
         <div className="attachment-actions">
-          {item.previewUrl && <button onClick={() => downloadMedia(item.previewUrl, item.name || 'yildiz-ai-video.mp4')}><Download size={14}/>Speichern</button>}
+          {item.previewUrl && <><button onClick={() => downloadMedia(item.previewUrl, item.name || 'yildiz-ai-video.mp4')}><Download size={14}/>Speichern</button><button onClick={() => shareToInstagram(item)}><Instagram size={14}/>Instagram</button></>}
           {item.projectData?.data?.scenes?.length > 0 && <button className="edit-video-project-btn" onClick={() => onOpenVideoProject?.(item.projectData)}><Edit3 size={15}/>Video-Studio</button>}
         </div>
       </div>;

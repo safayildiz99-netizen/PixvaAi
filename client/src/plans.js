@@ -88,6 +88,53 @@ export const PLAN_CATALOG = [
   }
 ];
 
+const DEFAULT_ACCESS = {
+  chat: true,
+  freeImageSearch: true,
+  files: true,
+  flyer: false,
+  image: false,
+  paidImages: false,
+  video: false,
+  paidVideos: false,
+  website: false,
+  projects: false
+};
+
+function safeId(value, fallback) {
+  const id = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  return id || fallback;
+}
+
+export function normalizeCustomPlan(value = {}, index = 0) {
+  const id = safeId(value.id || value.name, `plan-${index + 1}`);
+  return {
+    id,
+    name: String(value.name || `Neues Abo ${index + 1}`).slice(0, 50),
+    eyebrow: String(value.eyebrow || 'Individueller Zugang').slice(0, 80),
+    examplePrice: Math.max(0, Number(value.examplePrice ?? 0) || 0),
+    betaPrice: Math.max(0, Number(value.betaPrice ?? 0) || 0),
+    description: String(value.description || 'Individuell vom Admin konfiguriertes Beta-Abo.').slice(0, 240),
+    recommended: Boolean(value.recommended),
+    features: Array.isArray(value.features) ? value.features.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 16) : [],
+    limits: { projects: Number(value?.limits?.projects ?? -1) },
+    access: { ...DEFAULT_ACCESS, ...(value.access || {}) },
+    custom: true
+  };
+}
+
+export function getPlanCatalog(customPlans = []) {
+  const used = new Set(PLAN_CATALOG.map((plan) => plan.id));
+  const extras = (Array.isArray(customPlans) ? customPlans : [])
+    .map(normalizeCustomPlan)
+    .filter((plan) => {
+      if (used.has(plan.id)) return false;
+      used.add(plan.id);
+      return true;
+    });
+  return [...PLAN_CATALOG, ...extras];
+}
+
 export const DEFAULT_SUBSCRIPTION = {
   planId: 'free',
   status: 'active',
@@ -96,12 +143,13 @@ export const DEFAULT_SUBSCRIPTION = {
   canceledAt: null
 };
 
-export function getPlan(planId) {
-  return PLAN_CATALOG.find((plan) => plan.id === planId) || PLAN_CATALOG[0];
+export function getPlan(planId, customPlans = []) {
+  const catalog = getPlanCatalog(customPlans);
+  return catalog.find((plan) => plan.id === planId) || catalog[0];
 }
 
-export function normalizeSubscription(value) {
-  const planId = getPlan(value?.planId || value?.plan_id || 'free').id;
+export function normalizeSubscription(value, customPlans = []) {
+  const planId = getPlan(value?.planId || value?.plan_id || 'free', customPlans).id;
   return {
     ...DEFAULT_SUBSCRIPTION,
     ...value,
@@ -111,9 +159,9 @@ export function normalizeSubscription(value) {
   };
 }
 
-export function canUseFeature(subscription, feature, role = 'user') {
+export function canUseFeature(subscription, feature, role = 'user', customPlans = []) {
   if (role === 'admin') return true;
-  return Boolean(getPlan(normalizeSubscription(subscription).planId)?.access?.[feature]);
+  return Boolean(getPlan(normalizeSubscription(subscription, customPlans).planId, customPlans)?.access?.[feature]);
 }
 
 export function formatPlanPrice(value) {

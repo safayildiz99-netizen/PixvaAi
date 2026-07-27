@@ -1,0 +1,47 @@
+YILDIZ AI V9 – VOLLBILD-BILDEDITOR, INSTAGRAM, ABOS UND KOSTEN
+================================================================
+
+DAS UPDATE SELBST KOSTET 0,00 EURO.
+DIE BETA-ABOS KOSTEN 0,00 EURO UND BUCHEN NICHTS AB.
+Nur echte OpenAI-Bilder und Sora-Videos können weiterhin API-Guthaben verbrauchen.
+
+SCHRITT 1 – SUPABASE AKTUALISIEREN
+-----------------------------------
+1. V9-SUPABASE-UPDATE-EINFACH-OEFFNEN.html doppelklicken.
+2. Auf „Alles kopieren“ drücken.
+3. Supabase → SQL Editor → New query.
+4. Einfügen und Run drücken.
+5. Am Ende muss stehen: Yildiz AI V9 erfolgreich installiert.
+
+SCHRITT 2 – GITHUB AKTUALISIEREN
+--------------------------------
+1. Diese ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Nur den gesamten Inhalt in die Hauptseite des GitHub-Projekts Yildiz-AI hochladen.
+4. Vorhandene Dateien ersetzen.
+5. Commit-Nachricht:
+   Yildiz AI V9 Vollbild Instagram Abos Kosten
+6. In Vercel warten, bis Ready + Production angezeigt wird.
+7. Webseite hart neu laden:
+   Mac: Cmd + Shift + R
+   Windows: Ctrl + F5
+   iPhone: Safari vollständig schließen und erneut öffnen.
+
+NEU UND BEHOBEN
+---------------
+- KI-Bilder werden beim Öffnen im Editor randlos über die gesamte Arbeitsfläche gelegt.
+- Kein weißer Rand: „Ausfüllen“, „Ganzes Bild“ und „Als Hintergrund“ sind direkt verfügbar.
+- Bilder bleiben beweglich, skalierbar, drehbar, filterbar und löschbar.
+- Designs, gefundene Produktbilder, KI-Bilder und gerenderte Videos können über „Instagram“ geteilt werden.
+- Auf unterstützten Handys öffnet sich direkt das Teilen-Menü; dort Instagram auswählen.
+- Jeder angemeldete Account einschließlich Admin kann jedes Beta-Abo kostenlos aktivieren.
+- Admin kann zusätzliche Abos anlegen, Preise ändern, Funktionen festlegen und Abos löschen.
+- Abos können im Konto sofort gekündigt werden; danach ist Free aktiv.
+- Der Admin sieht je Konto die Bildkosten heute/Monat, Videokosten heute/Monat und Gesamtkosten heute/Monat.
+- Der Admin kann je Konto einstellen: globale Kostenregel, immer fragen oder ohne Nachfrage starten.
+- Die globale Kostenabfrage bleibt zusätzlich unter Admin → Ansicht verfügbar.
+- Alle Preis- und Aboänderungen werden erst nach „Preise & Abos speichern“ dauerhaft.
+
+INSTAGRAM-HINWEIS
+-----------------
+Die eingebaute Version nutzt das sichere Teilen-Menü des Geräts. Eine vollautomatische Veröffentlichung ohne Instagram-Auswahl benötigt später eine separate Meta-App, Instagram-Professional-Konto, Anmeldung und Freigaben. Dafür sind in V9 keine Zugangsdaten erforderlich.

@@ -1,0 +1,370 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yildiz AI V9 Supabase Update</title><style>body{margin:0;background:#071018;color:#eef7ff;font-family:Inter,Arial,sans-serif}main{max-width:980px;margin:30px auto;padding:22px}h1{color:#63c7ff}p{line-height:1.55;color:#bdd1df}button{position:sticky;top:12px;width:100%;padding:16px;border:0;border-radius:12px;background:#ffd400;color:#111;font-weight:900;font-size:17px;cursor:pointer}textarea{width:100%;min-height:65vh;margin-top:16px;padding:16px;border:1px solid #31536a;border-radius:12px;background:#0b1a24;color:#fff;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;box-sizing:border-box}#ok{margin-top:10px;color:#8dffba;font-weight:800}</style></head><body><main><h1>Yildiz AI V9 · Supabase Update</h1><p>Auf „Alles kopieren“ drücken. Danach Supabase → SQL Editor → New query → Einfügen → Run.</p><button onclick="copyAll()">Alles kopieren</button><div id="ok"></div><textarea id="code" readonly>begin;
+
+-- Flexible Beta-Abos: die alte feste 3-Abo-Prüfung entfernen.
+do $do$
+declare
+  r record;
+begin
+  for r in
+    select conname
+    from pg_constraint
+    where conrelid = &#x27;public.app_subscriptions&#x27;::regclass
+      and contype = &#x27;c&#x27;
+      and pg_get_constraintdef(oid) ilike &#x27;%plan_id%&#x27;
+  loop
+    execute format(&#x27;alter table public.app_subscriptions drop constraint if exists %I&#x27;, r.conname);
+  end loop;
+end
+$do$;
+
+create or replace function private.plan_exists(p_plan text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_plan text := lower(trim(coalesce(p_plan,&#x27;&#x27;)));
+  v_settings jsonb := &#x27;{}&#x27;::jsonb;
+begin
+  if v_plan in (&#x27;free&#x27;,&#x27;creator&#x27;,&#x27;studio&#x27;) then return true; end if;
+  select coalesce(settings,&#x27;{}&#x27;::jsonb) into v_settings from public.app_global_settings where id=1;
+  return exists(
+    select 1
+    from jsonb_array_elements(case when jsonb_typeof(v_settings-&gt;&#x27;customPlans&#x27;)=&#x27;array&#x27; then v_settings-&gt;&#x27;customPlans&#x27; else &#x27;[]&#x27;::jsonb end) item
+    where lower(trim(item-&gt;&gt;&#x27;id&#x27;)) = v_plan
+  );
+end;
+$$;
+revoke all on function private.plan_exists(text) from public, anon, authenticated;
+
+create or replace function private.plan_access_json(p_plan text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_plan text := lower(trim(coalesce(p_plan,&#x27;&#x27;)));
+  v_settings jsonb := &#x27;{}&#x27;::jsonb;
+  v_access jsonb;
+begin
+  if v_plan=&#x27;free&#x27; then
+    return &#x27;{&quot;chat&quot;:true,&quot;freeImageSearch&quot;:true,&quot;files&quot;:true,&quot;flyer&quot;:false,&quot;image&quot;:false,&quot;paidImages&quot;:false,&quot;video&quot;:false,&quot;paidVideos&quot;:false,&quot;website&quot;:false,&quot;projects&quot;:false}&#x27;::jsonb;
+  elsif v_plan=&#x27;creator&#x27; then
+    return &#x27;{&quot;chat&quot;:true,&quot;freeImageSearch&quot;:true,&quot;files&quot;:true,&quot;flyer&quot;:true,&quot;image&quot;:true,&quot;paidImages&quot;:true,&quot;video&quot;:false,&quot;paidVideos&quot;:false,&quot;website&quot;:false,&quot;projects&quot;:true}&#x27;::jsonb;
+  elsif v_plan=&#x27;studio&#x27; then
+    return &#x27;{&quot;chat&quot;:true,&quot;freeImageSearch&quot;:true,&quot;files&quot;:true,&quot;flyer&quot;:true,&quot;image&quot;:true,&quot;paidImages&quot;:true,&quot;video&quot;:true,&quot;paidVideos&quot;:true,&quot;website&quot;:true,&quot;projects&quot;:true}&#x27;::jsonb;
+  end if;
+
+  select coalesce(settings,&#x27;{}&#x27;::jsonb) into v_settings from public.app_global_settings where id=1;
+  select item-&gt;&#x27;access&#x27; into v_access
+  from jsonb_array_elements(case when jsonb_typeof(v_settings-&gt;&#x27;customPlans&#x27;)=&#x27;array&#x27; then v_settings-&gt;&#x27;customPlans&#x27; else &#x27;[]&#x27;::jsonb end) item
+  where lower(trim(item-&gt;&gt;&#x27;id&#x27;)) = v_plan
+  limit 1;
+  return coalesce(v_access,&#x27;{}&#x27;::jsonb);
+end;
+$$;
+revoke all on function private.plan_access_json(text) from public, anon, authenticated;
+
+-- Neue Konten starten mit Free; auch Admins können in der Beta jeden Plan auswählen.
+create or replace function private.ensure_subscription(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+begin
+  insert into public.app_subscriptions(user_id, plan_id, status, beta)
+  values (p_user_id, &#x27;free&#x27;, &#x27;active&#x27;, true)
+  on conflict (user_id) do nothing;
+end;
+$$;
+revoke all on function private.ensure_subscription(uuid) from public, anon, authenticated;
+
+create or replace function public.app_my_subscription(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_id uuid;
+  v_row public.app_subscriptions%rowtype;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object(&#x27;error&#x27;,&#x27;Nicht angemeldet.&#x27;); end if;
+  perform private.ensure_subscription(v_id);
+  select * into v_row from public.app_subscriptions where user_id=v_id;
+  if not private.plan_exists(v_row.plan_id) then
+    update public.app_subscriptions set plan_id=&#x27;free&#x27;,status=&#x27;active&#x27;,updated_at=now() where user_id=v_id;
+    select * into v_row from public.app_subscriptions where user_id=v_id;
+  end if;
+  return jsonb_build_object(&#x27;subscription&#x27;,jsonb_build_object(
+    &#x27;planId&#x27;,v_row.plan_id,
+    &#x27;status&#x27;,v_row.status,
+    &#x27;beta&#x27;,v_row.beta,
+    &#x27;startedAt&#x27;,v_row.started_at,
+    &#x27;canceledAt&#x27;,v_row.canceled_at,
+    &#x27;updatedAt&#x27;,v_row.updated_at,
+    &#x27;adminOverride&#x27;,false
+  ));
+end;
+$$;
+
+create or replace function public.app_beta_select_plan(p_token text, p_plan_id text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_id uuid;
+  v_plan text := lower(trim(coalesce(p_plan_id,&#x27;&#x27;)));
+  v_row public.app_subscriptions%rowtype;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object(&#x27;error&#x27;,&#x27;Nicht angemeldet.&#x27;); end if;
+  if not private.plan_exists(v_plan) then return jsonb_build_object(&#x27;error&#x27;,&#x27;Unbekanntes oder noch nicht gespeichertes Abo.&#x27;); end if;
+
+  insert into public.app_subscriptions(user_id,plan_id,status,beta,started_at,canceled_at,updated_at)
+  values(v_id,v_plan,&#x27;active&#x27;,true,now(),null,now())
+  on conflict(user_id) do update set
+    plan_id=excluded.plan_id,status=&#x27;active&#x27;,beta=true,
+    started_at=case when public.app_subscriptions.plan_id&lt;&gt;excluded.plan_id then now() else public.app_subscriptions.started_at end,
+    canceled_at=null,updated_at=now();
+
+  select * into v_row from public.app_subscriptions where user_id=v_id;
+  return jsonb_build_object(&#x27;ok&#x27;,true,&#x27;charged&#x27;,false,&#x27;subscription&#x27;,jsonb_build_object(
+    &#x27;planId&#x27;,v_row.plan_id,&#x27;status&#x27;,v_row.status,&#x27;beta&#x27;,v_row.beta,
+    &#x27;startedAt&#x27;,v_row.started_at,&#x27;canceledAt&#x27;,v_row.canceled_at,&#x27;updatedAt&#x27;,v_row.updated_at
+  ));
+end;
+$$;
+
+create or replace function public.app_cancel_subscription(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_id uuid;
+  v_row public.app_subscriptions%rowtype;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object(&#x27;error&#x27;,&#x27;Nicht angemeldet.&#x27;); end if;
+  perform private.ensure_subscription(v_id);
+  update public.app_subscriptions set plan_id=&#x27;free&#x27;,status=&#x27;active&#x27;,canceled_at=now(),updated_at=now() where user_id=v_id;
+  select * into v_row from public.app_subscriptions where user_id=v_id;
+  return jsonb_build_object(&#x27;ok&#x27;,true,&#x27;charged&#x27;,false,&#x27;subscription&#x27;,jsonb_build_object(
+    &#x27;planId&#x27;,v_row.plan_id,&#x27;status&#x27;,v_row.status,&#x27;beta&#x27;,v_row.beta,
+    &#x27;startedAt&#x27;,v_row.started_at,&#x27;canceledAt&#x27;,v_row.canceled_at,&#x27;updatedAt&#x27;,v_row.updated_at
+  ));
+end;
+$$;
+
+create or replace function public.app_plan_access(p_token text, p_kind text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_id uuid;
+  v_role text;
+  v_plan text;
+  v_kind text := lower(trim(coalesce(p_kind,&#x27;&#x27;)));
+  v_access jsonb;
+  v_allowed boolean := false;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object(&#x27;allowed&#x27;,false,&#x27;error&#x27;,&#x27;Nicht angemeldet.&#x27;); end if;
+  select role into v_role from public.app_users where id=v_id;
+  perform private.ensure_subscription(v_id);
+  select plan_id into v_plan from public.app_subscriptions where user_id=v_id;
+  if not private.plan_exists(v_plan) then v_plan:=&#x27;free&#x27;; end if;
+  v_access := private.plan_access_json(v_plan);
+  v_allowed := case
+    when v_role=&#x27;admin&#x27; then true
+    when v_kind=&#x27;image&#x27; then coalesce((v_access-&gt;&gt;&#x27;paidImages&#x27;)::boolean,false)
+    when v_kind=&#x27;video&#x27; then coalesce((v_access-&gt;&gt;&#x27;paidVideos&#x27;)::boolean,false)
+    else true
+  end;
+  return jsonb_build_object(
+    &#x27;allowed&#x27;,v_allowed,
+    &#x27;planId&#x27;,v_plan,
+    &#x27;error&#x27;,case when v_allowed then null when v_kind=&#x27;video&#x27; then &#x27;Sora-Videos sind in diesem Abo nicht enthalten. Aktiviere in der Beta kostenlos einen passenden Zugang.&#x27; else &#x27;OpenAI-Bilder sind in diesem Abo nicht enthalten. Aktiviere in der Beta kostenlos einen passenden Zugang.&#x27; end
+  );
+end;
+$$;
+
+create or replace function public.app_admin_subscription_overview(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_admin uuid;
+  v_users jsonb;
+  v_summary jsonb;
+begin
+  v_admin := private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then return jsonb_build_object(&#x27;error&#x27;,&#x27;Nur für Admins.&#x27;); end if;
+  insert into public.app_subscriptions(user_id,plan_id,status,beta)
+  select id,&#x27;free&#x27;,&#x27;active&#x27;,true from public.app_users
+  on conflict(user_id) do nothing;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    &#x27;id&#x27;,u.id,&#x27;username&#x27;,u.username::text,&#x27;role&#x27;,u.role,
+    &#x27;planId&#x27;,case when private.plan_exists(s.plan_id) then s.plan_id else &#x27;free&#x27; end,
+    &#x27;status&#x27;,s.status,&#x27;beta&#x27;,s.beta,&#x27;updatedAt&#x27;,s.updated_at
+  ) order by u.created_at),&#x27;[]&#x27;::jsonb)
+  into v_users
+  from public.app_users u join public.app_subscriptions s on s.user_id=u.id;
+
+  select coalesce(jsonb_object_agg(plan_id,total),&#x27;{}&#x27;::jsonb) into v_summary
+  from (
+    select case when private.plan_exists(s.plan_id) then s.plan_id else &#x27;free&#x27; end as plan_id, count(*)::int as total
+    from public.app_subscriptions s
+    group by 1
+  ) counts;
+
+  return jsonb_build_object(&#x27;users&#x27;,v_users,&#x27;summary&#x27;,v_summary,&#x27;beta&#x27;,true,&#x27;paymentsEnabled&#x27;,false);
+end;
+$$;
+
+create or replace function public.app_admin_set_subscription(p_token text,p_user_id uuid,p_plan_id text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_admin uuid;
+  v_plan text:=lower(trim(coalesce(p_plan_id,&#x27;&#x27;)));
+begin
+  v_admin:=private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then return jsonb_build_object(&#x27;error&#x27;,&#x27;Nur für Admins.&#x27;); end if;
+  if not private.plan_exists(v_plan) then return jsonb_build_object(&#x27;error&#x27;,&#x27;Unbekanntes oder noch nicht gespeichertes Abo.&#x27;); end if;
+  if not exists(select 1 from public.app_users where id=p_user_id) then return jsonb_build_object(&#x27;error&#x27;,&#x27;Konto nicht gefunden.&#x27;); end if;
+  insert into public.app_subscriptions(user_id,plan_id,status,beta,started_at,canceled_at,updated_at)
+  values(p_user_id,v_plan,&#x27;active&#x27;,true,now(),null,now())
+  on conflict(user_id) do update set plan_id=excluded.plan_id,status=&#x27;active&#x27;,beta=true,canceled_at=null,updated_at=now();
+  if to_regclass(&#x27;public.app_admin_audit_log&#x27;) is not null then
+    insert into public.app_admin_audit_log(admin_id,target_user_id,action,details)
+    values(v_admin,p_user_id,&#x27;subscription_changed&#x27;,jsonb_build_object(&#x27;planId&#x27;,v_plan,&#x27;charged&#x27;,false,&#x27;beta&#x27;,true));
+  end if;
+  return jsonb_build_object(&#x27;ok&#x27;,true,&#x27;planId&#x27;,v_plan,&#x27;charged&#x27;,false);
+end;
+$$;
+
+-- Tages- und Monatskosten getrennt für Bilder und Videos.
+create or replace function public.app_my_usage(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_id uuid;
+  v_limit public.app_usage_limits%rowtype;
+  v_day_start timestamptz := date_trunc(&#x27;day&#x27;, now() at time zone &#x27;Europe/Berlin&#x27;) at time zone &#x27;Europe/Berlin&#x27;;
+  v_month_start timestamptz := date_trunc(&#x27;month&#x27;, now() at time zone &#x27;Europe/Berlin&#x27;) at time zone &#x27;Europe/Berlin&#x27;;
+  v_daily_images numeric := 0;
+  v_daily_video_seconds numeric := 0;
+  v_daily_image_cost numeric := 0;
+  v_monthly_image_cost numeric := 0;
+  v_daily_video_cost numeric := 0;
+  v_monthly_video_cost numeric := 0;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object(&#x27;error&#x27;,&#x27;Nicht angemeldet.&#x27;); end if;
+  insert into public.app_usage_limits(user_id,daily_image_limit,daily_video_seconds_limit,monthly_budget_usd)
+  select id,case when role=&#x27;admin&#x27; then -1 else 20 end,case when role=&#x27;admin&#x27; then -1 else 24 end,case when role=&#x27;admin&#x27; then -1 else 10 end
+  from public.app_users where id=v_id on conflict(user_id) do nothing;
+  select * into v_limit from public.app_usage_limits where user_id=v_id;
+
+  select
+    coalesce(count(*) filter(where kind=&#x27;image&#x27; and created_at&gt;=v_day_start),0),
+    coalesce(sum(units) filter(where kind=&#x27;video&#x27; and created_at&gt;=v_day_start),0),
+    coalesce(sum(coalesce(actual_cost_usd,estimated_cost_usd)) filter(where kind=&#x27;image&#x27; and created_at&gt;=v_day_start),0),
+    coalesce(sum(coalesce(actual_cost_usd,estimated_cost_usd)) filter(where kind=&#x27;image&#x27; and created_at&gt;=v_month_start),0),
+    coalesce(sum(coalesce(actual_cost_usd,estimated_cost_usd)) filter(where kind=&#x27;video&#x27; and created_at&gt;=v_day_start),0),
+    coalesce(sum(coalesce(actual_cost_usd,estimated_cost_usd)) filter(where kind=&#x27;video&#x27; and created_at&gt;=v_month_start),0)
+  into v_daily_images,v_daily_video_seconds,v_daily_image_cost,v_monthly_image_cost,v_daily_video_cost,v_monthly_video_cost
+  from public.app_usage_events where user_id=v_id and status=&#x27;completed&#x27;;
+
+  return jsonb_build_object(
+    &#x27;usage&#x27;,jsonb_build_object(
+      &#x27;dailyImages&#x27;,v_daily_images,&#x27;dailyVideoSeconds&#x27;,v_daily_video_seconds,
+      &#x27;dailyImageCostUsd&#x27;,v_daily_image_cost,&#x27;monthlyImageCostUsd&#x27;,v_monthly_image_cost,
+      &#x27;dailyVideoCostUsd&#x27;,v_daily_video_cost,&#x27;monthlyVideoCostUsd&#x27;,v_monthly_video_cost,
+      &#x27;dailyCostUsd&#x27;,v_daily_image_cost+v_daily_video_cost,
+      &#x27;monthlyCostUsd&#x27;,v_monthly_image_cost+v_monthly_video_cost
+    ),
+    &#x27;limits&#x27;,jsonb_build_object(&#x27;dailyImageLimit&#x27;,v_limit.daily_image_limit,&#x27;dailyVideoSecondsLimit&#x27;,v_limit.daily_video_seconds_limit,&#x27;monthlyBudgetUsd&#x27;,v_limit.monthly_budget_usd,&#x27;allowImages&#x27;,v_limit.allow_images,&#x27;allowVideos&#x27;,v_limit.allow_videos)
+  );
+end;
+$$;
+
+create or replace function public.app_admin_usage(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_admin uuid;
+  v_users jsonb;
+  v_day_start timestamptz := date_trunc(&#x27;day&#x27;, now() at time zone &#x27;Europe/Berlin&#x27;) at time zone &#x27;Europe/Berlin&#x27;;
+  v_month_start timestamptz := date_trunc(&#x27;month&#x27;, now() at time zone &#x27;Europe/Berlin&#x27;) at time zone &#x27;Europe/Berlin&#x27;;
+  v_total_day numeric := 0;
+  v_total_month numeric := 0;
+begin
+  v_admin := private.session_user_id(p_token);
+  if v_admin is null or not private.is_admin(v_admin) then return jsonb_build_object(&#x27;error&#x27;,&#x27;Nur für Admins.&#x27;); end if;
+
+  insert into public.app_usage_limits(user_id,daily_image_limit,daily_video_seconds_limit,monthly_budget_usd)
+  select id,case when role=&#x27;admin&#x27; then -1 else 20 end,case when role=&#x27;admin&#x27; then -1 else 24 end,case when role=&#x27;admin&#x27; then -1 else 10 end
+  from public.app_users on conflict(user_id) do nothing;
+
+  select coalesce(sum(coalesce(actual_cost_usd,estimated_cost_usd)) filter(where created_at&gt;=v_day_start),0),
+         coalesce(sum(coalesce(actual_cost_usd,estimated_cost_usd)) filter(where created_at&gt;=v_month_start),0)
+  into v_total_day,v_total_month
+  from public.app_usage_events where status=&#x27;completed&#x27;;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    &#x27;id&#x27;,u.id,&#x27;username&#x27;,u.username::text,&#x27;role&#x27;,u.role,&#x27;active&#x27;,u.active,
+    &#x27;limits&#x27;,jsonb_build_object(&#x27;dailyImageLimit&#x27;,l.daily_image_limit,&#x27;dailyVideoSecondsLimit&#x27;,l.daily_video_seconds_limit,&#x27;monthlyBudgetUsd&#x27;,l.monthly_budget_usd,&#x27;allowImages&#x27;,l.allow_images,&#x27;allowVideos&#x27;,l.allow_videos),
+    &#x27;usage&#x27;,jsonb_build_object(
+      &#x27;dailyImages&#x27;,(select count(*) from public.app_usage_events e where e.user_id=u.id and e.kind=&#x27;image&#x27; and e.status=&#x27;completed&#x27; and e.created_at&gt;=v_day_start),
+      &#x27;dailyVideoSeconds&#x27;,(select coalesce(sum(e.units),0) from public.app_usage_events e where e.user_id=u.id and e.kind=&#x27;video&#x27; and e.status=&#x27;completed&#x27; and e.created_at&gt;=v_day_start),
+      &#x27;dailyImageCostUsd&#x27;,(select coalesce(sum(coalesce(e.actual_cost_usd,e.estimated_cost_usd)),0) from public.app_usage_events e where e.user_id=u.id and e.kind=&#x27;image&#x27; and e.status=&#x27;completed&#x27; and e.created_at&gt;=v_day_start),
+      &#x27;monthlyImageCostUsd&#x27;,(select coalesce(sum(coalesce(e.actual_cost_usd,e.estimated_cost_usd)),0) from public.app_usage_events e where e.user_id=u.id and e.kind=&#x27;image&#x27; and e.status=&#x27;completed&#x27; and e.created_at&gt;=v_month_start),
+      &#x27;dailyVideoCostUsd&#x27;,(select coalesce(sum(coalesce(e.actual_cost_usd,e.estimated_cost_usd)),0) from public.app_usage_events e where e.user_id=u.id and e.kind=&#x27;video&#x27; and e.status=&#x27;completed&#x27; and e.created_at&gt;=v_day_start),
+      &#x27;monthlyVideoCostUsd&#x27;,(select coalesce(sum(coalesce(e.actual_cost_usd,e.estimated_cost_usd)),0) from public.app_usage_events e where e.user_id=u.id and e.kind=&#x27;video&#x27; and e.status=&#x27;completed&#x27; and e.created_at&gt;=v_month_start),
+      &#x27;dailyCostUsd&#x27;,(select coalesce(sum(coalesce(e.actual_cost_usd,e.estimated_cost_usd)),0) from public.app_usage_events e where e.user_id=u.id and e.status=&#x27;completed&#x27; and e.created_at&gt;=v_day_start),
+      &#x27;monthlyCostUsd&#x27;,(select coalesce(sum(coalesce(e.actual_cost_usd,e.estimated_cost_usd)),0) from public.app_usage_events e where e.user_id=u.id and e.status=&#x27;completed&#x27; and e.created_at&gt;=v_month_start)
+    )
+  ) order by u.created_at),&#x27;[]&#x27;::jsonb) into v_users
+  from public.app_users u join public.app_usage_limits l on l.user_id=u.id;
+
+  return jsonb_build_object(&#x27;users&#x27;,v_users,&#x27;totalDailyCostUsd&#x27;,v_total_day,&#x27;totalMonthlyCostUsd&#x27;,v_total_month);
+end;
+$$;
+
+grant execute on function public.app_my_subscription(text) to anon,authenticated;
+grant execute on function public.app_beta_select_plan(text,text) to anon,authenticated;
+grant execute on function public.app_cancel_subscription(text) to anon,authenticated;
+grant execute on function public.app_plan_access(text,text) to anon,authenticated;
+grant execute on function public.app_admin_subscription_overview(text) to anon,authenticated;
+grant execute on function public.app_admin_set_subscription(text,uuid,text) to anon,authenticated;
+grant execute on function public.app_my_usage(text) to anon,authenticated;
+grant execute on function public.app_admin_usage(text) to anon,authenticated;
+
+commit;
+
+select &#x27;Yildiz AI V9 erfolgreich installiert.&#x27; as status;
+</textarea><script>async function copyAll(){const t=document.getElementById('code');t.select();t.setSelectionRange(0,99999999);try{await navigator.clipboard.writeText(t.value)}catch(e){document.execCommand('copy')}document.getElementById('ok').textContent='Kopiert. Jetzt in Supabase einfügen und Run drücken.'}</script></main></body></html>

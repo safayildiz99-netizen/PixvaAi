@@ -6,7 +6,7 @@ import {
 } from 'fabric';
 import {
   AlignCenter, ArrowDownToLine, ArrowUpToLine, Bold, Copy, Download, Eye, EyeOff,
-  ExternalLink, FileArchive, FileText, FlipHorizontal2, FlipVertical2, ImagePlus, Layers, LoaderCircle,
+  ExternalLink, FileArchive, FileText, FlipHorizontal2, FlipVertical2, ImagePlus, Instagram, Layers, LoaderCircle, Maximize2, Minimize2,
   Lock, MoveDown, MoveUp, Plus, Redo2, RotateCcw, Save, Sparkles, Square, Trash2,
   Type, Undo2, Unlock, Upload, WandSparkles, ZoomIn
 } from 'lucide-react';
@@ -369,7 +369,7 @@ function sourceElementToBlob(imageObject) {
   });
 }
 
-export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {} }) {
+export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {}, costPromptMode = 'all', customPlans = [] }) {
   const elementRef = useRef(null);
   const fabricRef = useRef(null);
   const historyRef = useRef([]);
@@ -547,9 +547,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       } else if (mode === 'image' && project?.data?.initialImage) {
         try {
           canvas.clear();
-          canvas.backgroundColor = '#ffffff';
+          canvas.backgroundColor = '#111111';
           const image = await createFabricImage(project.data.initialImage);
-          const scale = Math.min(canvas.width / Math.max(1, image.width), canvas.height / Math.max(1, image.height));
+          const scale = Math.max(canvas.width / Math.max(1, image.width), canvas.height / Math.max(1, image.height));
           image.set({
             left: canvas.width / 2, top: canvas.height / 2, originX: 'center', originY: 'center',
             scaleX: scale, scaleY: scale, dataRole: 'generated-image', displayName: 'KI-Bild'
@@ -557,8 +557,8 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           canvas.add(image);
           canvas.setActiveObject(image);
           canvas.requestRenderAll();
-          setBackground('#ffffff');
-          setStatus('KI-Bild geladen. Du kannst es verschieben, skalieren, drehen, zuschneiden, filtern und mit Texten oder Formen ergänzen.');
+          setBackground('#111111');
+          setStatus('KI-Bild randlos über die gesamte Arbeitsfläche geladen. Nutze „Ausfüllen“ oder „Ganzes Bild“, verschiebe es frei und ergänze Text, Logo oder Formen.');
         } catch {
           addCreativeTemplate(canvas, canvas.width, canvas.height);
           setStatus('Das KI-Bild konnte nicht direkt geladen werden.');
@@ -644,7 +644,10 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     const image = await createFabricImage(url);
     const maxW = options.maxW || canvas.width * .72;
     const maxH = options.maxH || canvas.height * .48;
-    image.scale(Math.min(maxW / image.width, maxH / image.height, 1));
+    const nextScale = options.fillCanvas
+      ? Math.max(canvas.width / Math.max(1,image.width), canvas.height / Math.max(1,image.height))
+      : Math.min(maxW / Math.max(1,image.width), maxH / Math.max(1,image.height), 1);
+    image.scale(nextScale);
     image.set({
       left: options.left ?? canvas.width / 2,
       top: options.top ?? canvas.height / 2,
@@ -781,6 +784,52 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       setStatus(`Hintergrund konnte nicht entfernt werden: ${error.message}`);
     } finally {
       setRemovingBackground(false);
+    }
+  }
+
+  function fitSelectedImage(modeName = 'cover') {
+    const canvas = fabricRef.current;
+    const object = canvas?.getActiveObject();
+    if (!(object instanceof FabricImage)) { setStatus('Wähle zuerst ein Bild aus.'); return; }
+    const scale = modeName === 'contain'
+      ? Math.min(canvas.width / Math.max(1,object.width), canvas.height / Math.max(1,object.height))
+      : Math.max(canvas.width / Math.max(1,object.width), canvas.height / Math.max(1,object.height));
+    object.set({ left:canvas.width/2, top:canvas.height/2, originX:'center', originY:'center', scaleX:scale, scaleY:scale, angle:0 });
+    object.setCoords();
+    canvas.requestRenderAll();
+    snapshot();
+    setStatus(modeName === 'contain' ? 'Das ganze Bild ist sichtbar.' : 'Das Bild füllt die Arbeitsfläche randlos aus. Überstehende Ränder werden abgeschnitten.');
+  }
+
+  function sendImageToBackground() {
+    const canvas = fabricRef.current;
+    const object = canvas?.getActiveObject();
+    if (!(object instanceof FabricImage)) { setStatus('Wähle zuerst ein Bild aus.'); return; }
+    fitSelectedImage('cover');
+    canvas.sendObjectToBack(object);
+    canvas.setActiveObject(object);
+    canvas.requestRenderAll();
+    snapshot();
+    setStatus('Bild liegt jetzt randlos als unterste Ebene. Es bleibt weiterhin auswählbar und bearbeitbar.');
+  }
+
+  async function shareCurrentToInstagram() {
+    try {
+      setStatus('Design wird für Instagram vorbereitet …');
+      const data = currentPngData();
+      const blob = await (await fetch(data)).blob();
+      const file = new File([blob], `${safeName(projectName)}.png`, { type:'image/png' });
+      if (navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))) {
+        await navigator.share({ files:[file], title:projectName, text:'Erstellt mit Yildiz AI' });
+        setStatus('Teilen geöffnet. Wähle Instagram aus.');
+      } else {
+        downloadDataUrl(data, `${safeName(projectName)}.png`);
+        window.open('https://www.instagram.com/', '_blank', 'noopener,noreferrer');
+        setStatus('PNG heruntergeladen und Instagram geöffnet. Auf dem Handy ist die direkte Teilen-Auswahl verfügbar.');
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') setStatus('Instagram-Teilen abgebrochen.');
+      else setStatus(error.message || 'Instagram-Teilen war nicht möglich.');
     }
   }
 
@@ -1050,13 +1099,17 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   }
 
   async function generateAiImage() {
-    if (!canUseFeature(subscription, 'paidImages', userRole)) {
+    if (!canUseFeature(subscription, 'paidImages', userRole, customPlans)) {
       setStatus('OpenAI-Bilder sind ab Creator enthalten. Während der Beta kannst du Creator für 0,00 € aktivieren.');
       onOpenPlans?.();
       return;
     }
-    const approved = window.confirm('Kostenhinweis: Dieses echte OpenAI-Bild kann ungefähr 0,02–0,20 US-Dollar API-Guthaben verbrauchen. Wirklich erstellen?');
-    if (!approved) { setStatus('Kostenpflichtige Bilderstellung abgebrochen.'); return; }
+    if (costPromptMode !== 'none') {
+      const approved = window.confirm('Kostenhinweis: Dieses echte OpenAI-Bild kann ungefähr 0,02–0,20 US-Dollar API-Guthaben verbrauchen. Wirklich erstellen?');
+      if (!approved) { setStatus('Kostenpflichtige Bilderstellung abgebrochen.'); return; }
+    } else {
+      setStatus('Kostenabfrage ist für dieses Konto deaktiviert. Die API kann trotzdem Guthaben verbrauchen.');
+    }
     setGenerating(true);
     setStatus('KI-Bild wird erstellt …');
     try {
@@ -1157,7 +1210,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           <textarea value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} rows={4}/>
           <label>Stil<select value={imageStyle} onChange={(event) => setImageStyle(event.target.value)}><option value="realistic">Realistisch</option><option value="product">Produktfoto</option><option value="poster">Werbeposter</option><option value="studio">Studio</option></select></label>
           <button className="primary-btn wide" onClick={generateAiImage} disabled={generating}>{generating ? <LoaderCircle className="spin" size={17}/> : <Sparkles size={17}/>} {generating ? 'Wird erstellt …' : 'KI-Bild erstellen'}</button>
-          {localMotifUrl && <div className="ai-result"><img src={localMotifUrl} alt="KI Motiv"/><button onClick={() => mode === 'flyer' ? replaceProductImage(localMotifUrl) : addImageUrl(localMotifUrl)}><ImagePlus size={16}/>In Design einsetzen</button></div>}
+          {localMotifUrl && <div className="ai-result"><img src={localMotifUrl} alt="KI Motiv"/><button onClick={() => mode === 'flyer' ? replaceProductImage(localMotifUrl) : addImageUrl(localMotifUrl,{fillCanvas:true,displayName:'KI-Bild'})}><ImagePlus size={16}/>In Design einsetzen</button></div>}
         </div>
       </aside>
 
@@ -1180,7 +1233,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
             <button onClick={saveProject}><Save size={17}/>{canSave ? 'Speichern' : 'Anmelden'}</button>
             <button onClick={exportPdf}><FileText size={17}/>PDF</button>
             <button onClick={exportZip}><FileArchive size={17}/>ZIP</button>
-            <button className="primary-btn" onClick={exportPng}><Download size={17}/>PNG</button>
+            <button className="primary-btn" onClick={exportPng}><Download size={17}/>PNG</button><button className="instagram-btn" onClick={shareCurrentToInstagram}><Instagram size={17}/>Instagram</button>
             <select className="external-mode" value={externalExportMode} onChange={(event) => setExternalExportMode(event.target.value)} title="Was soll extern geöffnet werden?">
               <option value="edited">Bearbeitetes Design</option>
               <option value="template">Nur Vorlage</option>
@@ -1245,6 +1298,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
             <label>Helligkeit <span>{adjustments.brightness.toFixed(2)}</span><input type="range" min="-1" max="1" step="0.05" value={adjustments.brightness} onChange={(event) => applyImageAdjustments({ ...adjustments, brightness: Number(event.target.value) })} onMouseUp={snapshot}/></label>
             <label>Kontrast <span>{adjustments.contrast.toFixed(2)}</span><input type="range" min="-1" max="1" step="0.05" value={adjustments.contrast} onChange={(event) => applyImageAdjustments({ ...adjustments, contrast: Number(event.target.value) })} onMouseUp={snapshot}/></label>
             <label>Sättigung <span>{adjustments.saturation.toFixed(2)}</span><input type="range" min="-1" max="1" step="0.05" value={adjustments.saturation} onChange={(event) => applyImageAdjustments({ ...adjustments, saturation: Number(event.target.value) })} onMouseUp={snapshot}/></label>
+            <div className="image-fit-actions"><button onClick={()=>fitSelectedImage('cover')}><Maximize2 size={16}/>Ausfüllen</button><button onClick={()=>fitSelectedImage('contain')}><Minimize2 size={16}/>Ganzes Bild</button><button onClick={sendImageToBackground}><Layers size={16}/>Als Hintergrund</button></div>
             <button onClick={resetImageAdjustments}><RotateCcw size={16}/>Bildwerte zurücksetzen</button>
             <button className="primary-btn" onClick={removeImageBackground} disabled={removingBackground}><WandSparkles size={16}/>{removingBackground ? 'Wird entfernt …' : 'Hintergrund entfernen'}</button>
           </div>}

@@ -16,10 +16,14 @@ export default async function handler(req, res) {
       betaAllPlansTestable: true,
       defaultVideoModel: 'sora-2-pro',
       defaultVideoResolution: '1024x1792',
-      costPromptMode: 'admin-controlled',
+      costPromptMode: 'global-and-per-account',
       generatedImageEditing: true,
+      generatedImageFullBleedEditing: true,
+      instagramShareSheet: true,
+      customBetaPlans: true,
+      usageCostsDailyAndMonthly: true,
       paymentsEnabled: false,
-      plans: ['free','creator','studio']
+      plans: 'admin-configurable'
     });
   } catch (error) {
     return send(res, 401, { error: error.message });

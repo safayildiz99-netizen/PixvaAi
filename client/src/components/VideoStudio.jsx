@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Copy, Download, FileArchive, FileImage, FileText, Film,
-  ImagePlus, LoaderCircle, Music2, Plus, Save, Sparkles, Trash2, Upload
+  ImagePlus, Instagram, LoaderCircle, Music2, Plus, Save, Sparkles, Trash2, Upload
 } from 'lucide-react';
 import { api } from '../api.js';
 import { canUseFeature } from '../plans.js';
@@ -244,7 +244,7 @@ function createGeneratedMusic(audioContext, destination, totalDuration, style, v
   return nodes;
 }
 
-export default function VideoStudio({ project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {} }) {
+export default function VideoStudio({ project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {}, costPromptMode = 'all', customPlans = [] }) {
   const [projectName, setProjectName] = useState(project?.name || 'Neues KI-Werbevideo');
   const [projectId, setProjectId] = useState(project?.id || '');
   const [scenes, setScenes] = useState(project?.data?.scenes?.length ? project.data.scenes : [newScene(0), newScene(1), newScene(2)]);
@@ -366,7 +366,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
   }
 
   async function generateSceneImage(scene, skipConfirm = false) {
-    if (!canUseFeature(subscription, 'paidImages', userRole)) {
+    if (!canUseFeature(subscription, 'paidImages', userRole, customPlans)) {
       updateScene(scene.id, { status: 'OpenAI-Bilder sind ab Creator enthalten. Beta-Abo kann kostenlos aktiviert werden.' });
       onOpenPlans?.();
       return false;
@@ -396,7 +396,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
   }
 
   async function generateAllImages() {
-    if (!canUseFeature(subscription, 'paidImages', userRole)) {
+    if (!canUseFeature(subscription, 'paidImages', userRole, customPlans)) {
       setStatus('OpenAI-Szenenbilder sind ab Creator enthalten. Während der Beta kannst du den Zugang kostenlos aktivieren.');
       onOpenPlans?.();
       return;
@@ -538,6 +538,24 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
       setRendering(false);
       try { customAudioSource?.stop?.(); } catch {}
       try { audioContext?.close?.(); } catch {}
+    }
+  }
+
+  async function shareRenderedVideo() {
+    if (!resultBlob) { setStatus('Rendere zuerst das Video.'); return; }
+    try {
+      const file = new File([resultBlob], `${safeName(projectName)}.${resultExt || 'mp4'}`, { type:resultBlob.type || 'video/mp4' });
+      if (navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))) {
+        await navigator.share({ files:[file], title:projectName, text:'Erstellt mit Yildiz AI' });
+        setStatus('Teilen geöffnet. Wähle Instagram aus.');
+      } else {
+        downloadBlob(resultBlob,file.name);
+        window.open('https://www.instagram.com/','_blank','noopener,noreferrer');
+        setStatus('Video heruntergeladen und Instagram geöffnet. Auf dem Handy ist direktes Teilen verfügbar.');
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') setStatus('Instagram-Teilen abgebrochen.');
+      else setStatus(error.message || 'Instagram-Teilen war nicht möglich.');
     }
   }
 
@@ -732,7 +750,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
 
       <div className="render-panel">
         <div><h3>Export</h3><p>Video mit echten Szenenbildern, Bewegung, Text und Musik rendern. MP4, sofern der Browser es unterstützt; sonst WebM.</p></div>
-        <div className="render-actions"><button className="primary-btn" onClick={renderVideo} disabled={rendering}>{rendering ? <LoaderCircle className="spin" size={17}/> : <Film size={17}/>} {rendering ? `Rendering ${progress}%` : 'Video rendern'}</button><button onClick={() => createStoryboardPdf()}><FileText size={17}/>PDF</button><button onClick={downloadPngFrames}><FileImage size={17}/>PNG</button><button onClick={exportProjectZip}><FileArchive size={17}/>ZIP</button></div>
+        <div className="render-actions"><button className="primary-btn" onClick={renderVideo} disabled={rendering}>{rendering ? <LoaderCircle className="spin" size={17}/> : <Film size={17}/>} {rendering ? `Rendering ${progress}%` : 'Video rendern'}</button><button onClick={() => createStoryboardPdf()}><FileText size={17}/>PDF</button><button onClick={downloadPngFrames}><FileImage size={17}/>PNG</button><button onClick={exportProjectZip}><FileArchive size={17}/>ZIP</button>{resultBlob&&<button className="instagram-btn" onClick={shareRenderedVideo}><Instagram size={17}/>Instagram</button>}</div>
       </div>
       {rendering && <div className="render-progress"><span style={{ width: `${progress}%` }}/></div>}
       {resultUrl && <div className="video-result"><video src={resultUrl} controls playsInline/><button className="primary-btn" onClick={() => downloadBlob(resultBlob, `${safeName(projectName)}.${resultExt}`)}><Download size={17}/>Video als {resultExt.toUpperCase()} herunterladen</button></div>}

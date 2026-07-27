@@ -47,6 +47,8 @@ const DEFAULT_UI_SETTINGS = {
   compactSidebar: false,
   mobileHistoryDrawer: true,
   costPromptMode: 'all',
+  costPromptOverrides: {},
+  customPlans: [],
   navItems: DEFAULT_NAV_ITEMS,
   texts: {
     appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
@@ -110,7 +112,9 @@ export default function App(){
         texts:{...DEFAULT_UI_SETTINGS.texts,...(result?.settings?.texts||{})},
         theme:{...DEFAULT_UI_SETTINGS.theme,...(result?.settings?.theme||{})},
         planPrices:{...DEFAULT_UI_SETTINGS.planPrices,...(result?.settings?.planPrices||{})},
-        betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(result?.settings?.betaPlanPrices||{})}
+        betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(result?.settings?.betaPlanPrices||{})},
+        costPromptOverrides:{...(result?.settings?.costPromptOverrides||{})},
+        customPlans:Array.isArray(result?.settings?.customPlans)?result.settings.customPlans:[]
       });
     }).catch(()=>{});
     return ()=>{cancelled=true};
@@ -130,14 +134,13 @@ export default function App(){
   useEffect(()=>{
     let cancelled=false;
     if(!user || guest){setSubscription(DEFAULT_SUBSCRIPTION);return()=>{cancelled=true}}
-    if(user.role==='admin'){
-      setSubscription({...DEFAULT_SUBSCRIPTION,planId:'studio',status:'active',beta:true,adminOverride:true});
-      return()=>{cancelled=true};
-    }
-    api('/api/subscription').then((result)=>{if(!cancelled)setSubscription(normalizeSubscription(result.subscription));})
-      .catch(()=>{if(!cancelled)setSubscription(DEFAULT_SUBSCRIPTION)});
+    api('/api/subscription').then((result)=>{
+      if(!cancelled)setSubscription(normalizeSubscription(result.subscription, uiSettings.customPlans));
+    }).catch(()=>{
+      if(!cancelled)setSubscription(DEFAULT_SUBSCRIPTION);
+    });
     return()=>{cancelled=true};
-  },[user?.id,guest]);
+  },[user?.id,guest,uiSettings.customPlans]);
 
   useEffect(()=>{
     if(view==='admin'||view==='account'||view==='chat'||view==='plans') return;
@@ -149,8 +152,8 @@ export default function App(){
 
   const workTarget=useMemo(()=>{
     const preferred=uiSettings.workView;
-    if(preferred&&enabledBySettings(preferred,uiSettings)&&canUseFeature(subscription,VIEW_FEATURES[preferred]||preferred,activeUser?.role)) return preferred;
-    return nav.find((item)=>item.id!=='chat'&&item.id!=='plans'&&canUseFeature(subscription,VIEW_FEATURES[item.id]||item.id,activeUser?.role))?.id||'plans';
+    if(preferred&&enabledBySettings(preferred,uiSettings)&&canUseFeature(subscription,VIEW_FEATURES[preferred]||preferred,activeUser?.role,uiSettings.customPlans)) return preferred;
+    return nav.find((item)=>item.id!=='chat'&&item.id!=='plans'&&canUseFeature(subscription,VIEW_FEATURES[item.id]||item.id,activeUser?.role,uiSettings.customPlans))?.id||'plans';
   },[activeUser?.role,nav,subscription,uiSettings]);
 
   function enterGuest(){
@@ -165,7 +168,7 @@ export default function App(){
   function exit(){setToken('');localStorage.removeItem('yildiz_ai_guest');setGuest(false);setUser(null);setSubscription(DEFAULT_SUBSCRIPTION);setView('chat')}
   function featureAllowed(id){
     const feature=VIEW_FEATURES[id];
-    return !feature||canUseFeature(subscription,feature,activeUser?.role);
+    return !feature||canUseFeature(subscription,feature,activeUser?.role,uiSettings.customPlans);
   }
   function changeView(id){
     setSelectedProject(null);
@@ -180,28 +183,28 @@ export default function App(){
     if(isMobile)setSidebar(false);
   }
   function handleSubscriptionChanged(next){
-    const normalized=normalizeSubscription(next);
+    const normalized=normalizeSubscription(next,uiSettings.customPlans);
     setSubscription(normalized);
-    if(requestedView&&canUseFeature(normalized,VIEW_FEATURES[requestedView],activeUser?.role)){
+    if(requestedView&&canUseFeature(normalized,VIEW_FEATURES[requestedView],activeUser?.role,uiSettings.customPlans)){
       setView(requestedView);setRequestedView('');
     }
   }
   function openProject(project){
     const feature=VIEW_FEATURES[project.type];
-    if(feature&&!canUseFeature(subscription,feature,activeUser?.role)){setRequestedView(project.type);setView('plans');return}
+    if(feature&&!canUseFeature(subscription,feature,activeUser?.role,uiSettings.customPlans)){setRequestedView(project.type);setView('plans');return}
     setSelectedProject(project);setView(project.type);
   }
   function saved(){setRefreshKey((n)=>n+1)}
   function openGeneratedImageProject(imageProject){
     if(!imageProject?.data?.initialImage) return;
-    if(!canUseFeature(subscription,'image',activeUser?.role)){setRequestedView('image');setView('plans');return}
+    if(!canUseFeature(subscription,'image',activeUser?.role,uiSettings.customPlans)){setRequestedView('image');setView('plans');return}
     setSelectedProject({id:`generated-image-${Date.now()}`,type:'image',name:imageProject.name||'KI-Bild bearbeiten',data:imageProject.data});
     setView('image');
   }
 
   function openGeneratedVideoProject(videoProject){
     if(!videoProject?.data?.scenes?.length) return;
-    if(!canUseFeature(subscription,'video',activeUser?.role)){setRequestedView('video');setView('plans');return}
+    if(!canUseFeature(subscription,'video',activeUser?.role,uiSettings.customPlans)){setRequestedView('video');setView('plans');return}
     setSelectedProject({id:`generated-${Date.now()}`,type:'video',name:videoProject.name||'Generiertes Video',data:videoProject.data});
     setView('video');
   }
@@ -212,7 +215,8 @@ export default function App(){
   const uiText={...DEFAULT_UI_SETTINGS.texts,...(uiSettings.texts||{})};
   const uiTheme={...DEFAULT_UI_SETTINGS.theme,...(uiSettings.theme||{})};
   const currentTitle=view==='chat'?uiText.appTitle:(nav.find((item)=>item.id===view)?.label||titles[view]);
-  const currentPlan=activeUser.role==='admin'?getPlan('studio'):getPlan(subscription.planId);
+  const currentPlan=getPlan(subscription.planId,uiSettings.customPlans);
+  const accountCostPromptMode=guest?'all':(uiSettings.costPromptOverrides?.[activeUser.id] || uiSettings.costPromptMode || 'all');
 
   return <div className={`app-shell ${sidebar?'':'sidebar-collapsed'} ${uiSettings.compactSidebar?'compact-sidebar':''}`} style={{'--sidebar-width':`${Math.max(210,Math.min(360,Number(uiTheme.sidebarWidth||255)))}px`,'--y-blue':uiTheme.accentBlue,'--y-yellow':uiTheme.accentYellow}}>
     <aside className="sidebar">
@@ -222,7 +226,7 @@ export default function App(){
       <div className="sidebar-bottom">
         {!guest&&<button className={view==='account'?'active':''} onClick={()=>changeView('account')}><KeyRound size={19}/><span>Mein Konto</span></button>}
         {activeUser.role==='admin'&&<button className={view==='admin'?'active':''} onClick={()=>changeView('admin')}><Settings size={19}/><span>Admin</span></button>}
-        <div className="user-box"><div className="user-avatar">{activeUser.username.slice(0,2).toUpperCase()}</div><div><b>{activeUser.username}</b><span>{guest?'Free · Gast':activeUser.role==='admin'?'Admin · Vollzugriff':currentPlan.name}</span></div><button onClick={exit} title={guest?'Anmelden':'Abmelden'}>{guest?<LogIn size={17}/>:<LogOut size={17}/>}</button></div>
+        <div className="user-box"><div className="user-avatar">{activeUser.username.slice(0,2).toUpperCase()}</div><div><b>{activeUser.username}</b><span>{guest?'Free · Gast':`${currentPlan.name}${activeUser.role==='admin'?' · Admin':''}`}</span></div><button onClick={exit} title={guest?'Anmelden':'Abmelden'}>{guest?<LogIn size={17}/>:<LogOut size={17}/>}</button></div>
       </div>
     </aside>
     {sidebar&&isMobile&&<button className="sidebar-backdrop" aria-label="Menü schließen" onClick={()=>setSidebar(false)}/>} 
@@ -235,14 +239,14 @@ export default function App(){
       {activeUser.mustChangePassword&&!guest&&<div className="warning-banner">Das Startpasswort ist noch aktiv. Öffne links „Mein Konto“ und lege dein eigenes Passwort fest.</div>}
       {requestedView&&view==='plans'&&<div className="plan-unlock-banner"><LockKeyhole size={17}/><span>Der Bereich „{titles[requestedView]||requestedView}“ ist in deinem aktuellen Zugang nicht enthalten. Während der Beta kannst du den passenden Zugang kostenlos aktivieren.</span></div>}
       <div className="workspace-content">
-        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={uiSettings.costPromptMode || 'all'}/>} 
-        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText}/>} 
-        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText}/>} 
-        {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText}/>} 
+        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='website'&&featureAllowed('website')&&<WebsiteBuilder key={selectedProject?.id||'new-site'} project={selectedProject?.type==='website'?selectedProject:null} onSaved={saved} canSave={!guest} uiText={uiText}/>} 
         {view==='projects'&&featureAllowed('projects')&&!guest&&<Projects onOpen={openProject} refreshKey={refreshKey} uiText={uiText}/>} 
-        {view==='plans'&&<Subscriptions user={activeUser} isGuest={guest} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onRequireLogin={exit} uiText={uiText} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices}/>} 
-        {view==='account'&&!guest&&<AccountSettings user={activeUser} onUserChanged={setUser} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onOpenPlans={()=>changeView('plans')}/>} 
+        {view==='plans'&&<Subscriptions user={activeUser} isGuest={guest} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onRequireLogin={exit} uiText={uiText} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices} customPlans={uiSettings.customPlans}/>} 
+        {view==='account'&&!guest&&<AccountSettings user={activeUser} onUserChanged={setUser} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onOpenPlans={()=>changeView('plans')} customPlans={uiSettings.customPlans} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices}/>} 
         {view==='admin'&&activeUser.role==='admin'&&<Admin user={activeUser} uiSettings={uiSettings} onSettingsChanged={setUiSettings} onOpenView={changeView}/>} 
       </div>
     </main>

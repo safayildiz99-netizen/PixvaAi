@@ -5,7 +5,7 @@ import {
   Search, Shield, ShieldAlert, Trash2, Undo2, UserRoundCog, Video, XCircle
 } from 'lucide-react';
 import { api } from '../api.js';
-import { PLAN_CATALOG, formatPlanPrice, getPlan } from '../plans.js';
+import { formatPlanPrice, getPlan, getPlanCatalog, normalizeCustomPlan } from '../plans.js';
 
 const DEFAULT_NAV_ITEMS = [
   { id:'chat', label:'Chat', visible:true },
@@ -32,6 +32,8 @@ const DEFAULT_UI_SETTINGS = {
   compactSidebar: false,
   mobileHistoryDrawer: true,
   costPromptMode: 'all',
+  costPromptOverrides: {},
+  customPlans: [],
   navItems: DEFAULT_NAV_ITEMS,
   texts: {
     appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
@@ -61,7 +63,9 @@ function normalizeSettings(value = {}) {
     texts:{...DEFAULT_UI_SETTINGS.texts,...(value.texts||{})},
     theme:{...DEFAULT_UI_SETTINGS.theme,...(value.theme||{})},
     planPrices:{...DEFAULT_UI_SETTINGS.planPrices,...(value.planPrices||{})},
-    betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(value.betaPlanPrices||{})}
+    betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(value.betaPlanPrices||{})},
+    costPromptOverrides:{...(value.costPromptOverrides||{})},
+    customPlans:Array.isArray(value.customPlans)?value.customPlans.map(normalizeCustomPlan):[]
   };
 }
 
@@ -143,6 +147,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [tab, setTab] = useState('overview');
   const [users, setUsers] = useState([]);
   const [usageUsers, setUsageUsers] = useState([]);
+  const [totalDailyCost, setTotalDailyCost] = useState(0);
   const [totalMonthlyCost, setTotalMonthlyCost] = useState(0);
   const [drafts, setDrafts] = useState({});
   const [status, setStatus] = useState('');
@@ -166,11 +171,12 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [subscriptionSummary, setSubscriptionSummary] = useState({ free:0, creator:0, studio:0 });
   const [previewPage, setPreviewPage] = useState('chat');
   const [editingTextKey, setEditingTextKey] = useState('');
+  const [newPlan, setNewPlan] = useState({ name:'', description:'', examplePrice:14.99, betaPrice:0, recommended:false, access:{ flyer:true, image:true, paidImages:true, video:false, paidVideos:false, website:false, projects:true } });
 
   async function loadCore() {
     try {
       const response = await api('/api/users');
-      let usage = { users: [], totalMonthlyCostUsd: 0 };
+      let usage = { users: [], totalDailyCostUsd: 0, totalMonthlyCostUsd: 0 };
       try {
         usage = await api('/api/admin/usage');
       } catch (usageError) {
@@ -178,6 +184,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       }
       setUsers(response.users || []);
       setUsageUsers(usage.users || []);
+      setTotalDailyCost(Number(usage.totalDailyCostUsd || 0));
       setTotalMonthlyCost(Number(usage.totalMonthlyCostUsd || 0));
       setDrafts(Object.fromEntries((usage.users || []).map((item) => [item.id, normalizeLimitUser(item)])));
       try {
@@ -234,6 +241,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
 
   const usageById = useMemo(() => Object.fromEntries(usageUsers.map((item) => [item.id, item])), [usageUsers]);
   const subscriptionById = useMemo(() => Object.fromEntries(subscriptions.map((item) => [item.id, item])), [subscriptions]);
+  const catalog = useMemo(() => getPlanCatalog(settingsDraft.customPlans), [settingsDraft.customPlans]);
   const filteredChatAccounts = useMemo(() => {
     const query = chatSearch.trim().toLowerCase();
     return chatAccounts.filter((item) => !query || String(item.username || '').toLowerCase().includes(query));
@@ -281,11 +289,67 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         method: 'POST',
         body: JSON.stringify({ userId: target.id, planId })
       });
-      setStatus(`Beta-Abo für ${target.username} auf ${getPlan(planId).name} gesetzt.`);
+      setStatus(`Beta-Abo für ${target.username} auf ${getPlan(planId,settingsDraft.customPlans).name} gesetzt.`);
       loadCore();
     } catch (error) {
       setStatus(error.message);
     }
+  }
+
+  async function saveAccountCostPrompt(userId, value) {
+    try {
+      const overrides = { ...(settingsDraft.costPromptOverrides || {}) };
+      if (value === 'inherit') delete overrides[userId];
+      else overrides[userId] = value;
+      const next = withLegacyVisibility({ ...settingsDraft, costPromptOverrides: overrides });
+      const response = await api('/api/admin/ui-settings', { method:'POST', body:JSON.stringify({ settings: next }) });
+      const saved = normalizeSettings(response.settings || next);
+      setSettingsDraft(saved);
+      onSettingsChanged?.(saved);
+      setStatus('Kostenabfrage für das Konto gespeichert.');
+    } catch (error) { setStatus(error.message); }
+  }
+
+  function addCustomPlan() {
+    const normalized = normalizeCustomPlan({
+      ...newPlan,
+      id: newPlan.name,
+      eyebrow: 'Individueller Beta-Zugang',
+      features: [
+        newPlan.access.flyer && 'Angebote- und Flyer-Editor',
+        newPlan.access.image && 'Motive- und Bildeditor',
+        newPlan.access.paidImages && 'OpenAI-Bilder nach Kostenregel',
+        newPlan.access.video && 'Video-Studio',
+        newPlan.access.paidVideos && 'Sora-Videos nach Kostenregel',
+        newPlan.access.website && 'Website-Builder',
+        newPlan.access.projects && 'Cloud-Projekte'
+      ].filter(Boolean),
+      access: { chat:true, freeImageSearch:true, files:true, ...newPlan.access }
+    }, (settingsDraft.customPlans || []).length);
+    if (!newPlan.name.trim()) { setStatus('Bitte zuerst einen Namen für das neue Abo eintragen.'); return; }
+    if (catalog.some((plan) => plan.id === normalized.id)) { setStatus('Ein Abo mit diesem Namen oder Kürzel existiert bereits.'); return; }
+    applyViewChange((old) => ({
+      ...old,
+      customPlans:[...(old.customPlans || []), normalized],
+      planPrices:{...old.planPrices,[normalized.id]:normalized.examplePrice},
+      betaPlanPrices:{...old.betaPlanPrices,[normalized.id]:normalized.betaPrice}
+    }));
+    setNewPlan({ name:'', description:'', examplePrice:14.99, betaPrice:0, recommended:false, access:{ flyer:true, image:true, paidImages:true, video:false, paidVideos:false, website:false, projects:true } });
+    setStatus('Neues Abo hinzugefügt. Jetzt oben „Preise & Abos speichern“ drücken.');
+  }
+
+  function patchCustomPlan(planId, patch) {
+    applyViewChange((old) => ({ ...old, customPlans:(old.customPlans || []).map((plan) => plan.id === planId ? normalizeCustomPlan({ ...plan, ...patch }) : plan) }));
+  }
+
+  function removeCustomPlan(planId) {
+    if (!window.confirm('Dieses eigene Abo wirklich entfernen? Konten mit diesem Abo fallen danach auf Free zurück.')) return;
+    applyViewChange((old) => {
+      const planPrices={...old.planPrices}; const betaPlanPrices={...old.betaPlanPrices};
+      delete planPrices[planId]; delete betaPlanPrices[planId];
+      return { ...old, customPlans:(old.customPlans || []).filter((plan)=>plan.id!==planId), planPrices, betaPlanPrices };
+    });
+    setStatus('Abo entfernt. Bitte speichern.');
   }
 
   async function resetPassword(target) {
@@ -467,8 +531,9 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         <article><UserRoundCog/><span>Konten</span><strong>{users.length}</strong><small>{users.filter((item) => item.active).length} aktiv</small></article>
         <article><Image/><span>Bilder heute</span><strong>{usageUsers.reduce((sum, item) => sum + Number(item?.usage?.dailyImages || 0), 0)}</strong><small>über OpenAI</small></article>
         <article><Video/><span>Video heute</span><strong>{usageUsers.reduce((sum, item) => sum + Number(item?.usage?.dailyVideoSeconds || 0), 0)} s</strong><small>über Sora</small></article>
-        <article><BarChart3/><span>Kosten Monat</span><strong>{money(totalMonthlyCost)}</strong><small>geschätzte Nutzung</small></article>
-        <article><BadgeEuro/><span>Beta-Abos</span><strong>{(subscriptionSummary.creator || 0) + (subscriptionSummary.studio || 0)}</strong><small>{subscriptionSummary.creator || 0} Creator · {subscriptionSummary.studio || 0} Pro</small></article>
+        <article><BarChart3/><span>Kosten heute</span><strong>{money(totalDailyCost)}</strong><small>Bilder und Videos</small></article>
+        <article><BarChart3/><span>Kosten Monat</span><strong>{money(totalMonthlyCost)}</strong><small>Bilder und Videos</small></article>
+        <article><BadgeEuro/><span>Bezahlte Beta-Pläne</span><strong>{catalog.filter((plan)=>plan.id!=='free').reduce((sum,plan)=>sum+Number(subscriptionSummary?.[plan.id]||0),0)}</strong><small>Beta selbst bleibt 0,00 €</small></article>
       </div>
       <div className="admin-grid admin-grid-two">
         <article className="admin-card"><h3><Cpu size={19}/> KI-Dienste</h3><div className="service-row ok"><CheckCircle2/>Gemini Chat verbunden</div><div className="service-row ok"><CheckCircle2/>OpenAI Bildroute aktiv</div><div className="service-row ok"><CheckCircle2/>Sora-Videoroute aktiv</div><p>Die API-Schlüssel bleiben ausschließlich serverseitig in Vercel.</p></article>
@@ -489,38 +554,55 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         return <div className="user-limit-card" key={account.id}>
           <div className="user-limit-head"><div><b>{account.username}</b><span>{account.role==='admin'?'Admin':'Mitarbeiter'} · {account.active?'aktiv':'deaktiviert'} · {account.mustChangePassword?'Passwortänderung erforderlich':'eigenes Passwort gesetzt'}</span></div><div className="account-actions"><button onClick={()=>resetPassword(account)}><KeyRound size={15}/>Passwort zurücksetzen</button><button onClick={()=>toggle(account)} disabled={account.id===user.id}>{account.active?'Deaktivieren':'Aktivieren'}</button></div></div>
           {visiblePassword && <div className="temporary-password"><div><b>Temporäres Passwort – nur einmal sichtbar</b><code>{visiblePassword}</code></div><button onClick={() => copyText(visiblePassword)}><ClipboardCopy size={16}/>Kopieren</button></div>}
-          <div className="usage-mini-row"><span><Image size={15}/>Heute: {usage.dailyImages || 0} Bilder</span><span><Video size={15}/>Heute: {usage.dailyVideoSeconds || 0} s Video</span><span><BarChart3 size={15}/>Monat: {money(usage.monthlyCostUsd)}</span></div>
-          <div className="limit-editor-grid"><label>Bilder pro Tag<input type="number" min="-1" value={draft.dailyImageLimit} onChange={(event)=>patchDraft(account.id,{dailyImageLimit:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label>Videosekunden pro Tag<input type="number" min="-1" value={draft.dailyVideoSecondsLimit} onChange={(event)=>patchDraft(account.id,{dailyVideoSecondsLimit:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label>Monatsbudget in US-Dollar<input type="number" min="-1" step="0.01" value={draft.monthlyBudgetUsd} onChange={(event)=>patchDraft(account.id,{monthlyBudgetUsd:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label className="checkbox-row"><input type="checkbox" checked={draft.allowImages} onChange={(event)=>patchDraft(account.id,{allowImages:event.target.checked})}/>Bilder erlauben</label><label className="checkbox-row"><input type="checkbox" checked={draft.allowVideos} onChange={(event)=>patchDraft(account.id,{allowVideos:event.target.checked})}/>Videos erlauben</label><button className="primary-btn" onClick={()=>saveLimits(account)}><Save size={16}/>Limits speichern</button></div>
+          <div className="usage-mini-row usage-mini-costs"><span><Image size={15}/>{usage.dailyImages || 0} Bilder · heute {money(usage.dailyImageCostUsd)} · Monat {money(usage.monthlyImageCostUsd)}</span><span><Video size={15}/>{usage.dailyVideoSeconds || 0} s Video · heute {money(usage.dailyVideoCostUsd)} · Monat {money(usage.monthlyVideoCostUsd)}</span><span><BarChart3 size={15}/>Gesamt heute {money(usage.dailyCostUsd)} · Monat {money(usage.monthlyCostUsd)}</span></div>
+          <div className="limit-editor-grid"><label>Bilder pro Tag<input type="number" min="-1" value={draft.dailyImageLimit} onChange={(event)=>patchDraft(account.id,{dailyImageLimit:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label>Videosekunden pro Tag<input type="number" min="-1" value={draft.dailyVideoSecondsLimit} onChange={(event)=>patchDraft(account.id,{dailyVideoSecondsLimit:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label>Monatsbudget in US-Dollar<input type="number" min="-1" step="0.01" value={draft.monthlyBudgetUsd} onChange={(event)=>patchDraft(account.id,{monthlyBudgetUsd:Number(event.target.value)})}/><small>-1 = unbegrenzt</small></label><label className="checkbox-row"><input type="checkbox" checked={draft.allowImages} onChange={(event)=>patchDraft(account.id,{allowImages:event.target.checked})}/>Bilder erlauben</label><label className="checkbox-row"><input type="checkbox" checked={draft.allowVideos} onChange={(event)=>patchDraft(account.id,{allowVideos:event.target.checked})}/>Videos erlauben</label><label>Kostenabfrage für dieses Konto<select value={settingsDraft.costPromptOverrides?.[account.id] || 'inherit'} onChange={(event)=>saveAccountCostPrompt(account.id,event.target.value)}><option value="inherit">Globale Einstellung übernehmen</option><option value="all">Immer vorher fragen</option><option value="none">Ohne Nachfrage starten</option></select><small>Ohne Nachfrage können trotzdem API-Kosten entstehen.</small></label><button className="primary-btn" onClick={()=>saveLimits(account)}><Save size={16}/>Limits speichern</button></div>
         </div>})}</div>
     </>}
 
     {tab === 'subscriptions' && <div className="admin-subscriptions-panel">
       <div className="admin-stat-grid subscription-admin-stats">
-        <article><Shield size={20}/><span>Free</span><strong>{subscriptionSummary.free || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices.free)} / Monat</small></article>
-        <article><BadgeEuro size={20}/><span>Creator</span><strong>{subscriptionSummary.creator || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices.creator)} / Monat</small></article>
-        <article><Crown size={20}/><span>Studio Pro</span><strong>{subscriptionSummary.studio || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices.studio)} / Monat</small></article>
+        {catalog.map((plan)=><article key={plan.id}><BadgeEuro size={20}/><span>{plan.name}</span><strong>{subscriptionSummary?.[plan.id] || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice)} / Monat</small></article>)}
       </div>
 
       <article className="admin-card plan-price-admin-card">
-        <div className="plan-price-admin-head"><div><h3><BadgeEuro size={19}/> Abo-Preise ändern</h3><p>Die Preise werden direkt auf der Abo-Seite und in der Admin-Vorschau übernommen. In der Beta kannst du den Beta-Preis weiterhin auf 0,00 € lassen.</p></div><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Preise speichern</button></div>
+        <div className="plan-price-admin-head"><div><h3><BadgeEuro size={19}/> Preise & Abos verwalten</h3><p>Monatspreise, Beta-Preise und eigene zusätzliche Abos. Während der Beta wird nichts abgebucht.</p></div><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Preise & Abos speichern</button></div>
         <div className="plan-price-editor-grid">
-          {PLAN_CATALOG.map((plan) => <div className="plan-price-editor-card" key={plan.id}>
+          {catalog.map((plan) => <div className="plan-price-editor-card" key={plan.id}>
             <div><b>{plan.name}</b><span>{plan.eyebrow}</span></div>
+            {plan.custom && <><label>Name<input value={plan.name} onChange={(event)=>patchCustomPlan(plan.id,{name:event.target.value})}/></label><label>Beschreibung<textarea value={plan.description} onChange={(event)=>patchCustomPlan(plan.id,{description:event.target.value})}/></label></>}
             <label>Späterer Monatspreis (€)<input type="number" min="0" step="0.01" value={settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,false)}/></label>
             <label>Beta-Preis (€)<input type="number" min="0" step="0.01" value={settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,true)}/></label>
+            {plan.custom && <div className="plan-access-checkboxes">
+              {['flyer','image','paidImages','video','paidVideos','website','projects'].map((feature)=><label className="checkbox-row" key={feature}><input type="checkbox" checked={Boolean(plan.access?.[feature])} onChange={(event)=>patchCustomPlan(plan.id,{access:{...plan.access,[feature]:event.target.checked}})}/>{({flyer:'Flyer',image:'Bildeditor',paidImages:'OpenAI-Bilder',video:'Video-Studio',paidVideos:'Sora-Videos',website:'Webseiten',projects:'Projekte'})[feature]}</label>)}
+            </div>}
             <small>Vorschau: {formatPlanPrice(settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice)} jetzt · später {formatPlanPrice(settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice)}</small>
+            {plan.custom && <button className="danger-btn" onClick={()=>removeCustomPlan(plan.id)}><Trash2 size={15}/>Eigenes Abo löschen</button>}
           </div>)}
         </div>
       </article>
 
-      <article className="admin-card beta-admin-note"><h3><BadgeEuro size={19}/> Beta-Modus ohne Zahlung</h3><p>Die Auswahl schaltet Funktionen sofort frei. Es gibt noch keinen Zahlungsanbieter, keine Kreditkarte und keine Abbuchung. OpenAI- und Sora-API-Nutzung kann trotzdem Betreiber-Guthaben verbrauchen und bleibt durch Kostenwarnungen und Limits geschützt.</p></article>
+      <article className="admin-card new-plan-admin-card">
+        <h3><Plus size={19}/> Neues Abo hinzufügen</h3>
+        <div className="new-plan-grid">
+          <label>Name<input value={newPlan.name} onChange={(event)=>setNewPlan({...newPlan,name:event.target.value})} placeholder="z. B. Business"/></label>
+          <label>Beschreibung<input value={newPlan.description} onChange={(event)=>setNewPlan({...newPlan,description:event.target.value})} placeholder="Für Teams und Unternehmen"/></label>
+          <label>Monatspreis (€)<input type="number" min="0" step="0.01" value={newPlan.examplePrice} onChange={(event)=>setNewPlan({...newPlan,examplePrice:Number(event.target.value)})}/></label>
+          <label>Beta-Preis (€)<input type="number" min="0" step="0.01" value={newPlan.betaPrice} onChange={(event)=>setNewPlan({...newPlan,betaPrice:Number(event.target.value)})}/></label>
+        </div>
+        <div className="plan-access-checkboxes">
+          {['flyer','image','paidImages','video','paidVideos','website','projects'].map((feature)=><label className="checkbox-row" key={feature}><input type="checkbox" checked={Boolean(newPlan.access?.[feature])} onChange={(event)=>setNewPlan({...newPlan,access:{...newPlan.access,[feature]:event.target.checked}})}/>{({flyer:'Flyer',image:'Bildeditor',paidImages:'OpenAI-Bilder',video:'Video-Studio',paidVideos:'Sora-Videos',website:'Webseiten',projects:'Projekte'})[feature]}</label>)}
+        </div>
+        <button className="primary-btn" onClick={addCustomPlan}><Plus size={16}/>Abo hinzufügen</button>
+      </article>
+
+      <article className="admin-card beta-admin-note"><h3><BadgeEuro size={19}/> Beta-Modus ohne Zahlung</h3><p>Jeder Account einschließlich Admin kann jedes Abo aktivieren. Es gibt keine Kreditkarte und keine Abbuchung. Externe Bild- und Videogenerierung bleibt durch Kontolimits und die Kostenabfrage geschützt.</p></article>
       <div className="subscription-user-list">
         {users.map((account) => {
-          const entry = subscriptionById[account.id] || { planId: account.role === 'admin' ? 'studio' : 'free', status:'active' };
-          const planId = account.role === 'admin' ? 'studio' : (entry.planId || 'free');
+          const entry = subscriptionById[account.id] || { planId:'free', status:'active' };
+          const planId = getPlan(entry.planId || 'free',settingsDraft.customPlans).id;
           return <article key={account.id} className="subscription-user-row">
-            <div><b>{account.username}</b><span>{account.role === 'admin' ? 'Admin · Vollzugriff' : `${getPlan(planId).name} · ${entry.status || 'active'}`}</span></div>
-            <label>Beta-Abo<select value={planId} disabled={account.role === 'admin'} onChange={(event)=>saveSubscription(account,event.target.value)}>{PLAN_CATALOG.map((plan)=><option key={plan.id} value={plan.id}>{plan.name} · Beta {formatPlanPrice(settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice)}</option>)}</select></label>
+            <div><b>{account.username}</b><span>{getPlan(planId,settingsDraft.customPlans).name} · {entry.status || 'active'}{account.role === 'admin' ? ' · Adminrechte' : ''}</span></div>
+            <label>Beta-Abo<select value={planId} onChange={(event)=>saveSubscription(account,event.target.value)}>{catalog.map((plan)=><option key={plan.id} value={plan.id}>{plan.name} · Beta {formatPlanPrice(settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice)}</option>)}</select></label>
           </article>;
         })}
       </div>
@@ -613,7 +695,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
               <InlineTextEditor as="h2" className={`live-editable ${selectedVisualId===`text-${previewTitleKey}`?'selected':''}`} value={previewTitle} active={editingTextKey===previewTitleKey} onActivate={()=>{setSelectedVisualId(`text-${previewTitleKey}`);setEditingTextKey(previewTitleKey)}} onCommit={(value)=>{patchText(previewTitleKey,value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
               <InlineTextEditor as="p" multiline className={`live-editable ${selectedVisualId===`text-${previewSubtitleKey}`?'selected':''}`} value={previewSubtitle} active={editingTextKey===previewSubtitleKey} onActivate={()=>{setSelectedVisualId(`text-${previewSubtitleKey}`);setEditingTextKey(previewSubtitleKey)}} onCommit={(value)=>{patchText(previewSubtitleKey,value);setEditingTextKey('')}} onCancel={()=>setEditingTextKey('')}/>
             </div>
-            {previewPage === 'plans' ? <div className="live-plan-cards">{PLAN_CATALOG.map((plan)=><article key={plan.id}><b>{plan.name}</b><label><span>Monat</span><input aria-label={`${plan.name} Monatspreis`} type="number" min="0" step="0.01" value={settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,false)}/></label><label><span>Beta</span><input aria-label={`${plan.name} Beta-Preis`} type="number" min="0" step="0.01" value={settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,true)}/></label></article>)}</div> : previewPage === 'projects' ? <div className="live-project-cards"><article/><article/><article/></div> : previewPage === 'website' ? <div className="live-website-preview"><aside/><main><div/><div/><div/></main></div> : previewPage === 'video' ? <div className="live-video-preview"><aside/><main>▶</main><aside/></div> : <div className="live-editor-preview"><aside/><main><div className="live-canvas-sheet">{previewPage === 'flyer' ? 'ANGEBOTE' : 'MOTIV'}</div></main><aside/></div>}
+            {previewPage === 'plans' ? <div className="live-plan-cards">{catalog.map((plan)=><article key={plan.id}><b>{plan.name}</b><label><span>Monat</span><input aria-label={`${plan.name} Monatspreis`} type="number" min="0" step="0.01" value={settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,false)}/></label><label><span>Beta</span><input aria-label={`${plan.name} Beta-Preis`} type="number" min="0" step="0.01" value={settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice} onChange={(event)=>patchPlanPrice(plan.id,event.target.value,true)}/></label></article>)}</div> : previewPage === 'projects' ? <div className="live-project-cards"><article/><article/><article/></div> : previewPage === 'website' ? <div className="live-website-preview"><aside/><main><div/><div/><div/></main></div> : previewPage === 'video' ? <div className="live-video-preview"><aside/><main>▶</main><aside/></div> : <div className="live-editor-preview"><aside/><main><div className="live-canvas-sheet">{previewPage === 'flyer' ? 'ANGEBOTE' : 'MOTIV'}</div></main><aside/></div>}
           </section>}
         </main>
 
