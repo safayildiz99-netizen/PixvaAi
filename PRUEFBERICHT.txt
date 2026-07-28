@@ -1,44 +1,22 @@
-YILDIZ AI V10.0.3 – PRÜFBERICHT
-Datum: 27.07.2026
+YILDIZ AI V9.2.2 – LOKALE PRÜFUNGEN
+=====================================
 
-VERCEL-HOBBY-STRUKTUR
----------------------
-Öffentliche JavaScript-Dateien unter /api: 1
-Öffentliche Funktion: api/index.js
-Interne API-Code-Dateien unter /server/api: 31
-Interne Endpunkt-Handler: 28
-Router-Einträge: 28
-Ergebnis: BESTANDEN
+- BESTANDEN: Python-Patcher-Syntax
+  Spreadsheet runtime warmup failed during python startup
+  Traceback (most recent call last):
+    File "/tmp/tmp.yTcnQsZYiA/artifact_tool_v2-2.8.4/artifact_tool/patches/warm_spreadsheet_runtime_on_startup.py", line 26, in warm_spreadsheet_runtime_on_startup
+    File "/tmp/tmp.yTcnQsZYiA/artifact_tool_v2-2.8.4/artifact_tool/spreadsheet_warmup.py", line 785, in warm_spreadsheet_runtime
+    File "/tmp/tmp.yTcnQsZYiA/artifact_tool_v2-2.8.4/artifact_tool/spreadsheet_warmup.py", line 720, in _warm_feature_flows
+    File "/tmp/tmp.yTcnQsZYiA/artifact_tool_v2-2.8.4/artifact_tool/spreadsheet_warmup.py", line 704, in _warm_collaboration_flows
+    File "/tmp/tmp.yTcnQsZYiA/artifact_tool_v2-2.8.4/artifact_tool/generated/interface/models.py", line 30820, in hydrate_crdt_from_proto
+    File "/tmp/tmp.yTcnQsZYiA/artifact_tool_v2-2.8.4/artifact_tool/rpc/remote.py", line 749, in __call__
+    File "/tmp/tmp.yTcnQsZYiA/artifact_tool_v2-2.8.4/artifact_tool/rpc/client.py", line 150, in call
+  artifact_tool.rpc.client.RemoteError: hydrateCrdtFromProto requires an empty collaborative document.
+- BESTANDEN: PayPal-Server-Syntax
+- BESTANDEN: Abo-Seite-JSX
+  Subscriptions JSX gültig
+- BESTANDEN: YAML-Workflow gültig
+- BESTANDEN: Fragiler App.jsx-PayPal-Rückkehr-Patch entfernt
+- BESTANDEN: Serverseitige PayPal-Rückkehr eingebaut
 
-CODEPRÜFUNG
------------
-JavaScript-Syntax: BESTANDEN
-React/JSX-Parsing: BESTANDEN
-Lokale Importpfade: BESTANDEN
-vercel.json JSON-Syntax: BESTANDEN
-package.json JSON-Syntax: BESTANDEN
-
-SICHERHEIT UND DATEN
---------------------
-RLS-Pflichtstruktur: BESTANDEN
-Privater Storage-Pfad mit Nutzer-ID: BESTANDEN
-Serverseitige Kosten-, Limit- und Idempotenzprüfung: BESTANDEN
-Client-Geheimnis-Scan: BESTANDEN
-Webhook-Rohdatenmodus: VORHANDEN
-
-AUTOMATISCHE TESTS
-------------------
-8 von 8 Tests bestanden.
-
-PAKETINSTALLATION
------------------
-Der npm-Paketdownload im Arbeitscontainer konnte wegen eines Netzwerk-Timeouts
-nicht vollständig wiederholt werden. Der vorherige Vercel-Log des Zielprojekts
-zeigte jedoch, dass die Abhängigkeiten der V10.0.2 erfolgreich installiert wurden.
-V10.0.3 ändert keine Abhängigkeit, sondern nur die API-Struktur und das Routing.
-
-WICHTIG BEIM GITHUB-UPDATE
---------------------------
-Der alte /api-Ordner muss vollständig gelöscht werden. Danach den neuen /api-
-Ordner hochladen. Wenn alte .js-Dateien unter /api verbleiben, zählt Vercel sie
-weiterhin als zusätzliche Funktionen.
+Der vollständige Produktions-Build wird zusätzlich im GitHub-Workflow geprüft.
