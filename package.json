@@ -1,9 +1,9 @@
 {
   "name": "yildiz-ai-v10-production",
-  "version": "10.0.3",
+  "version": "10.0.4",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI V10.0.3: Vercel Hobby-kompatibel mit einer einzigen gebündelten API-Funktion, Supabase Auth, RLS, Storage, Medienjobs, Kostenkontrolle und Zahlungen",
+  "description": "Yildiz AI V10.0.4: Login mit Benutzername oder E-Mail und sichere einmalige Admin-Einrichtung",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "vercel-build": "npm run build",

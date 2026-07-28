@@ -1,17 +1,44 @@
-YILDIZ AI V9.1 – PRÜFBERICHT
-================================
+YILDIZ AI V10.0.3 – PRÜFBERICHT
+Datum: 27.07.2026
 
-Prüfungen bestanden: 5/5
+VERCEL-HOBBY-STRUKTUR
+---------------------
+Öffentliche JavaScript-Dateien unter /api: 1
+Öffentliche Funktion: api/index.js
+Interne API-Code-Dateien unter /server/api: 31
+Interne Endpunkt-Handler: 28
+Router-Einträge: 28
+Ergebnis: BESTANDEN
 
-- BESTANDEN: billing.js JavaScript-Syntax
-- BESTANDEN: Updater Python-Syntax
-- BESTANDEN: Subscriptions.jsx JSX-Syntax
-- BESTANDEN: SQL-Struktur für Zahlungen und Zugriffsprüfung
-- BESTANDEN: Geheimnis-Scan – keine echten API-Schlüssel gefunden
+CODEPRÜFUNG
+-----------
+JavaScript-Syntax: BESTANDEN
+React/JSX-Parsing: BESTANDEN
+Lokale Importpfade: BESTANDEN
+vercel.json JSON-Syntax: BESTANDEN
+package.json JSON-Syntax: BESTANDEN
 
-WICHTIG:
-- Der Workflow stellt zuerst exakt den erfolgreichen V9-Commit wieder her.
-- Dein alter Admin-Login und die V9-Oberfläche bleiben dadurch erhalten.
-- Danach werden nur Schrift-Ersetzen und PayPal ergänzt.
-- Ein echter PayPal-End-to-End-Test ist erst mit Sandbox-Zugangsdaten möglich.
-- Das echte Empfängerkonto wird durch PAYPAL_CLIENT_ID und PAYPAL_CLIENT_SECRET bestimmt.
+SICHERHEIT UND DATEN
+--------------------
+RLS-Pflichtstruktur: BESTANDEN
+Privater Storage-Pfad mit Nutzer-ID: BESTANDEN
+Serverseitige Kosten-, Limit- und Idempotenzprüfung: BESTANDEN
+Client-Geheimnis-Scan: BESTANDEN
+Webhook-Rohdatenmodus: VORHANDEN
+
+AUTOMATISCHE TESTS
+------------------
+8 von 8 Tests bestanden.
+
+PAKETINSTALLATION
+-----------------
+Der npm-Paketdownload im Arbeitscontainer konnte wegen eines Netzwerk-Timeouts
+nicht vollständig wiederholt werden. Der vorherige Vercel-Log des Zielprojekts
+zeigte jedoch, dass die Abhängigkeiten der V10.0.2 erfolgreich installiert wurden.
+V10.0.3 ändert keine Abhängigkeit, sondern nur die API-Struktur und das Routing.
+
+WICHTIG BEIM GITHUB-UPDATE
+--------------------------
+Der alte /api-Ordner muss vollständig gelöscht werden. Danach den neuen /api-
+Ordner hochladen. Wenn alte .js-Dateien unter /api verbleiben, zählt Vercel sie
+weiterhin als zusätzliche Funktionen.

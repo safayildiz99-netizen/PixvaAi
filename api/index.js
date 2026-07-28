@@ -7,6 +7,8 @@ import aiChat from '../server/api/ai/chat.js';
 import aiImage from '../server/api/ai/image.js';
 import aiVideo from '../server/api/ai/video.js';
 import authSignup from '../server/api/auth/signup.js';
+import authLogin from '../server/api/auth/login.js';
+import authBootstrapAdmin from '../server/api/auth/bootstrap-admin.js';
 import billingCancel from '../server/api/billing/cancel.js';
 import billingCheckout from '../server/api/billing/checkout.js';
 import billingDownload from '../server/api/billing/download.js';
@@ -41,6 +43,8 @@ const ROUTES = new Map([
   ['ai/image', aiImage],
   ['ai/video', aiVideo],
   ['auth/signup', authSignup],
+  ['auth/login', authLogin],
+  ['auth/bootstrap-admin', authBootstrapAdmin],
   ['billing/cancel', billingCancel],
   ['billing/checkout', billingCheckout],
   ['billing/download', billingDownload],

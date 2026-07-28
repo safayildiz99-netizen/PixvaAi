@@ -1,6 +1,6 @@
 {
   "name": "yildiz-ai-v10-client",
-  "version": "10.0.0",
+  "version": "10.0.4",
   "private": true,
   "type": "module",
   "scripts": {
