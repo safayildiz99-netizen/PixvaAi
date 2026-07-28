@@ -1,0 +1,62 @@
+YILDIZ AI V9.3 – SICHERHEIT & DATEN, OHNE GELDÄNDERUNG
+=========================================================
+
+DIESES UPDATE VERÄNDERT NICHT:
+- PayPal
+- Preise
+- Abos
+- Zahlungsdauer
+- Kostenwarnungen und Kostenanzeigen
+- vorhandenes V9-Design, Logo oder Login
+
+NEU:
+- automatisches Speichern nach der ersten manuellen Speicherung
+- 30 Projektversionen mit Wiederherstellung
+- dauerhafte Bild-/Video-Auftragsübersicht
+- Browser-Benachrichtigungen
+- Systemstatus
+- aktuelle Websuche mit Quellen
+- Upload-Größen- und Dateitypprüfung
+- serverseitige Rate Limits
+- vollständiger Datenexport
+- andere Geräte abmelden
+- Konto samt Daten löschen
+- Markenprofil
+- Admin-Fehlerprotokoll
+- leere Dateien werden nicht zum Download angeboten
+
+SCHRITT 1 – SUPABASE:
+1. V9_3_SUPABASE_KOPIEREN.html öffnen.
+2. „SQL vollständig kopieren“ drücken.
+3. Supabase → SQL Editor → New query.
+4. Einfügen → Run.
+5. Am Ende muss stehen:
+   Yildiz AI V9.3 Sicherheit und Daten erfolgreich installiert.
+   Geldfunktionen wurden nicht verändert.
+
+SCHRITT 2 – GITHUB:
+1. Yildiz_AI_V9_3_WORKFLOW_KOPIEREN.html öffnen.
+2. „V9.3 Workflow kopieren“ drücken.
+3. GitHub → Code → .github/workflows → main.yml.
+4. Stift-Symbol drücken.
+5. Cmd + A → alles löschen.
+6. Cmd + V → neuen Workflow einfügen.
+7. Commit changes drücken.
+
+SCHRITT 3 – ACTIONS:
+1. GitHub → Actions.
+2. „Yildiz AI V9.3 Sicherheit und Daten OHNE GELD“ öffnen.
+3. Run workflow drücken.
+4. Auf einen grünen Haken warten.
+
+SCHRITT 4 – VERCEL:
+1. Vercel-Deployment abwarten, bis „Ready / Production“ erscheint.
+2. Yildiz AI mit Cmd + Shift + R neu laden.
+3. Links erscheint „Sicherheit & Daten“.
+
+WICHTIG:
+- Automatisches Speichern beginnt erst, nachdem ein Projekt einmal manuell gespeichert wurde.
+- Die Websuche mit Quellen benötigt den vorhandenen GEMINI_API_KEY.
+- Das Update migriert den bestehenden Benutzernamen-Login nicht zu Supabase Auth.
+- Bereits lokal im Browser liegende große Medien werden nicht automatisch in privaten Supabase Storage verschoben.
+- Vor dem Live-Einsatz mit zwei Testkonten prüfen, dass Projekte und Versionen getrennt bleiben.
