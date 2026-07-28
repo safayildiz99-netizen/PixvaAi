@@ -18,8 +18,7 @@ jobs:
       - name: Aktuellen Workflow sichern
         shell: bash
         run: |
-          cp "$GITHUB_WORKSPACE/$GITHUB_WORKFLOW" /tmp/yildiz-ai-v9-2-3-workflow.yml
-
+          git show "$GITHUB_SHA:.github/workflows/main.yml" > /tmp/yildiz-ai-v9-2-3-workflow.yml
       - name: Korrigierte V9.2.3-Dateien vorbereiten
         shell: bash
         run: |
