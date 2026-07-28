@@ -1,2 +1,0 @@
-import { env, send } from './_lib.js';
-export default async function handler(req,res){if(req.method!=='GET')return send(res,405,{error:'Nur GET ist erlaubt.'});const services={supabase:Boolean(env('SUPABASE_URL')&&env('SUPABASE_SERVICE_ROLE_KEY')),gemini:Boolean(env('GEMINI_API_KEY')),openai:Boolean(env('OPENAI_API_KEY')),stripe:Boolean(env('STRIPE_SECRET_KEY')),paypal:Boolean(env('PAYPAL_CLIENT_ID')&&env('PAYPAL_CLIENT_SECRET'))};return send(res,200,{ok:services.supabase&&services.gemini&&services.openai,checkedAt:new Date().toISOString(),services});}

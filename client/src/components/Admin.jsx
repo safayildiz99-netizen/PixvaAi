@@ -49,7 +49,12 @@ const DEFAULT_UI_SETTINGS = {
   },
   theme: { sidebarWidth:255, accentBlue:'#63c7ff', accentYellow:'#ffd400' },
   planPrices: { free:0, creator:9.99, studio:24.99 },
-  betaPlanPrices: { free:0, creator:0, studio:0 }
+  betaPlanPrices: { free:0, creator:0, studio:0 },
+  paymentsEnabled: false,
+  paymentProvider: 'paypal',
+  paymentMerchantLabel: '',
+  planPurchasable: { free:false, creator:true, studio:true },
+  paidAccessDays: 30
 };
 
 function normalizeSettings(value = {}) {
@@ -64,6 +69,7 @@ function normalizeSettings(value = {}) {
     theme:{...DEFAULT_UI_SETTINGS.theme,...(value.theme||{})},
     planPrices:{...DEFAULT_UI_SETTINGS.planPrices,...(value.planPrices||{})},
     betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(value.betaPlanPrices||{})},
+    planPurchasable:{...DEFAULT_UI_SETTINGS.planPurchasable,...(value.planPurchasable||{})},
     costPromptOverrides:{...(value.costPromptOverrides||{})},
     customPlans:Array.isArray(value.customPlans)?value.customPlans.map(normalizeCustomPlan):[]
   };
@@ -167,6 +173,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [previewDevice, setPreviewDevice] = useState('desktop');
   const [health, setHealth] = useState(null);
   const [healthLoading, setHealthLoading] = useState(false);
+  const [billingConfig, setBillingConfig] = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionSummary, setSubscriptionSummary] = useState({ free:0, creator:0, studio:0 });
   const [previewPage, setPreviewPage] = useState('chat');
@@ -231,11 +238,18 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     }
   }
 
+  async function loadBillingConfig() {
+    try {
+      setBillingConfig(await api('/api/billing?action=config'));
+    } catch (error) {
+      setBillingConfig({ configured:false, error:error.message });
+    }
+  }
   useEffect(() => { loadCore(); }, []);
   useEffect(() => { setSettingsDraft(normalizeSettings(uiSettings)); setViewHistory({ past: [], future: [] }); }, [uiSettings]);
   useEffect(() => {
     if (tab === 'chats') loadChatAccounts();
-    if (tab === 'subscriptions') loadCore();
+    if (tab === 'subscriptions') { loadCore(); loadBillingConfig(); }
     if (tab === 'system') { loadAuditLog(); loadHealth(); }
   }, [tab]);
 
@@ -560,12 +574,26 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     </>}
 
     {tab === 'subscriptions' && <div className="admin-subscriptions-panel">
+      <article className="admin-card paypal-admin-card">
+        <div className="plan-price-admin-head">
+          <div><h3><BadgeEuro size={19}/> PayPal-Zahlungen</h3><p>Der Käufer wird sicher zu PayPal weitergeleitet. Das Geld geht an das PayPal-Business-Konto, dessen API-Zugang in Vercel hinterlegt ist.</p></div>
+          <button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Zahlungen speichern</button>
+        </div>
+        <div className="paypal-settings-grid">
+          <label className="checkbox-row"><input type="checkbox" checked={Boolean(settingsDraft.paymentsEnabled)} onChange={(event)=>patchSettings({paymentsEnabled:event.target.checked})}/>Echte Zahlungen aktivieren</label>
+          <label>Zahlungsanbieter<select value={settingsDraft.paymentProvider || 'paypal'} onChange={(event)=>patchSettings({paymentProvider:event.target.value})}><option value="paypal">PayPal</option><option value="disabled">Deaktiviert</option></select></label>
+          <label>Angezeigtes Empfängerkonto<input value={settingsDraft.paymentMerchantLabel || ''} onChange={(event)=>patchSettings({paymentMerchantLabel:event.target.value})} placeholder="z. B. Yildiz AI / zahlung@firma.de"/><small>Nur Anzeige. Das echte Empfängerkonto wird durch PAYPAL_CLIENT_ID und PAYPAL_CLIENT_SECRET bestimmt.</small></label>
+          <label>Zugangsdauer pro Zahlung<input type="number" min="1" max="365" value={Number(settingsDraft.paidAccessDays || 30)} onChange={(event)=>patchSettings({paidAccessDays:Math.max(1,Number(event.target.value)||30)})}/><small>Tage, danach läuft der bezahlte Zugang ab.</small></label>
+        </div>
+        <div className={`service-row ${billingConfig?.configured ? 'ok' : 'bad'}`}>{billingConfig?.configured ? <CheckCircle2/> : <XCircle/>}{billingConfig?.configured ? `PayPal ${billingConfig.environment === 'live' ? 'LIVE' : 'Sandbox'} verbunden` : 'PayPal-Zugang in Vercel noch nicht vollständig eingetragen'}</div>
+        <div className="info-box">Kartendaten und PayPal-Passwörter werden niemals in Yildiz AI gespeichert. Zum Wechsel des Empfängerkontos werden in Vercel die API-Zugangsdaten des gewünschten PayPal-Business-Kontos eingetragen.</div>
+      </article>
       <div className="admin-stat-grid subscription-admin-stats">
         {catalog.map((plan)=><article key={plan.id}><BadgeEuro size={20}/><span>{plan.name}</span><strong>{subscriptionSummary?.[plan.id] || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice)} / Monat</small></article>)}
       </div>
 
       <article className="admin-card plan-price-admin-card">
-        <div className="plan-price-admin-head"><div><h3><BadgeEuro size={19}/> Preise & Abos verwalten</h3><p>Monatspreise, Beta-Preise und eigene zusätzliche Abos. Während der Beta wird nichts abgebucht.</p></div><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Preise & Abos speichern</button></div>
+        <div className="plan-price-admin-head"><div><h3><BadgeEuro size={19}/> Preise & Abos verwalten</h3><p>Preise, kostenlose Testphase und echte PayPal-Käufe. Zahlungen können jederzeit global ausgeschaltet werden; Preise bleiben trotzdem sichtbar.</p></div><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Preise & Abos speichern</button></div>
         <div className="plan-price-editor-grid">
           {catalog.map((plan) => <div className="plan-price-editor-card" key={plan.id}>
             <div><b>{plan.name}</b><span>{plan.eyebrow}</span></div>
@@ -575,7 +603,8 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
             {plan.custom && <div className="plan-access-checkboxes">
               {['flyer','image','paidImages','video','paidVideos','website','projects'].map((feature)=><label className="checkbox-row" key={feature}><input type="checkbox" checked={Boolean(plan.access?.[feature])} onChange={(event)=>patchCustomPlan(plan.id,{access:{...plan.access,[feature]:event.target.checked}})}/>{({flyer:'Flyer',image:'Bildeditor',paidImages:'OpenAI-Bilder',video:'Video-Studio',paidVideos:'Sora-Videos',website:'Webseiten',projects:'Projekte'})[feature]}</label>)}
             </div>}
-            <small>Vorschau: {formatPlanPrice(settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice)} jetzt · später {formatPlanPrice(settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice)}</small>
+            <label className="checkbox-row"><input type="checkbox" checked={Boolean(settingsDraft.planPurchasable?.[plan.id])} disabled={plan.id==='free'} onChange={(event)=>patchSettings({planPurchasable:{...(settingsDraft.planPurchasable||{}),[plan.id]:event.target.checked}})}/>Über PayPal kaufbar</label>
+            <small>Vorschau: {settingsDraft.paymentsEnabled ? `${formatPlanPrice(settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice)} für ${Number(settingsDraft.paidAccessDays||30)} Tage` : `${formatPlanPrice(settingsDraft.betaPlanPrices?.[plan.id] ?? plan.betaPrice)} im kostenlosen Modus`} · Listenpreis {formatPlanPrice(settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice)}</small>
             {plan.custom && <button className="danger-btn" onClick={()=>removeCustomPlan(plan.id)}><Trash2 size={15}/>Eigenes Abo löschen</button>}
           </div>)}
         </div>
@@ -595,7 +624,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         <button className="primary-btn" onClick={addCustomPlan}><Plus size={16}/>Abo hinzufügen</button>
       </article>
 
-      <article className="admin-card beta-admin-note"><h3><BadgeEuro size={19}/> Beta-Modus ohne Zahlung</h3><p>Jeder Account einschließlich Admin kann jedes Abo aktivieren. Es gibt keine Kreditkarte und keine Abbuchung. Externe Bild- und Videogenerierung bleibt durch Kontolimits und die Kostenabfrage geschützt.</p></article>
+      <article className="admin-card beta-admin-note"><h3><BadgeEuro size={19}/> Kostenlos oder bezahlt</h3><p>Ist „Echte Zahlungen“ ausgeschaltet, bleibt der bisherige kostenlose Beta-Modus aktiv. Ist er eingeschaltet, können nur die markierten Abos über PayPal gekauft werden. Nicht kaufbare Abos zeigen weiterhin den Preis, besitzen aber keinen Kaufknopf.</p></article>
       <div className="subscription-user-list">
         {users.map((account) => {
           const entry = subscriptionById[account.id] || { planId:'free', status:'active' };

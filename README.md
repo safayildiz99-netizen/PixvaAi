@@ -1,35 +1,20 @@
-# Yildiz AI V10.0.3
+# Yildiz AI – PRO-KERN V1
 
-Vercel-Hobby-kompatible Produktionsgrundlage mit **einer einzigen öffentlichen Serverless Function**.
+Vollständige React/Vite- und Vercel-Version mit privater Kontosynchronisierung, Gemini-Chat, OpenAI-Bildern, Sora-Videos, Mediensteuerung und serverseitiger Kostenkontrolle.
 
-## Wichtigster V10.0.3-Fix
+## Installation
 
-V10.0.2 legte alle Endpunkte als einzelne Dateien unter `/api` ab. V10.0.3 verschiebt die Handler nach `/server/api` und bündelt alle bisherigen API-Adressen über `/api/index.js`.
+1. `PRO-KERN-UPDATE-ZUM-KOPIEREN.txt` vollständig im Supabase SQL Editor ausführen.
+2. Den Inhalt dieses Projektordners in das GitHub-Repository hochladen und vorhandene Dateien ersetzen.
+3. Auf das neue Vercel-Deployment warten und die Website hart neu laden.
 
-Im GitHub-Ordner `/api` darf nach der Installation nur noch diese Datei liegen:
+Commit-Nachricht: `Yildiz AI Pro Kern Chat Medien Kostenkontrolle`
 
-```text
-api/index.js
-```
+## Pflichtvariablen in Vercel
 
-Alte Dateien und Unterordner unter `/api` müssen vor dem Upload gelöscht werden. Nur Dateien zu überschreiben löscht alte GitHub-Dateien nicht.
+- `OPENAI_API_KEY`
+- `GEMINI_API_KEY`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-## Enthalten
-
-- Supabase Auth statt eigener Passworttabelle
-- RLS für Profile, Chats, Projekte, Medien, Designs, Websites, KI-Aufträge, Abos, Käufe, Kosten, Meldungen und Fehler
-- privater Supabase Storage unter `nutzer-id/bilder`, `videos`, `pdf`, `designs` und `uploads`
-- dauerhafte OpenAI-Sora-Aufträge plus Webhook
-- serverseitige Abo-, Limit-, Budget-, Kostenwarnungs- und Idempotenzprüfung
-- Stripe Checkout und PayPal; Preise können sichtbar, aber nicht kaufbar sein
-- echter PDF-, DOCX- und XLSX-Export
-- Bildeditor mit Textobjekten, Schriftarten, Ebenen, Zuschneiden, KI-Bereichsbearbeitung, Versionen, Vergleich und Export
-- Systemstatus, Fehlerprotokoll, Audit-Protokoll, Sperren, Rate Limits und Meldesystem
-
-## Kreditkartensicherheit
-
-Yildiz AI nimmt keine rohe Kreditkartennummer im eigenen Formular oder Server entgegen. Karten werden über Stripe Checkout beziehungsweise PayPal eingegeben. Dadurch bleiben vollständige Kartendaten beim Zahlungsanbieter.
-
-## Schrift in Bildern
-
-Schrift, die bereits als Pixel in einem JPG oder PNG eingebrannt ist, ist kein editierbares Textobjekt. Der Editor kann neue echte Text-Ebenen anlegen; vorhandene Pixelschrift muss markiert, entfernt und anschließend als neue Text-Ebene gesetzt werden.
+API-Schlüssel niemals in Client-Dateien oder als `VITE_OPENAI_API_KEY` speichern.

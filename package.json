@@ -1,28 +1,14 @@
 {
-  "name": "yildiz-ai-v10-production",
-  "version": "10.0.4",
+  "name": "yildiz-ai-studio",
+  "version": "13.0.0",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI V10.0.4: Login mit Benutzername oder E-Mail und sichere einmalige Admin-Einrichtung",
+  "description": "Yildiz AI V9: Vollbild-Bildeditor, Instagram-Teilen, flexible Beta-Abos, Tages-/Monatskosten und Kostenabfrage je Konto",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
-    "vercel-build": "npm run build",
-    "check": "node scripts/validate.mjs",
-    "test": "node --test tests/*.test.mjs"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.57.4",
-    "docx": "^9.5.1",
-    "exceljs": "^4.4.0",
-    "openai": "^6.3.0",
-    "pdf-lib": "^1.17.1",
-    "stripe": "22.3.2",
-    "sharp": "^0.34.3"
+    "vercel-build": "npm run build"
   },
   "engines": {
-    "node": "20.x"
-  },
-  "devDependencies": {
-    "typescript": "^5.9.2"
+    "node": ">=20.19"
   }
 }

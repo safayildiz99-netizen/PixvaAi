@@ -1,16 +1,260 @@
-import React,{useEffect,useState} from 'react';
-import { supabase } from './supabase';
-import AuthPage from './pages/AuthPage';
-import PasswordChange from './pages/PasswordChange';
-import Layout from './Layout';
-import ChatPage from './pages/ChatPage';
-import SearchPage from './pages/SearchPage';
-import ImagesPage from './pages/ImagesPage';
-import EditorPage from './pages/EditorPage';
-import VideosPage from './pages/VideosPage';
-import FilesPage from './pages/FilesPage';
-import PricingPage from './pages/PricingPage';
-import AccountPage from './pages/AccountPage';
-import AdminPage from './pages/AdminPage';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  BadgeEuro, Bot, FileImage, Film, FolderOpen, Globe2, LayoutTemplate, LockKeyhole, LogIn, LogOut,
+  KeyRound, Menu, PanelLeftClose, PanelLeftOpen, Settings, Sparkles
+} from 'lucide-react';
+import { api, getToken, setToken } from './api.js';
+import Login from './components/Login.jsx';
+import Chat from './components/Chat.jsx';
+import DesignEditor from './components/DesignEditor.jsx';
+import VideoStudio from './components/VideoStudio.jsx';
+import WebsiteBuilder from './components/WebsiteBuilder.jsx';
+import Projects from './components/Projects.jsx';
+import Admin from './components/Admin.jsx';
+import AccountSettings from './components/AccountSettings.jsx';
+import Subscriptions from './components/Subscriptions.jsx';
+import { DEFAULT_SUBSCRIPTION, canUseFeature, getPlan, normalizeSubscription } from './plans.js';
 
-export default function App(){const [session,setSession]=useState(null);const [profile,setProfile]=useState(null);const [page,setPage]=useState('chat');const [editorAsset,setEditorAsset]=useState(null);const [loading,setLoading]=useState(true);async function loadProfile(s){if(!s){setProfile(null);return}const {data,error}=await supabase.from('profiles').select('*').eq('id',s.user.id).single();if(!error)setProfile(data)}useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);loadProfile(data.session).finally(()=>setLoading(false))});const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>{setSession(s);loadProfile(s);setLoading(false)});return()=>subscription.unsubscribe()},[]);useEffect(()=>{const q=new URLSearchParams(location.search);if(q.get('paypal')==='capture'&&q.get('token')&&session){import('./api').then(async({api})=>{try{await api(`/api/billing/paypal-capture?orderId=${encodeURIComponent(q.get('token'))}`,{method:'POST',body:'{}'});alert('PayPal-Zahlung erfolgreich.')}catch(e){alert(e.message)}history.replaceState({},'',location.pathname)})}},[session]);if(loading)return <div className="splash">Yildiz AI wird geladen…</div>;if(!session)return <AuthPage/>;const props={profile,setPage};let content;if(page==='chat')content=<ChatPage/>;else if(page==='search')content=<SearchPage onEdit={a=>{setEditorAsset(a);setPage('editor')}}/>;else if(page==='images')content=<ImagesPage onEdit={a=>{setEditorAsset(a);setPage('editor')}}/>;else if(page==='editor')content=<EditorPage initialAsset={editorAsset}/>;else if(page==='videos')content=<VideosPage/>;else if(page==='files')content=<FilesPage/>;else if(page==='pricing')content=<PricingPage/>;else if(page==='account')content=<AccountPage profile={profile} refresh={()=>loadProfile(session)}/>;else if(page==='admin'&&profile?.role==='admin')content=<AdminPage/>;else content=<ChatPage/>;return <><Layout page={page} setPage={setPage} profile={profile}>{content}</Layout><PasswordChange open={Boolean(profile?.must_change_password)} onDone={()=>loadProfile(session)}/></>}
+const NAV_DEFINITIONS = {
+  chat:{ id:'chat', label:'Chat', icon:Bot },
+  flyer:{ id:'flyer', label:'Angebote & Flyer', icon:LayoutTemplate },
+  image:{ id:'image', label:'Motive & Editor', icon:FileImage },
+  video:{ id:'video', label:'Video-Studio', icon:Film },
+  website:{ id:'website', label:'Website-Builder', icon:Globe2 },
+  projects:{ id:'projects', label:'Projekte', icon:FolderOpen },
+  plans:{ id:'plans', label:'Abos & Preise', icon:BadgeEuro }
+};
+
+const DEFAULT_NAV_ITEMS = Object.values(NAV_DEFINITIONS).map(({id,label})=>({id,label,visible:true}));
+
+const titles = {
+  chat:'Yildiz AI Chat', flyer:'Angebote & Flyer', image:'Motive & Editor',
+  video:'Video-Studio', website:'Website-Builder', projects:'Projekte', plans:'Abos & Preise', account:'Mein Konto', admin:'Admin & Einstellungen'
+};
+
+const DEFAULT_UI_SETTINGS = {
+  defaultView: 'chat',
+  workView: 'projects',
+  allowGuest: true,
+  showFlyer: true,
+  showImage: true,
+  showVideo: true,
+  showWebsite: true,
+  showProjects: true,
+  showPlans: true,
+  announcement: '',
+  maintenanceMode: false,
+  compactSidebar: false,
+  mobileHistoryDrawer: true,
+  costPromptMode: 'all',
+  costPromptOverrides: {},
+  customPlans: [],
+  navItems: DEFAULT_NAV_ITEMS,
+  texts: {
+    appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
+    statusTitle:'Yildiz AI · Gemini + OpenAI + Sora',
+    welcome:'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und hochladen.',
+    composer:'Frag Yildiz AI …',
+    flyerTitle:'Angebote & Flyer', flyerSubtitle:'Bearbeitbare Vorlagen für Angebote, Produkte und Preise.',
+    imageTitle:'Motive & Editor', imageSubtitle:'Bilder, Motive, Texte und Ebenen direkt bearbeiten.',
+    videoTitle:'Video-Studio', videoSubtitle:'Szenen, Texte, Musik und Videos in einem Projekt.',
+    websiteTitle:'Website-Builder', websiteSubtitle:'Webseiten gestalten und als HTML oder ZIP exportieren.',
+    projectsTitle:'Projekte', projectsSubtitle:'Deine gespeicherten Designs, Videos und Webseiten.',
+    plansTitle:'Abos & Preise', plansSubtitle:'Free, Creator und Studio Pro – während der Beta ohne Zahlung.'
+  },
+  theme: { sidebarWidth:255, accentBlue:'#63c7ff', accentYellow:'#ffd400' },
+  planPrices: { free:0, creator:9.99, studio:24.99 },
+  betaPlanPrices: { free:0, creator:0, studio:0 },
+  paymentsEnabled: false,
+  paymentProvider: 'paypal',
+  paymentMerchantLabel: '',
+  planPurchasable: { free:false, creator:true, studio:true },
+  paidAccessDays: 30
+};
+
+const guestUser = { id:'guest', username:'Gast', role:'guest', active:true, mustChangePassword:false };
+const VIEW_FEATURES = { flyer:'flyer', image:'image', video:'video', website:'website', projects:'projects' };
+
+function configuredNav(settings) {
+  const source = Array.isArray(settings?.navItems) && settings.navItems.length ? settings.navItems : DEFAULT_NAV_ITEMS;
+  const known = source.filter((item)=>NAV_DEFINITIONS[item?.id]).map((item)=>({ ...NAV_DEFINITIONS[item.id], label:String(item.label || NAV_DEFINITIONS[item.id].label), visible:item.visible !== false }));
+  for (const item of DEFAULT_NAV_ITEMS) if (!known.some((entry)=>entry.id===item.id)) known.push({ ...NAV_DEFINITIONS[item.id], visible:true });
+  return known;
+}
+
+function enabledBySettings(id, settings) {
+  const configured = configuredNav(settings).find((item)=>item.id===id);
+  if (configured) return configured.visible !== false;
+  if (id === 'flyer') return settings.showFlyer !== false;
+  if (id === 'image') return settings.showImage !== false;
+  if (id === 'video') return settings.showVideo !== false;
+  if (id === 'website') return settings.showWebsite !== false;
+  if (id === 'projects') return settings.showProjects !== false;
+  if (id === 'plans') return settings.showPlans !== false;
+  return true;
+}
+
+export default function App(){
+  const [user,setUser]=useState(null);
+  const [guest,setGuest]=useState(()=>localStorage.getItem('yildiz_ai_guest')==='1');
+  const [loading,setLoading]=useState(Boolean(getToken()));
+  const [view,setView]=useState('chat');
+  const [sidebar,setSidebar]=useState(()=>typeof window==='undefined' ? true : window.innerWidth>760);
+  const [isMobile,setIsMobile]=useState(()=>typeof window!=='undefined' && window.innerWidth<=760);
+  const [selectedProject,setSelectedProject]=useState(null);
+  const [refreshKey,setRefreshKey]=useState(0);
+  const [uiSettings,setUiSettings]=useState(DEFAULT_UI_SETTINGS);
+  const [subscription,setSubscription]=useState(DEFAULT_SUBSCRIPTION);
+  const [requestedView,setRequestedView]=useState('');
+
+  useEffect(()=>{
+    let cancelled=false;
+    api('/api/ui-settings').then((result)=>{
+      if(cancelled) return;
+      setUiSettings({
+        ...DEFAULT_UI_SETTINGS,
+        ...(result?.settings||{}),
+        texts:{...DEFAULT_UI_SETTINGS.texts,...(result?.settings?.texts||{})},
+        theme:{...DEFAULT_UI_SETTINGS.theme,...(result?.settings?.theme||{})},
+        planPrices:{...DEFAULT_UI_SETTINGS.planPrices,...(result?.settings?.planPrices||{})},
+        betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(result?.settings?.betaPlanPrices||{})},
+        costPromptOverrides:{...(result?.settings?.costPromptOverrides||{})},
+        customPlans:Array.isArray(result?.settings?.customPlans)?result.settings.customPlans:[],
+        planPurchasable:{...DEFAULT_UI_SETTINGS.planPurchasable,...(result?.settings?.planPurchasable||{})}
+      });
+    }).catch(()=>{});
+    return ()=>{cancelled=true};
+  },[]);
+
+  useEffect(()=>{
+    const updateMobile=()=>{const mobile=window.innerWidth<=760;setIsMobile(mobile);if(mobile)setSidebar(false)};
+    updateMobile();window.addEventListener('resize',updateMobile);return()=>window.removeEventListener('resize',updateMobile);
+  },[]);
+
+  useEffect(()=>{
+    if(!getToken()){setLoading(false);return}
+    api('/api/me').then((r)=>{setUser(r.user);setGuest(false);localStorage.removeItem('yildiz_ai_guest')})
+      .catch(()=>setToken('')).finally(()=>setLoading(false));
+  },[]);
+
+  useEffect(()=>{
+    let cancelled=false;
+    if(!user || guest){setSubscription(DEFAULT_SUBSCRIPTION);return()=>{cancelled=true}}
+    api('/api/subscription').then((result)=>{
+      if(!cancelled)setSubscription(normalizeSubscription(result.subscription, uiSettings.customPlans));
+    }).catch(()=>{
+      if(!cancelled)setSubscription(DEFAULT_SUBSCRIPTION);
+    });
+    return()=>{cancelled=true};
+  },[user?.id,guest,uiSettings.customPlans]);
+
+  useEffect(()=>{
+    if(view==='admin'||view==='account'||view==='chat'||view==='plans') return;
+    if(!enabledBySettings(view,uiSettings)) setView('chat');
+  },[uiSettings,view]);
+
+  const activeUser=user || (guest ? guestUser : null);
+  const nav=useMemo(()=>configuredNav(uiSettings).filter((item)=>item.visible !== false && enabledBySettings(item.id,uiSettings)),[uiSettings]);
+
+  const workTarget=useMemo(()=>{
+    const preferred=uiSettings.workView;
+    if(preferred&&enabledBySettings(preferred,uiSettings)&&canUseFeature(subscription,VIEW_FEATURES[preferred]||preferred,activeUser?.role,uiSettings.customPlans)) return preferred;
+    return nav.find((item)=>item.id!=='chat'&&item.id!=='plans'&&canUseFeature(subscription,VIEW_FEATURES[item.id]||item.id,activeUser?.role,uiSettings.customPlans))?.id||'plans';
+  },[activeUser?.role,nav,subscription,uiSettings]);
+
+  function enterGuest(){
+    if(uiSettings.allowGuest===false) return;
+    setToken('');localStorage.setItem('yildiz_ai_guest','1');setGuest(true);setUser(null);setSubscription(DEFAULT_SUBSCRIPTION);setView('chat');
+  }
+  function loggedIn(nextUser){
+    localStorage.removeItem('yildiz_ai_guest');setGuest(false);setUser(nextUser);
+    const next=enabledBySettings(uiSettings.defaultView,uiSettings)?uiSettings.defaultView:'chat';
+    setView(next==='chat'||next==='plans'||nextUser?.role==='admin'?next:'chat');
+  }
+  function exit(){setToken('');localStorage.removeItem('yildiz_ai_guest');setGuest(false);setUser(null);setSubscription(DEFAULT_SUBSCRIPTION);setView('chat')}
+  function featureAllowed(id){
+    const feature=VIEW_FEATURES[id];
+    return !feature||canUseFeature(subscription,feature,activeUser?.role,uiSettings.customPlans);
+  }
+  function changeView(id){
+    setSelectedProject(null);
+    if(id!=='admin'&&id!=='account'&&!enabledBySettings(id,uiSettings)) return setView('chat');
+    if(!featureAllowed(id)){
+      setRequestedView(id);
+      setView('plans');
+    }else{
+      setRequestedView('');
+      setView(id);
+    }
+    if(isMobile)setSidebar(false);
+  }
+  function handleSubscriptionChanged(next){
+    const normalized=normalizeSubscription(next,uiSettings.customPlans);
+    setSubscription(normalized);
+    if(requestedView&&canUseFeature(normalized,VIEW_FEATURES[requestedView],activeUser?.role,uiSettings.customPlans)){
+      setView(requestedView);setRequestedView('');
+    }
+  }
+  function openProject(project){
+    const feature=VIEW_FEATURES[project.type];
+    if(feature&&!canUseFeature(subscription,feature,activeUser?.role,uiSettings.customPlans)){setRequestedView(project.type);setView('plans');return}
+    setSelectedProject(project);setView(project.type);
+  }
+  function saved(){setRefreshKey((n)=>n+1)}
+  function openGeneratedImageProject(imageProject){
+    if(!imageProject?.data?.initialImage) return;
+    if(!canUseFeature(subscription,'image',activeUser?.role,uiSettings.customPlans)){setRequestedView('image');setView('plans');return}
+    setSelectedProject({id:`generated-image-${Date.now()}`,type:'image',name:imageProject.name||'KI-Bild bearbeiten',data:imageProject.data});
+    setView('image');
+  }
+
+  function openGeneratedVideoProject(videoProject){
+    if(!videoProject?.data?.scenes?.length) return;
+    if(!canUseFeature(subscription,'video',activeUser?.role,uiSettings.customPlans)){setRequestedView('video');setView('plans');return}
+    setSelectedProject({id:`generated-${Date.now()}`,type:'video',name:videoProject.name||'Generiertes Video',data:videoProject.data});
+    setView('video');
+  }
+
+  if(loading) return <div className="app-loader"><Sparkles/>Yildiz AI Studio lädt …</div>;
+  if(!activeUser) return <Login onLogin={loggedIn} onGuest={enterGuest} allowGuest={uiSettings.allowGuest!==false}/>;
+
+  const uiText={...DEFAULT_UI_SETTINGS.texts,...(uiSettings.texts||{})};
+  const uiTheme={...DEFAULT_UI_SETTINGS.theme,...(uiSettings.theme||{})};
+  const currentTitle=view==='chat'?uiText.appTitle:(nav.find((item)=>item.id===view)?.label||titles[view]);
+  const currentPlan=getPlan(subscription.planId,uiSettings.customPlans);
+  const accountCostPromptMode=guest?'all':(uiSettings.costPromptOverrides?.[activeUser.id] || uiSettings.costPromptMode || 'all');
+
+  return <div className={`app-shell ${sidebar?'':'sidebar-collapsed'} ${uiSettings.compactSidebar?'compact-sidebar':''}`} style={{'--sidebar-width':`${Math.max(210,Math.min(360,Number(uiTheme.sidebarWidth||255)))}px`,'--y-blue':uiTheme.accentBlue,'--y-yellow':uiTheme.accentYellow}}>
+    <aside className="sidebar">
+      <div className="sidebar-brand"><img className="sidebar-logo" src="/yildiz-ai-logo.png" alt="Yildiz AI"/><span className="sr-only">Yildiz AI</span><button onClick={()=>setSidebar(false)}><PanelLeftClose size={18}/></button></div>
+      {uiSettings.showFlyer!==false&&<button className="new-project" onClick={()=>changeView('flyer')}><LayoutTemplate size={18}/>{uiText.newDesign}{!featureAllowed('flyer')&&<LockKeyhole className="nav-lock" size={14}/>}</button>}
+      <nav>{nav.map((item)=>{const Icon=item.icon;const locked=!featureAllowed(item.id);return <button key={item.id} className={`${view===item.id?'active':''} ${locked?'locked':''}`} onClick={()=>changeView(item.id)}><Icon size={19}/><span>{item.label}</span>{locked&&<LockKeyhole className="nav-lock" size={14}/>}</button>})}</nav>
+      <div className="sidebar-bottom">
+        {!guest&&<button className={view==='account'?'active':''} onClick={()=>changeView('account')}><KeyRound size={19}/><span>Mein Konto</span></button>}
+        {activeUser.role==='admin'&&<button className={view==='admin'?'active':''} onClick={()=>changeView('admin')}><Settings size={19}/><span>Admin</span></button>}
+        <div className="user-box"><div className="user-avatar">{activeUser.username.slice(0,2).toUpperCase()}</div><div><b>{activeUser.username}</b><span>{guest?'Free · Gast':`${currentPlan.name}${activeUser.role==='admin'?' · Admin':''}`}</span></div><button onClick={exit} title={guest?'Anmelden':'Abmelden'}>{guest?<LogIn size={17}/>:<LogOut size={17}/>}</button></div>
+      </div>
+    </aside>
+    {sidebar&&isMobile&&<button className="sidebar-backdrop" aria-label="Menü schließen" onClick={()=>setSidebar(false)}/>} 
+    {!sidebar&&<button className="sidebar-open" onClick={()=>setSidebar(true)}><PanelLeftOpen size={20}/></button>}
+    <main className="workspace">
+      <header className="topbar"><div><button className="mobile-menu" onClick={()=>setSidebar(!sidebar)}><Menu size={19}/></button><h1>{currentTitle}</h1>{selectedProject&&<span className="project-pill">{selectedProject.name}</span>}</div><div className="mode-toggle"><button className={view==='chat'?'active':''} onClick={()=>changeView('chat')}>{uiText.chatTab}</button><button className={view!=='chat'?'active':''} onClick={()=>changeView(workTarget)}>{uiText.workTab}</button></div></header>
+      {uiSettings.announcement&&<div className="global-announcement">{uiSettings.announcement}</div>}
+      {uiSettings.maintenanceMode&&activeUser.role!=='admin'&&<div className="warning-banner">Wartungshinweis: Einige Funktionen können vorübergehend eingeschränkt sein.</div>}
+      {guest&&<div className="guest-banner"><span>Gastmodus: Free-Funktionen funktionieren ohne Anmeldung. Für Cloud-Speicherung und Beta-Abos bitte anmelden.</span><button onClick={exit}>Anmelden</button></div>}
+      {activeUser.mustChangePassword&&!guest&&<div className="warning-banner">Das Startpasswort ist noch aktiv. Öffne links „Mein Konto“ und lege dein eigenes Passwort fest.</div>}
+      {requestedView&&view==='plans'&&<div className="plan-unlock-banner"><LockKeyhole size={17}/><span>Der Bereich „{titles[requestedView]||requestedView}“ ist in deinem aktuellen Zugang nicht enthalten. Während der Beta kannst du den passenden Zugang kostenlos aktivieren.</span></div>}
+      <div className="workspace-content">
+        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='website'&&featureAllowed('website')&&<WebsiteBuilder key={selectedProject?.id||'new-site'} project={selectedProject?.type==='website'?selectedProject:null} onSaved={saved} canSave={!guest} uiText={uiText}/>} 
+        {view==='projects'&&featureAllowed('projects')&&!guest&&<Projects onOpen={openProject} refreshKey={refreshKey} uiText={uiText}/>} 
+        {view==='plans'&&<Subscriptions user={activeUser} isGuest={guest} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onRequireLogin={exit} uiText={uiText} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices} customPlans={uiSettings.customPlans} billingSettings={uiSettings}/>} 
+        {view==='account'&&!guest&&<AccountSettings user={activeUser} onUserChanged={setUser} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onOpenPlans={()=>changeView('plans')} customPlans={uiSettings.customPlans} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices}/>} 
+        {view==='admin'&&activeUser.role==='admin'&&<Admin user={activeUser} uiSettings={uiSettings} onSettingsChanged={setUiSettings} onOpenView={changeView}/>} 
+      </div>
+    </main>
+  </div>;
+}

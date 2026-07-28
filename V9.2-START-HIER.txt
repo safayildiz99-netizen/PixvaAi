@@ -1,0 +1,104 @@
+YILDIZ AI V9.2 – PAYPAL + BILDSCHRIFT, OHNE DESIGNÄNDERUNG
+================================================================
+
+GARANTIE FÜR DIE OBERFLÄCHE
+---------------------------
+Dieses Update stellt zuerst exakt den erfolgreichen V9-Stand 3b492fd wieder her.
+Danach werden nur die zwei Funktionen ergänzt.
+
+Unverändert bleiben:
+- altes Yildiz-AI-Logo und Icon
+- alter Login mit Benutzername
+- Admin-Zugang
+- alter Chat und Chatverlauf
+- Seitenleiste, Farben, Schriften und Grundlayout
+- bestehende Projekte, Konten und Preise
+
+Der Workflow vergleicht Logo, Icon und Login mit der alten V9. Wenn der Patch oder
+der Produktions-Build fehlschlägt, wird kein neuer Commit veröffentlicht.
+
+NEU 1 – PAYPAL
+--------------
+- Echte PayPal-Zahlung für kaufbare Abos
+- Das Geld geht an das PayPal-Business-Konto der eingetragenen
+  PAYPAL_CLIENT_ID und PAYPAL_CLIENT_SECRET
+- PayPal-Passwort und vollständige Zahlungsdaten werden nicht gespeichert
+- Der Admin kann im bestehenden Abo-Bereich Zahlungen ein- oder ausschalten
+- Jedes Abo kann kaufbar oder nur mit sichtbarem Preis angezeigt werden
+- Der Preis wird serverseitig aus den gespeicherten V9-Preisen gelesen
+- Zugang wird erst bei PayPal-Status COMPLETED und passendem Betrag aktiviert
+- Rückerstattungen setzen den bezahlten Zugang wieder auf Free
+- Schutz vor Doppelklick und doppelter Aktivierung durch Request-ID
+
+Das ist zunächst eine sichere Einmalzahlung für eine einstellbare Anzahl Tage,
+zum Beispiel 30 Tage. Es ist noch keine automatische monatliche Verlängerung.
+
+NEU 2 – SCHRIFT IN KI-BILDERN
+-----------------------------
+KI-Schrift in JPG/PNG ist Pixelinhalt und keine echte Textebene.
+Im bestehenden Bildeditor erscheint deshalb unter den Werkzeugen:
+„Schrift im KI-Bild ändern“.
+
+1. Schriftbereich markieren
+2. Gelben Rahmen über die alte Schrift ziehen und skalieren
+3. Neuen Text, Schriftart, Größe und Farben eingeben
+4. Schrift ersetzen
+5. Der neue Text ist danach eine echte Ebene
+6. Doppelklick, verschieben und spätere Schriftänderung funktionieren
+
+INSTALLATION
+------------
+1. ZIP entpacken.
+2. Auf dem Mac Cmd + Shift + . drücken, damit .github und .yildiz-v9-2 sichtbar sind.
+3. Den gesamten Inhalt in die Hauptseite des GitHub-Projekts hochladen.
+4. Commit-Nachricht:
+   Yildiz AI V9.2 Installer ohne Designänderung
+5. GitHub → Actions.
+6. „Yildiz AI V9.2 PayPal und Bildschrift“ öffnen.
+7. Run workflow drücken und bestätigen.
+8. Nur wenn der Lauf grün ist, wird der neue Code automatisch auf main veröffentlicht.
+9. Vercel abwarten, bis Ready + Production erscheint.
+10. Cmd + Shift + R drücken.
+
+SUPABASE
+--------
+1. V9.2-SUPABASE-EINFACH-OEFFNEN.html öffnen.
+2. Alles kopieren.
+3. Supabase → SQL Editor → New query.
+4. Einfügen → Run.
+5. Am Ende muss stehen:
+   Yildiz AI V9.2 PayPal und Bildschrift erfolgreich installiert.
+
+VERCEL – PAYPAL TEST
+--------------------
+PAYPAL_ENV=sandbox
+PAYPAL_CLIENT_ID=Sandbox Client-ID
+PAYPAL_CLIENT_SECRET=Sandbox Secret
+PAYPAL_WEBHOOK_ID=Sandbox Webhook-ID
+SUPABASE_SERVICE_ROLE_KEY=dein vorhandener sb_secret_-Schlüssel
+APP_URL=https://yildiz-ai.vercel.app
+
+Webhook:
+https://yildiz-ai.vercel.app/api/billing?action=webhook
+
+Ereignisse:
+- PAYMENT.CAPTURE.COMPLETED
+- PAYMENT.CAPTURE.REFUNDED
+- PAYMENT.CAPTURE.REVERSED
+
+VERCEL – ECHTES GELD
+--------------------
+Erst nach erfolgreichem Sandbox-Test:
+- PAYPAL_ENV auf live stellen
+- LIVE Client-ID und LIVE Secret des gewünschten PayPal-Business-Kontos eintragen
+- LIVE Webhook anlegen und PAYPAL_WEBHOOK_ID ersetzen
+- Redeploy starten
+
+Das Empfängerkonto ist nicht ein frei eingetippter Text. Das Geld geht an das
+PayPal-Business-Konto, zu dessen App die LIVE Client-ID und das LIVE Secret gehören.
+
+ADMIN-LOGIN
+-----------
+Benutzername: admin
+Passwort: dein bisheriges V9-Passwort
+Falls du es nicht geändert hast: SafaStart2026!

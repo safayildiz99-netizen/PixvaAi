@@ -400,6 +400,14 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const [adjustments, setAdjustments] = useState({ brightness: 0, contrast: 0, saturation: 0 });
   const [templateVariant, setTemplateVariant] = useState('editable');
   const [externalExportMode, setExternalExportMode] = useState('edited');
+  const [rasterText, setRasterText] = useState({
+    text:'Neuer Text',
+    fontFamily:'Arial',
+    fontSize:52,
+    textColor:'#111111',
+    coverColor:'#ffffff',
+    coverOldText:true
+  });
 
   const format = useMemo(() => formats[formatKey], [formatKey]);
   const isText = selected instanceof IText || selected instanceof FabricText || ['i-text', 'textbox', 'text'].includes(selected?.type);
@@ -615,6 +623,93 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     snapshot();
   }
 
+  function markRasterTextArea() {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const oldMask = canvas.getObjects().find((object) => object.dataRole === 'text-replace-mask');
+    if (oldMask) canvas.remove(oldMask);
+    const mask = new Rect({
+      left: canvas.width * .2,
+      top: canvas.height * .38,
+      width: canvas.width * .6,
+      height: Math.max(80, canvas.height * .12),
+      fill:'rgba(255,212,0,.16)',
+      stroke:'#ffd400',
+      strokeWidth:3,
+      strokeDashArray:[12,8],
+      cornerColor:'#63c7ff',
+      transparentCorners:false,
+      dataRole:'text-replace-mask',
+      displayName:'Schriftbereich'
+    });
+    canvas.add(mask);
+    canvas.setActiveObject(mask);
+    canvas.requestRenderAll();
+    syncSelected(mask);
+    refreshLayers();
+    setStatus('Gelben Rahmen genau über die alte Schrift ziehen und skalieren. Danach unten „Schrift ersetzen“ drücken.');
+  }
+  function applyRasterTextReplacement() {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const mask = canvas.getObjects().find((object) => object.dataRole === 'text-replace-mask');
+    if (!mask) {
+      setStatus('Bitte zuerst „Schriftbereich markieren“ drücken und den gelben Rahmen über den alten Text legen.');
+      return;
+    }
+    const value = String(rasterText.text || '').trim();
+    if (!value) {
+      setStatus('Bitte den neuen Text eintragen.');
+      return;
+    }
+    mask.setCoords();
+    const bounds = mask.getBoundingRect();
+    if (rasterText.coverOldText) {
+      const cover = new Rect({
+        left:bounds.left,
+        top:bounds.top,
+        width:Math.max(20,bounds.width),
+        height:Math.max(20,bounds.height),
+        fill:rasterText.coverColor,
+        strokeWidth:0,
+        dataRole:'text-replace-cover',
+        displayName:'Abdeckung alte Schrift'
+      });
+      canvas.add(cover);
+    }
+    const text = makeText(value, {
+      left:bounds.left + bounds.width / 2,
+      top:bounds.top + bounds.height / 2,
+      originX:'center',
+      originY:'center',
+      fontFamily:rasterText.fontFamily,
+      fontSize:Number(rasterText.fontSize || 52),
+      fill:rasterText.textColor,
+      fontWeight:700,
+      textAlign:'center',
+      displayName:'Bearbeitbare Bildschrift',
+      dataRole:'editable-replaced-text'
+    });
+    canvas.remove(mask);
+    canvas.add(text);
+    canvas.setActiveObject(text);
+    text.enterEditing?.();
+    text.selectAll?.();
+    canvas.requestRenderAll();
+    syncSelected(text);
+    snapshot();
+    refreshLayers();
+    setStatus('Die Bildschrift ist jetzt eine echte Textebene. Doppelklicken, Text ändern oder oben eine andere Schrift wählen.');
+  }
+  function cancelRasterTextReplacement() {
+    const canvas = fabricRef.current;
+    const mask = canvas?.getObjects().find((object) => object.dataRole === 'text-replace-mask');
+    if (mask) canvas.remove(mask);
+    canvas?.discardActiveObject();
+    canvas?.requestRenderAll();
+    syncSelected(null);
+    refreshLayers();
+  }
   function addShape() {
     const canvas = fabricRef.current;
     const shape = new Rect({ left: 100, top: 160, width: 220, height: 120, fill: '#ffd400', rx: 18, ry: 18, displayName: 'Form' });
@@ -1193,6 +1288,21 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           <button onClick={removeSelected}><Trash2 size={18}/>Löschen</button>
         </div>
 
+        <div className="panel-section">
+          <h3><Type size={17}/> Schrift im KI-Bild ändern</h3>
+          <p>Text, der direkt im erzeugten Bild steckt, ist Teil der Pixel. Markiere ihn einmal; Yildiz AI deckt ihn ab und setzt eine echte bearbeitbare Textebene darüber.</p>
+          <button className="wide" onClick={markRasterTextArea}><Type size={17}/>Schriftbereich markieren</button>
+          <label>Neuer Text<textarea rows={2} value={rasterText.text} onChange={(event)=>setRasterText({...rasterText,text:event.target.value})}/></label>
+          <label>Schrift<select value={rasterText.fontFamily} onChange={(event)=>setRasterText({...rasterText,fontFamily:event.target.value})}>{fontOptions.map((font)=><option key={font}>{font}</option>)}</select></label>
+          <div>
+            <label>Größe<input type="number" min="8" max="240" value={rasterText.fontSize} onChange={(event)=>setRasterText({...rasterText,fontSize:Number(event.target.value)})}/></label>
+            <label>Textfarbe<input type="color" value={rasterText.textColor} onChange={(event)=>setRasterText({...rasterText,textColor:event.target.value})}/></label>
+            <label>Abdeckfarbe<input type="color" value={rasterText.coverColor} onChange={(event)=>setRasterText({...rasterText,coverColor:event.target.value})}/></label>
+          </div>
+          <label className="checkbox-row"><input type="checkbox" checked={rasterText.coverOldText} onChange={(event)=>setRasterText({...rasterText,coverOldText:event.target.checked})}/>Alte Bildschrift abdecken</label>
+          <div><button className="primary-btn" onClick={applyRasterTextReplacement}>Schrift ersetzen</button><button onClick={cancelRasterTextReplacement}>Abbrechen</button></div>
+          <small>Danach ist die neue Schrift unter „Ebenen“ auswählbar und kann jederzeit geändert werden.</small>
+        </div>
         <div className="panel-section">
           <h3><Layers size={17}/> Ebenen</h3>
           <div className="layers-list">
