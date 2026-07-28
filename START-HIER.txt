@@ -1,0 +1,19 @@
+YILDIZ AI V9.2.1 – FEHLER KORRIGIEREN
+=======================================
+
+NICHT „RE-RUN JOBS“ DRÜCKEN. Der alte Workflow enthält den Fehler weiterhin.
+
+1. Auf der fehlgeschlagenen GitHub-Seite links „Workflow file“ anklicken.
+2. Oben rechts auf das Stift-Symbol „Edit this file“ klicken.
+3. Den gesamten alten Workflow mit Cmd + A markieren und löschen.
+4. Yildiz_AI_V9_2_1_WORKFLOW_KOPIEREN.html öffnen.
+5. Gelben Knopf „Korrigierten Workflow kopieren“ drücken.
+6. Den neuen Text mit Cmd + V in GitHub einfügen.
+7. Oben rechts „Commit changes“ drücken und bestätigen.
+8. Danach GitHub → Actions öffnen.
+9. Links „Yildiz AI V9.2.1 PayPal und Bildschrift FIX“ auswählen.
+10. „Run workflow“ drücken und bestätigen.
+11. Warten, bis der Lauf grün ist.
+
+Der neue Patcher akzeptiert sicher unterschiedliche Leerzeichen und Leerzeilen,
+ändert aber weiterhin nur exakt festgelegte Codebereiche.
