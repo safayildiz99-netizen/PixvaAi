@@ -953,3 +953,249 @@ input[type="range"]{accent-color:#35C2C3!important}
   .topbar{background:rgba(5,15,23,.95)!important}
   .workspace-content:before{display:none}
 }
+
+/* PIXVA FINAL POLISH V3
+   Letzter visueller Schliff: keine alten gelb/oliv/grauen Markenakzente mehr.
+   PIXVA-Logo bleibt unverändert.
+*/
+:root{
+  --pixva-violet:#67459A;
+  --pixva-indigo:#34358C;
+  --pixva-blue:#237FAE;
+  --pixva-cyan:#169BB8;
+  --pixva-teal:#49B29B;
+  --pixva-ink:#041019;
+  --pixva-nav:#061722;
+  --pixva-card:#0A202D;
+  --pixva-card-2:#0D2734;
+  --pixva-line:#245367;
+  --pixva-line-bright:#34798D;
+  --pixva-copy:#F4FAFD;
+  --pixva-sub:#9DB9C6;
+  --pixva-brand-gradient:linear-gradient(135deg,#67459A 0%,#34358C 25%,#237FAE 52%,#169BB8 72%,#49B29B 100%);
+  --yellow:#49B29B!important;
+  --accent:#169BB8!important;
+}
+
+/* Globale Ruhe und Premium-Kontrast */
+body{
+  background:
+    radial-gradient(circle at 9% 5%,rgba(103,69,154,.16),transparent 25%),
+    radial-gradient(circle at 93% 6%,rgba(22,155,184,.10),transparent 24%),
+    linear-gradient(180deg,#05131D 0%,#030C13 100%)!important;
+}
+.workspace-content{background:transparent!important}
+.workspace-content::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(circle at 72% 35%,rgba(35,127,174,.035),transparent 28%);
+}
+
+/* Logo und linke Navigation */
+.sidebar{
+  background:linear-gradient(180deg,#071A26 0%,#04111A 100%)!important;
+  border-right:1px solid #1C4659!important;
+}
+.sidebar-logo{filter:none!important;transform:none!important}
+.sidebar nav button,.sidebar-bottom>button{
+  border-radius:12px!important;
+  min-height:42px!important;
+}
+.sidebar nav button.active,.sidebar-bottom>button.active,.new-project{
+  background:var(--pixva-brand-gradient)!important;
+  box-shadow:0 9px 24px rgba(22,155,184,.15),inset 0 1px 0 rgba(255,255,255,.10)!important;
+}
+.sidebar nav button:not(.active):hover,.sidebar-bottom>button:not(.active):hover{
+  background:linear-gradient(90deg,rgba(103,69,154,.15),rgba(22,155,184,.10),rgba(73,178,155,.06))!important;
+  border-color:#24556A!important;
+}
+
+/* Topbar */
+.topbar{
+  background:rgba(4,16,25,.94)!important;
+  border-bottom:1px solid #1E4B5D!important;
+}
+.topbar h1{font-weight:750!important;letter-spacing:-.02em!important}
+.mode-toggle{background:#0A202C!important;border:1px solid #245467!important;padding:3px!important}
+.mode-toggle button.active{background:var(--pixva-brand-gradient)!important}
+
+/* Der sichtbare Modell-Banner: olive/grün komplett entfernen */
+.chat-intro,
+.chat-model-banner,
+.chat-model-info,
+.assistant-info,
+.model-card,
+.model-info,
+[class*="model-banner"],
+[class*="assistant-info"]{
+  background:
+    linear-gradient(120deg,rgba(103,69,154,.13) 0%,rgba(35,127,174,.11) 48%,rgba(73,178,155,.08) 100%),
+    #0A202C!important;
+  border:1px solid #2E6678!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 10px 28px rgba(0,0,0,.10)!important;
+  color:#E8F5F8!important;
+}
+.chat-intro::before,.chat-model-banner::before,.chat-model-info::before{
+  color:#55C9CF!important;
+}
+.chat-intro small,.chat-model-banner small,.chat-model-info small,.assistant-info small,.model-info small{
+  color:#8FB0BF!important;
+}
+
+/* Chat-Spalten */
+.chat-sidebar,.chat-list-panel,.chat-history-panel{
+  background:linear-gradient(180deg,#071B27 0%,#05141E 100%)!important;
+  border-right:1px solid #1F4B5D!important;
+}
+.chat-sidebar input,.chat-list-panel input,.chat-history-panel input{
+  background:#09212E!important;
+  border-color:#275A6D!important;
+}
+.chat-item,.chat-list-item{
+  background:#09202C!important;
+  border:1px solid #204C5F!important;
+  border-radius:11px!important;
+  transition:transform .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease!important;
+}
+.chat-item:hover,.chat-list-item:hover{
+  background:linear-gradient(120deg,rgba(103,69,154,.11),rgba(22,155,184,.09)),#0A202C!important;
+  border-color:#35788B!important;
+  transform:translateY(-1px);
+}
+.chat-item.active,.chat-list-item.active{
+  background:linear-gradient(125deg,rgba(103,69,154,.20),rgba(35,127,174,.17),rgba(73,178,155,.10)),#0A202C!important;
+  border-color:#3D94A2!important;
+  box-shadow:inset 3px 0 0 #42C4BE,0 8px 25px rgba(0,0,0,.12)!important;
+}
+
+/* Nachrichten */
+.message.user .message-body{
+  background:linear-gradient(135deg,#0D3141 0%,#0B2836 100%)!important;
+  border:1px solid #2B667A!important;
+  box-shadow:0 10px 28px rgba(0,0,0,.11)!important;
+}
+.message.assistant .avatar,.message.user .avatar{
+  background:var(--pixva-brand-gradient)!important;
+  border:0!important;
+  box-shadow:0 7px 20px rgba(22,155,184,.14)!important;
+}
+.message-actions button{
+  background:#09202C!important;border:1px solid #244F62!important;color:#86ABB9!important
+}
+.message-actions button:hover{
+  background:linear-gradient(135deg,rgba(103,69,154,.16),rgba(22,155,184,.14))!important;
+  border-color:#3B8495!important;color:#fff!important
+}
+
+/* Google/Bing/Resultat-Karten */
+.image-search-card,.search-link-card,.generated-file-card,.generated-image-card,.attachment-card,.result-card,.file-card,.media-card{
+  background:linear-gradient(180deg,#0A2230,#071B27)!important;
+  border:1px solid #25576A!important;
+  border-radius:13px!important;
+}
+.image-search-card:hover,.search-link-card:hover,.generated-file-card:hover,.generated-image-card:hover,.attachment-card:hover,.result-card:hover{
+  border-color:#3C8698!important;
+  box-shadow:0 12px 35px rgba(0,0,0,.14),0 0 0 1px rgba(73,178,155,.04)!important;
+}
+.image-search-card button,.search-link-card button,.generated-file-card button,.generated-image-card button,.file-card button,.media-card button{
+  background:#0C2937!important;
+  border-color:#2A6074!important;
+}
+.image-search-card button:hover,.search-link-card button:hover,.generated-file-card button:hover,.generated-image-card button:hover,.file-card button:hover,.media-card button:hover{
+  background:linear-gradient(135deg,rgba(103,69,154,.23),rgba(22,155,184,.21),rgba(73,178,155,.14))!important;
+  border-color:#4192A0!important;
+}
+
+/* Eingabe unten */
+.chat-input-wrap,.composer,.chat-composer{
+  background:linear-gradient(#091F2B,#091F2B) padding-box,var(--pixva-brand-gradient) border-box!important;
+  border:1px solid transparent!important;
+  border-radius:15px!important;
+  box-shadow:0 17px 50px rgba(0,0,0,.23),0 0 28px rgba(22,155,184,.045)!important;
+}
+.send-btn{background:var(--pixva-brand-gradient)!important;border:0!important}
+
+/* Primäre Buttons überall konsistent */
+.primary-btn,.current-plan-btn,.new-project,.send-btn,
+button[class*="primary"]:not(.danger){
+  background:var(--pixva-brand-gradient)!important;
+  color:white!important;border-color:transparent!important;
+}
+button:not(.danger):not(.active):hover{
+  border-color:#377A8D!important;
+}
+
+/* Alle neutralen Karten auf eine Familie bringen */
+.admin-card,.project-card,.account-card,.subscription-card,.plan-card,.editor-panel,
+.panel-section,.site-controls,.video-controls,.timeline-panel,.tool-card,.settings-card,
+.stat-card,.service-card,.modal-card,.dialog-card,.user-table,.admin-panel,
+.admin-stat,.admin-stat-card,.beta-price-card,.current-plan-summary{
+  background:linear-gradient(180deg,#0A202D 0%,#071923 100%)!important;
+  border-color:#225166!important;
+  border-radius:14px!important;
+}
+.admin-card:hover,.project-card:hover,.subscription-card:hover,.plan-card:hover,.tool-card:hover{
+  border-color:#34778A!important;
+}
+
+/* Admin/Account/Projekte Tabs */
+.admin-tabs,.account-tabs{
+  background:#071B27!important;
+  border-color:#214F62!important;
+  border-radius:13px!important;
+}
+.admin-tabs button.active,.account-tabs button.active{
+  background:var(--pixva-brand-gradient)!important;
+}
+.project-icon{
+  background:linear-gradient(135deg,rgba(103,69,154,.24),rgba(22,155,184,.18),rgba(73,178,155,.11))!important;
+  color:#68D9D2!important;
+}
+
+/* Editor / Video / Website konsistent */
+.editor-toolbar,.editor-topbar,.toolbox,.editor-sidebar,.layers-panel,.properties-panel,
+.timeline,.video-timeline,.site-controls{
+  background:linear-gradient(180deg,#081D29,#05141E)!important;
+  border-color:#1F4B5D!important;
+}
+.editor-toolbar button.active,.toolbox button.active,.scene-card.active,.timeline-item.active,.clip-card.active{
+  background:linear-gradient(135deg,rgba(103,69,154,.26),rgba(22,155,184,.20),rgba(73,178,155,.13))!important;
+  border-color:#3D8D9C!important;color:#fff!important
+}
+
+/* Abo: NUR optisch, Geldlogik bleibt unberührt */
+.subscription-hero,.account-hero,.profile-card{
+  background:
+    radial-gradient(circle at 10% 0,rgba(103,69,154,.12),transparent 34%),
+    radial-gradient(circle at 92% 4%,rgba(73,178,155,.09),transparent 30%),
+    linear-gradient(180deg,#0A202D,#071923)!important;
+  border-color:#275C70!important;
+}
+.plan-badge,.featured-badge{background:var(--pixva-brand-gradient)!important}
+
+/* Keine alten gelb/olivfarbenen UI-Badges mehr */
+.badge:not(.warning):not(.danger),
+.tag:not(.warning):not(.danger),
+.pill:not(.warning):not(.danger){
+  background:rgba(22,155,184,.12)!important;
+  border-color:rgba(73,178,155,.32)!important;
+  color:#A9E6E1!important;
+}
+
+/* Focus */
+input:focus,textarea:focus,select:focus{
+  border-color:#35A5B5!important;
+  box-shadow:0 0 0 3px rgba(22,155,184,.11)!important;
+}
+
+/* Login */
+.login-card{
+  border-color:#2B6679!important;
+  background:linear-gradient(180deg,rgba(10,32,45,.98),rgba(5,19,29,.99))!important;
+}
+.login-card button[type="submit"],.login-card .primary-btn{
+  background:var(--pixva-brand-gradient)!important;
+}
+
+/* Feine Trennlinien */
+hr{border-color:#1D4658!important}
+::selection{background:rgba(22,155,184,.34)!important;color:#fff!important}

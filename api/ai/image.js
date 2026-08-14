@@ -13,7 +13,7 @@ function isAdvertisingPrompt(value) {
   return /(werbebild|werbung|anzeige|kampagne|flyer|poster|social.?media|instagram.?post|banner|angebot|promotion|advertis)/i.test(value);
 }
 
-function isYildizPrompt(value) {
+function isPixvaPrompt(value) {
   return /yildiz\s*ai/i.test(value);
 }
 
@@ -57,10 +57,10 @@ function buildPrompt(prompt, style, hasReference) {
     instructions.push('Do not add text unless the user explicitly requests it');
   }
 
-  if (isYildizPrompt(clean) && isAdvertisingPrompt(clean)) {
+  if (isPixvaPrompt(clean) && isAdvertisingPrompt(clean)) {
     instructions.push(
       'Brand: PIXVA, spelled exactly "PIXVA"',
-      'Use a deep navy/black premium background with electric blue and warm yellow accents',
+      'Use a premium deep navy background with PIXVA violet, blue, cyan and teal accents matching the PIXVA logo',
       'Include the exact main headline "PIXVA"',
       'Include the exact subheadline "Die moderne KI für Bilder, Videos und kreative Projekte"',
       'Include the exact call to action "Jetzt entdecken"',
