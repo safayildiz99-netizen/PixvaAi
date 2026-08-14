@@ -47,7 +47,10 @@ export async function api(path, options = {}) {
   }
 
   if (path === '/api/auth/login' && method === 'POST') {
-    return rpc('app_login', { p_username: body.username, p_password: body.password });
+    return callServer('/api/pixva?action=login', {
+      method:'POST',
+      body:JSON.stringify(body)
+    });
   }
   if (path === '/api/me' && method === 'GET') {
     return rpc('app_me', { p_token: token });

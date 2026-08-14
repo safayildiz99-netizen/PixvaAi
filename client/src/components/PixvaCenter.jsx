@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Bell, BookOpen, Bot, Boxes, BrainCircuit, CheckCircle2, Cloud, Database, Download,
-  FileCheck2, FileUp, Languages, LoaderCircle, MemoryStick, Mic, PackagePlus, Play,
-  RefreshCw, RotateCcw, Save, Search, ShieldCheck, Sparkles, SquareStack, Trash2,
+  FileCheck2, FileUp, Instagram, KeyRound, Languages, LoaderCircle, MemoryStick, Mic, PackagePlus, Play,
+  RefreshCw, RotateCcw, Save, Search, ShieldCheck, Sparkles, SquareStack, Trash2, UsersRound,
   Upload, Volume2, WandSparkles
 } from 'lucide-react';
 import { api } from '../api.js';
@@ -12,7 +12,7 @@ import './PixvaCenter.css';
 const TABS=[
   ['agent','Agent',BrainCircuit],['products','Produkte',Boxes],['knowledge','Wissen',BookOpen],
   ['brand','Brand & Memory',MemoryStick],['tools','Prüfen & Übersetzen',FileCheck2],
-  ['security','Sicherheit & Daten',ShieldCheck],['status','Status',Database]
+  ['security','Sicherheit & Daten',ShieldCheck],['team','Team & Freigaben',UsersRound],['integrations','Integrationen',Instagram],['status','Status',Database]
 ];
 const emptyBrand={company_name:'',logo_path:'',primary_color:'#7258ff',secondary_color:'#39d6d0',font_family:'Inter',address:'',opening_hours:'',instagram:'',language:'de',design_style:'modern-premium',notes:''};
 const emptyProduct={ean:'',name:'',brand:'',weight:'',category:'',normal_price:'',offer_price:'',image_url:'',notes:''};
@@ -28,12 +28,17 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   const [webQuery,setWebQuery]=useState(''),[webAnswer,setWebAnswer]=useState(null);
   const [translate,setTranslate]=useState({text:'',target:'Türkisch'}),[translation,setTranslation]=useState('');
   const [flyerCheck,setFlyerCheck]=useState(null),[recoveryCodes,setRecoveryCodes]=useState([]),[deleteForm,setDeleteForm]=useState({password:'',confirmation:''}),[status,setStatus]=useState(null);
+  const [securityState,setSecurityState]=useState(null),[twofaSetup,setTwofaSetup]=useState(null),[twofaCode,setTwofaCode]=useState('');
+  const [email,setEmail]=useState(''),[team,setTeam]=useState(null),[instagram,setInstagram]=useState(null);
+  const [instagramForm,setInstagramForm]=useState({accountId:'',displayName:'',accessToken:'',caption:''}),[approvalForm,setApprovalForm]=useState({projectId:'',title:'',note:''});
+  const productPhoto=useRef(null),instagramFile=useRef(null);
   const prevUnread=useRef(new Set()),productFile=useRef(null),knowledgeFile=useRef(null),flyerFile=useRef(null),brandLogoFile=useRef(null);
 
   async function load(silent=false){
     if(!silent)setLoading(true);
     try{
       const result=await api('/api/pixva?action=overview');setData(result);setBrand({...emptyBrand,...(result.brand||{})});
+      setAgentRun(prev=>{if(!prev?.run?.id)return prev;const fresh=(result.runs||[]).find(r=>r.id===prev.run.id);return fresh?{...prev,run:fresh,plan:fresh.plan||prev.plan}:prev});
       const unread=(result.notifications||[]).filter(n=>!n.read_at);
       if('Notification'in window&&Notification.permission==='granted'){
         for(const n of unread)if(!prevUnread.current.has(n.id))new Notification(`PIXVA · ${n.title}`,{body:n.message||''});
@@ -68,6 +73,8 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   async function saveProduct(){try{await call('product-save',product);setProduct(emptyProduct);setMessage('Produkt gespeichert.');await load(true)}catch{}}
   async function deleteProduct(id){if(!confirm('Produkt wirklich löschen?'))return;try{await call('product-delete',{id});await load(true)}catch{}}
   async function importProducts(){const file=productFile.current?.files?.[0];if(!file)return;try{const t=await privateUpload(file,'product-import');const r=await call('products-import',{storagePath:t.path,replace:false});setMessage(`${r.imported} Produkte importiert.`);await load(true)}catch{}finally{if(productFile.current)productFile.current.value=''}}
+  async function lookupEan(){if(!product.ean.trim())return setError('EAN eingeben.');try{const r=await call('product-ean-lookup',{ean:product.ean});setProduct({...emptyProduct,...r.product});setMessage('Produktdaten zur EAN gefunden. Bitte vor dem Speichern prüfen.')}catch{}}
+  async function recognizeProductPhoto(){const file=productPhoto.current?.files?.[0];if(!file)return;try{const t=await privateUpload(file,'product-photo');const r=await call('product-photo-recognize',{storagePath:t.path,mimeType:file.type||'image/jpeg'});setProduct(v=>({...v,...r.product}));setMessage('Produkt aus Foto erkannt. Bitte Daten prüfen.')}catch{}finally{if(productPhoto.current)productPhoto.current.value=''}}
   async function addKnowledge(){const file=knowledgeFile.current?.files?.[0];if(!file)return;try{const t=await privateUpload(file,'knowledge');const r=await call('knowledge-finalize',{storagePath:t.path,originalName:file.name,mimeType:file.type||'text/plain'});setMessage(`${file.name}: ${r.chunks} Wissensabschnitte gespeichert.`);await load(true)}catch{}finally{if(knowledgeFile.current)knowledgeFile.current.value=''}}
   async function deleteKnowledge(id){if(!confirm('Datei aus der Wissensbasis löschen?'))return;try{await call('knowledge-delete',{id});await load(true)}catch{}}
   async function askKnowledge(){if(!knowledgeQuestion.trim())return;try{setKnowledgeAnswer(await call('knowledge-ask',{question:knowledgeQuestion}))}catch{}}
@@ -84,7 +91,7 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(text||''));u.lang='de-DE';speechSynthesis.speak(u);
   }
 
-  async function planAgent(){if(!agentPrompt.trim())return;try{const r=await call('agent-plan',{prompt:agentPrompt,webSearch:agentWeb});setAgentRun(r);setAgentResults({});setMessage('PIXVA Agent hat den Auftrag geplant.')}catch{}}
+  async function planAgent(){if(!agentPrompt.trim())return;try{const r=await call('agent-plan',{prompt:agentPrompt,webSearch:agentWeb});setAgentRun(r);setAgentResults({});const paidMedia=(r.plan?.tasks||[]).some(t=>t.type==='image'||t.type==='video');if(paidMedia&&!window.confirm('Kostenhinweis: Dieser Agent-Auftrag enthält echte Bild- oder Video-KI und kann API-Guthaben verbrauchen. Automatisch starten?')){setMessage('Plan erstellt. Kostenpflichtige Medien wurden nicht automatisch gestartet.');return}await call('agent-start',{runId:r.run.id,allowPaidMedia:paidMedia});setMessage('PIXVA Agent arbeitet automatisch im Hintergrund weiter.')}catch{}}
   async function recordAgentResult(runId,result){try{await api('/api/pixva?action=agent-result',{method:'POST',body:JSON.stringify({runId,result})})}catch{}}
   async function executeTask(task){
     if(!agentRun?.run?.id)return;const id=task.id||`task-${Date.now()}`;setAgentResults(o=>({...o,[id]:{status:'running'}}));
@@ -121,6 +128,21 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   async function loadStatus(deep=false){resetFeedback();setBusy('status');try{setStatus(await api(`/api/pixva?action=status${deep?'&deep=1':''}`))}catch(e){setError(e.message)}finally{setBusy('')}}
   async function allowNotifications(){if(!('Notification'in window))return setError('Browser-Benachrichtigungen werden hier nicht unterstützt.');const r=await Notification.requestPermission();setMessage(r==='granted'?'Browser-Benachrichtigungen aktiviert.':'Benachrichtigungen wurden nicht freigegeben.')}
 
+  async function loadSecurity(){try{const r=await api('/api/pixva?action=security-state');setSecurityState(r);setEmail(r.email||'')}catch(e){setError(e.message)}}
+  async function setup2fa(){try{const r=await call('2fa-setup');setTwofaSetup(r);setMessage('QR-Code scannen und 6-stelligen Code bestätigen.')}catch{}}
+  async function confirm2fa(){try{await call('2fa-confirm',{code:twofaCode});setTwofaSetup(null);setTwofaCode('');setMessage('2FA ist aktiviert.');await loadSecurity()}catch{}}
+  async function disable2fa(){if(!twofaCode)return setError('Aktuellen 2FA-Code eingeben.');try{await call('2fa-disable',{code:twofaCode});setTwofaCode('');setMessage('2FA deaktiviert.');await loadSecurity()}catch{}}
+  async function saveEmail(){try{await call('profile-email-save',{email});setMessage('E-Mail gespeichert.');await loadSecurity()}catch{}}
+  async function loadTeam(){if(user.role!=='admin')return;try{setTeam(await api('/api/pixva?action=team-list'))}catch(e){setError(e.message)}}
+  async function changeTeamRole(target,teamRole){try{await call('team-update',{userId:target.id,teamRole,email:target.email||''});setMessage('Team-Rolle gespeichert.');await loadTeam()}catch{}}
+  async function reviewApproval(id,status){try{await call('approval-update',{id,status});setMessage(status==='approved'?'Freigegeben.':'Abgelehnt.');await loadTeam()}catch{}}
+  async function requestApproval(){if(!approvalForm.projectId)return setError('Projekt-ID fehlt.');try{await call('approval-create',approvalForm);setApprovalForm({projectId:'',title:'',note:''});setMessage('Freigabe angefordert.')}catch{}}
+  async function loadInstagram(){try{setInstagram(await api('/api/pixva?action=instagram-status'))}catch(e){setError(e.message)}}
+  async function connectInstagram(){try{await call('instagram-save',instagramForm);setInstagramForm(v=>({...v,accessToken:''}));setMessage('Instagram-Verbindung gespeichert.');await loadInstagram()}catch{}}
+  async function disconnectInstagram(){if(!confirm('Instagram-Verbindung trennen?'))return;try{await call('instagram-disconnect',{});setMessage('Instagram getrennt.');await loadInstagram()}catch{}}
+  async function publishInstagram(){const file=instagramFile.current?.files?.[0];if(!file)return setError('Bitte zuerst ein Bild auswählen.');try{const t=await privateUpload(file,'instagram');const r=await call('instagram-publish',{storagePath:t.path,caption:instagramForm.caption});setMessage(`Instagram veröffentlicht · Media ID ${r.mediaId}`)}catch{}finally{if(instagramFile.current)instagramFile.current.value=''}}
+  useEffect(()=>{if(tab==='security')loadSecurity();if(tab==='team')loadTeam();if(tab==='integrations')loadInstagram()},[tab]);
+
   if(loading)return <div className="pixva-center-loading"><LoaderCircle className="spin"/>PIXVA Hub wird geladen …</div>;
 
   return <section className="pixva-center">
@@ -138,8 +160,8 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
       </article>
       <article className="pixva-card">
         <div className="pixva-card-title"><Play/><div><h3>Ausführung</h3><p>{agentRun?.plan?.summary||'Noch kein Auftrag geplant.'}</p></div></div>
-        {agentRun?.plan?.tasks?.length>0&&<button className="pixva-primary" onClick={executeAll}><Play size={16}/>Alle Schritte ausführen</button>}
-        <div className="pixva-task-list">{(agentRun?.plan?.tasks||[]).map(task=>{const r=agentResults[task.id];return <div className="pixva-task" key={task.id}><div><b>{task.title}</b><span>{task.type} · {task.aspect||''}</span></div><button onClick={()=>executeTask(task)} disabled={r?.status==='running'}>{r?.status==='running'?<LoaderCircle className="spin"/>:<Play size={15}/>}</button>
+        {agentRun?.plan?.tasks?.length>0&&<div className="pixva-background-note">Automatische Ausführung: <b>{agentRun?.run?.status||'running'}</b> · Du kannst PIXVA weiter benutzen.</div>}
+        <div className="pixva-task-list">{(agentRun?.plan?.tasks||[]).map(task=>{const r=agentResults[task.id]||(agentRun?.run?.results||[]).find(x=>x.taskId===task.id);return <div className="pixva-task" key={task.id}><div><b>{task.title}</b><span>{task.type} · {task.aspect||''}</span></div><button onClick={()=>executeTask(task)} disabled={r?.status==='running'}>{r?.status==='running'?<LoaderCircle className="spin"/>:<Play size={15}/>}</button>
           {r?.image&&<div className="pixva-result"><img src={r.image}/><button onClick={()=>openAgentImage(r)}>Im Editor öffnen</button></div>}
           {r?.videoId&&<div className="pixva-result"><small>Videoauftrag: {r.videoId} · {r.status}</small><button onClick={()=>openAgentVideo(r)}>Video-Studio öffnen</button></div>}
           {r?.text&&<div className="pixva-result"><p>{r.text}</p><button onClick={()=>speak(r.text)}><Volume2 size={14}/>Vorlesen</button></div>}
@@ -151,13 +173,13 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     {tab==='products'&&<div className="pixva-grid two">
       <article className="pixva-card"><div className="pixva-card-title"><PackagePlus/><div><h3>Produktdatenbank</h3><p>EAN, Name, Marke, Gewicht und Preise.</p></div></div>
         <div className="pixva-form-grid">
-          <label>EAN<input value={product.ean} onChange={e=>setProduct({...product,ean:e.target.value})}/></label><label>Produktname<input value={product.name} onChange={e=>setProduct({...product,name:e.target.value})}/></label>
+          <label>EAN<input value={product.ean} onChange={e=>setProduct({...product,ean:e.target.value})}/><button type="button" onClick={lookupEan}>EAN online abrufen</button></label><label>Produktname<input value={product.name} onChange={e=>setProduct({...product,name:e.target.value})}/></label>
           <label>Marke<input value={product.brand} onChange={e=>setProduct({...product,brand:e.target.value})}/></label><label>Gewicht/Inhalt<input value={product.weight} onChange={e=>setProduct({...product,weight:e.target.value})}/></label>
           <label>Kategorie<input value={product.category} onChange={e=>setProduct({...product,category:e.target.value})}/></label><label>Normalpreis<input value={product.normal_price} onChange={e=>setProduct({...product,normal_price:e.target.value})}/></label>
           <label>Angebotspreis<input value={product.offer_price} onChange={e=>setProduct({...product,offer_price:e.target.value})}/></label><label>Bild-URL<input value={product.image_url} onChange={e=>setProduct({...product,image_url:e.target.value})}/></label>
         </div><label>Notiz<textarea rows={2} value={product.notes} onChange={e=>setProduct({...product,notes:e.target.value})}/></label>
         <button className="pixva-primary" onClick={saveProduct}><Save size={16}/>Produkt speichern</button><hr/>
-        <label className="pixva-upload"><Upload/>Excel/CSV importieren<input ref={productFile} type="file" accept=".xlsx,.xls,.csv" onChange={importProducts}/></label>
+        <label className="pixva-upload"><Upload/>Excel/CSV importieren<input ref={productFile} type="file" accept=".xlsx,.xls,.csv" onChange={importProducts}/></label><label className="pixva-upload"><Upload/>Produktfoto erkennen<input ref={productPhoto} type="file" accept="image/png,image/jpeg,image/webp" onChange={recognizeProductPhoto}/></label>
       </article>
       <article className="pixva-card"><h3>{products.length} Produkte</h3><div className="pixva-table">{products.map(p=><div className="pixva-row" key={p.id}><div><b>{p.name}</b><span>{[p.brand,p.weight,p.ean].filter(Boolean).join(' · ')}</span><small>{money(p.normal_price)} → <strong>{money(p.offer_price)}</strong></small></div><button onClick={()=>deleteProduct(p.id)}><Trash2 size={15}/></button></div>)}</div></article>
     </div>}
@@ -201,7 +223,13 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     </div>}
 
     {tab==='security'&&<div className="pixva-grid two">
-      <article className="pixva-card"><h3>Konto-Sicherheit</h3><button className="pixva-primary" onClick={generateRecovery}><ShieldCheck size={16}/>Neue Wiederherstellungscodes erzeugen</button>
+      <article className="pixva-card"><h3>Konto-Sicherheit</h3>
+        <div className="pixva-status-grid"><div><span>2FA</span><b className={securityState?.twoFactorEnabled?'ok':'warn'}>{securityState?.twoFactorEnabled?'AKTIV':'AUS'}</b></div><div><span>E-Mail</span><b className={securityState?.emailConfigured?'ok':'warn'}>{securityState?.emailConfigured?'BEREIT':'OPTIONAL'}</b></div></div>
+        <label>Recovery-E-Mail<input value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@firma.de"/></label><button onClick={saveEmail}><Save size={15}/>E-Mail speichern</button>
+        {!securityState?.twoFactorEnabled&&<button className="pixva-primary" onClick={setup2fa}><KeyRound size={16}/>2FA aktivieren</button>}
+        {twofaSetup&&<div className="pixva-answer"><img src={twofaSetup.qrDataUrl} alt="PIXVA 2FA QR" style={{width:220,maxWidth:'100%',background:'white',padding:8,borderRadius:12}}/><p>Secret: <code>{twofaSetup.secret}</code></p><input value={twofaCode} onChange={e=>setTwofaCode(e.target.value)} placeholder="6-stelliger Code"/><button className="pixva-primary" onClick={confirm2fa}>2FA bestätigen</button></div>}
+        {securityState?.twoFactorEnabled&&<div className="pixva-inline"><input value={twofaCode} onChange={e=>setTwofaCode(e.target.value)} placeholder="Aktueller 2FA-Code"/><button onClick={disable2fa}>2FA deaktivieren</button></div>}
+        <button className="pixva-primary" onClick={generateRecovery}><ShieldCheck size={16}/>Neue Wiederherstellungscodes erzeugen</button>
         {recoveryCodes.length>0&&<div className="pixva-codes">{recoveryCodes.map(c=><code key={c}>{c}</code>)}</div>}
         <a className="pixva-link" href="/pixva-recovery.html" target="_blank" rel="noreferrer">Wiederherstellungsseite öffnen</a>
         <button onClick={endSessions}><ShieldCheck size={16}/>Alle anderen Sitzungen beenden</button><button onClick={allowNotifications}><Bell size={16}/>Browser-Benachrichtigungen aktivieren</button>
@@ -212,6 +240,16 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
         <hr/><h3>Projektversionen</h3><div className="pixva-table compact-table">{versions.slice(0,20).map(v=><div className="pixva-row" key={v.id}><div><b>{v.name}</b><span>Version {v.version_no} · {fmtDate(v.created_at)}</span></div><button onClick={()=>restoreVersion(v.id)}><RotateCcw size={15}/></button></div>)}</div>
         <hr/><details className="pixva-danger"><summary>Konto dauerhaft löschen</summary><p>Alle mit dem Konto verknüpften Daten werden gelöscht. Das letzte Admin-Konto ist geschützt.</p><input type="password" placeholder="Passwort" value={deleteForm.password} onChange={e=>setDeleteForm({...deleteForm,password:e.target.value})}/><input placeholder={`Benutzername exakt: ${user.username}`} value={deleteForm.confirmation} onChange={e=>setDeleteForm({...deleteForm,confirmation:e.target.value})}/><button onClick={deleteAccount}><Trash2 size={15}/>Konto endgültig löschen</button></details>
       </article>
+    </div>}
+
+    {tab==='team'&&<div className="pixva-grid two">
+      <article className="pixva-card"><h3>Team-Rollen</h3>{user.role!=='admin'?<p>Nur Admins können Rollen verwalten.</p>:<div className="pixva-table">{(team?.users||[]).map(u=><div className="pixva-row" key={u.id}><div><b>{u.username}</b><span>{u.email||'keine E-Mail'} · {u.role}</span></div><select value={u.team_role||'member'} onChange={e=>changeTeamRole(u,e.target.value)}><option value="owner">Owner</option><option value="manager">Manager</option><option value="designer">Designer</option><option value="member">Mitarbeiter</option><option value="viewer">Nur ansehen</option></select></div>)}</div>}<hr/><h3>Freigabe anfordern</h3><input placeholder="Projekt-ID" value={approvalForm.projectId} onChange={e=>setApprovalForm({...approvalForm,projectId:e.target.value})}/><input placeholder="Titel" value={approvalForm.title} onChange={e=>setApprovalForm({...approvalForm,title:e.target.value})}/><textarea rows={3} placeholder="Notiz" value={approvalForm.note} onChange={e=>setApprovalForm({...approvalForm,note:e.target.value})}/><button onClick={requestApproval}>Freigabe anfordern</button></article>
+      <article className="pixva-card"><h3>Freigaben & Audit-Log</h3>{user.role==='admin'&&<><div className="pixva-table">{(team?.approvals||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.title||'Freigabe'}</b><span>{a.status} · {fmtDate(a.created_at)}</span></div>{a.status==='pending'&&<div className="pixva-inline"><button onClick={()=>reviewApproval(a.id,'approved')}>Freigeben</button><button onClick={()=>reviewApproval(a.id,'rejected')}>Ablehnen</button></div>}</div>)}</div><hr/><div className="pixva-table compact-table">{(team?.audit||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.action}</b><span>{fmtDate(a.created_at)}</span><small>{JSON.stringify(a.details||{})}</small></div></div>)}</div></>}</article>
+    </div>}
+
+    {tab==='integrations'&&<div className="pixva-grid two">
+      <article className="pixva-card"><div className="pixva-card-title"><Instagram/><div><h3>Instagram Publishing</h3><p>Direkte Veröffentlichung über die Meta Instagram API.</p></div></div><div className="pixva-status-grid"><div><span>Status</span><b className={instagram?.connected?'ok':'warn'}>{instagram?.connected?'VERBUNDEN':'NICHT VERBUNDEN'}</b></div><div><span>Graph API</span><b>{instagram?.graphVersion||'v26.0'}</b></div></div>{!instagram?.connected?<><label>Instagram User ID<input value={instagramForm.accountId} onChange={e=>setInstagramForm({...instagramForm,accountId:e.target.value})}/></label><label>Anzeigename<input value={instagramForm.displayName} onChange={e=>setInstagramForm({...instagramForm,displayName:e.target.value})}/></label><label>Access Token<input type="password" value={instagramForm.accessToken} onChange={e=>setInstagramForm({...instagramForm,accessToken:e.target.value})}/></label><button className="pixva-primary" onClick={connectInstagram}>Instagram verbinden</button><small>Benötigt ein Instagram Business-/Creator-Konto und einen gültigen Meta Access Token mit Publishing-Rechten.</small></>:<><p>Verbunden: <b>{instagram.account?.display_name||instagram.account?.account_id}</b></p><button onClick={disconnectInstagram}>Verbindung trennen</button></>}</article>
+      <article className="pixva-card"><h3>Direkt veröffentlichen</h3><label className="pixva-upload"><Upload/>Bild auswählen<input ref={instagramFile} type="file" accept="image/jpeg,image/png,image/webp"/></label><label>Caption<textarea rows={6} value={instagramForm.caption} onChange={e=>setInstagramForm({...instagramForm,caption:e.target.value})}/></label><button className="pixva-primary" onClick={publishInstagram} disabled={!instagram?.connected}><Instagram size={16}/>Auf Instagram veröffentlichen</button><hr/><h3>E-Mail</h3><p>Passwort-Recovery per E-Mail wird automatisch aktiv, sobald die optionalen SMTP-Variablen in Vercel gesetzt sind.</p></article>
     </div>}
 
     {tab==='status'&&<div className="pixva-grid two">

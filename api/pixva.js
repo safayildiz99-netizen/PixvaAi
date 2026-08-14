@@ -1,9 +1,13 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, createCipheriv, createDecipheriv, createHmac, timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
+import { waitUntil } from '@vercel/functions';
+import QRCode from 'qrcode';
+import nodemailer from 'nodemailer';
 import { readJson, readToken, send, validateUser } from './_lib.js';
 
+export const config={maxDuration:300};
 const BUCKET='pixva-private';
 const MAX_FILE_BYTES=15*1024*1024;
 const ALLOWED_MIMES=new Set([
@@ -25,6 +29,27 @@ function effectiveMime(name,mime){
     csv:'text/csv',txt:'text/plain',md:'text/markdown',json:'application/json',html:'text/html',htm:'text/html',
     xml:'application/xml',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp'})[ext]||raw||'application/octet-stream';
 }
+
+function securityKey(){return createHash('sha256').update(`PIXVA-V11:${process.env.PIXVA_SECURITY_KEY||serviceKey()}`).digest()}
+function encryptText(value){const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',securityKey(),iv);const data=Buffer.concat([cipher.update(String(value),'utf8'),cipher.final()]),tag=cipher.getAuthTag();return `${iv.toString('base64url')}.${tag.toString('base64url')}.${data.toString('base64url')}`}
+function decryptText(value){const [ivRaw,tagRaw,dataRaw]=String(value||'').split('.'),d=createDecipheriv('aes-256-gcm',securityKey(),Buffer.from(ivRaw,'base64url'));d.setAuthTag(Buffer.from(tagRaw,'base64url'));return Buffer.concat([d.update(Buffer.from(dataRaw,'base64url')),d.final()]).toString('utf8')}
+const B32='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function base32Encode(buffer){let bits=0,value=0,out='';for(const byte of buffer){value=(value<<8)|byte;bits+=8;while(bits>=5){out+=B32[(value>>>(bits-5))&31];bits-=5}}if(bits>0)out+=B32[(value<<(5-bits))&31];return out}
+function base32Decode(input){let bits=0,value=0,out=[];for(const ch of String(input||'').toUpperCase().replace(/[^A-Z2-7]/g,'')){const i=B32.indexOf(ch);if(i<0)continue;value=(value<<5)|i;bits+=5;if(bits>=8){out.push((value>>>(bits-8))&255);bits-=8}}return Buffer.from(out)}
+function totpAt(secret,step){const key=base32Decode(secret),buf=Buffer.alloc(8);buf.writeBigUInt64BE(BigInt(step));const digest=createHmac('sha1',key).update(buf).digest(),offset=digest[digest.length-1]&15,value=(digest.readUInt32BE(offset)&0x7fffffff)%1000000;return String(value).padStart(6,'0')}
+function verifyTotp(secret,code){const clean=String(code||'').replace(/\s/g,'');if(!/^\d{6}$/.test(clean))return false;const step=Math.floor(Date.now()/30000);for(const drift of [-1,0,1]){const a=Buffer.from(clean),b=Buffer.from(totpAt(secret,step+drift));if(a.length===b.length&&timingSafeEqual(a,b))return true}return false}
+function emailConfigured(){return Boolean(process.env.PIXVA_SMTP_HOST&&process.env.PIXVA_SMTP_USER&&process.env.PIXVA_SMTP_PASS&&process.env.PIXVA_EMAIL_FROM)}
+function mailer(){return emailConfigured()?nodemailer.createTransport({host:process.env.PIXVA_SMTP_HOST,port:Number(process.env.PIXVA_SMTP_PORT||587),secure:String(process.env.PIXVA_SMTP_SECURE||'false')==='true',auth:{user:process.env.PIXVA_SMTP_USER,pass:process.env.PIXVA_SMTP_PASS}}):null}
+async function sendMail(to,subject,html){const transport=mailer();if(!transport)throw new Error('E-Mail ist noch nicht konfiguriert.');await transport.sendMail({from:process.env.PIXVA_EMAIL_FROM,to,subject,html})}
+async function openAIEmbeddings(texts){const key=String(process.env.OPENAI_API_KEY||'').trim();if(!key)return[];const input=(Array.isArray(texts)?texts:[texts]).map(x=>String(x||'').slice(0,8000));const r=await fetch('https://api.openai.com/v1/embeddings',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model:'text-embedding-3-small',input})});if(!r.ok)throw new Error(`Embeddings fehlgeschlagen (${r.status}).`);const d=await r.json().catch(()=>({}));return(d.data||[]).sort((a,b)=>a.index-b.index).map(x=>x.embedding)}
+function sniffAllowed(buffer,name){const ext=extensionOf(name);if(ext==='pdf'&&buffer.subarray(0,5).toString()!=='%PDF-')return false;if(ext==='png'&&!buffer.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return false;if((ext==='jpg'||ext==='jpeg')&&!(buffer[0]===255&&buffer[1]===216&&buffer[2]===255))return false;if(['docx','xlsx','xls'].includes(ext)&&!(buffer[0]===80&&buffer[1]===75))return false;return true}
+async function audit(client,actor,action,target=null,details={}){try{await client.from('app_audit_log').insert({actor_id:actor?.id||null,target_user_id:target||null,action,details})}catch{}}
+function requestBase(req){const explicit=String(process.env.APP_URL||'').replace(/\/$/,'');if(explicit)return explicit;const proto=String(req.headers['x-forwarded-proto']||'https'),host=String(req.headers.host||'');return host?`${proto}://${host}`:''}
+async function consumeRecoveryCode(client,userId,code){const hash=createHash('sha256').update(String(code||'').trim().toUpperCase()).digest('hex');const {data}=await client.from('app_recovery_codes').select('*').eq('user_id',userId).eq('code_hash',hash).is('used_at',null).order('created_at',{ascending:false}).limit(1);const row=data?.[0];if(!row)return false;await client.from('app_recovery_codes').update({used_at:new Date().toISOString()}).eq('id',row.id);return true}
+async function persistGeneratedImage(client,user,imageDataUrl,title='pixva-agent'){const m=String(imageDataUrl||'').match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);if(!m)return null;const ext=m[1].includes('png')?'png':m[1].includes('jpeg')?'jpg':'webp',path=`${user.id}/agent/${randomUUID()}-${cleanName(title)}.${ext}`;const {error}=await client.storage.from(BUCKET).upload(path,Buffer.from(m[2],'base64'),{contentType:m[1],upsert:false});if(error)throw error;return path}
+async function internalCall(base,token,path,options={}){const r=await fetch(`${base}${path}`,{...options,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',...(options.headers||{})}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error||`Interner PIXVA-Aufruf fehlgeschlagen (${r.status}).`);return d}
+async function hydrateRuns(client,runs){const copy=JSON.parse(JSON.stringify(runs||[]));for(const run of copy){for(const item of(run.results||[])){if(item.storagePath&&!item.image){try{const {data}=await client.storage.from(BUCKET).createSignedUrl(item.storagePath,3600);if(data?.signedUrl)item.image=data.signedUrl}catch{}}}}return copy}
+async function runAgentBackground(client,user,run,token,base){const tasks=Array.isArray(run?.plan?.tasks)?run.plan.tasks:[],results=[];await client.from('app_agent_runs').update({status:'running',auto_run:true,background_started_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',run.id);try{for(const task of tasks){let result={taskId:task.id||randomUUID(),title:task.title||'PIXVA Aufgabe',type:task.type||'text',at:new Date().toISOString()};try{if(task.type==='image'){const r=await internalCall(base,token,'/api/ai/image',{method:'POST',body:JSON.stringify({prompt:task.prompt,aspect:task.aspect||'post',style:'poster'})}),storagePath=r.imageDataUrl?await persistGeneratedImage(client,user,r.imageDataUrl,task.title):null;result={...result,status:'completed',storagePath,image:r.imageUrl||'',provider:r.provider||''}}else if(task.type==='video'){const r=await internalCall(base,token,'/api/ai/video?action=create',{method:'POST',body:JSON.stringify({prompt:task.prompt,aspect:task.aspect||'portrait',seconds:String(task.seconds||4),requestId:randomUUID()})});result={...result,status:r.status||'queued',videoId:r.id||'',requestId:r.requestId||''}}else if(task.type==='translation'){const r=await gemini({prompt:`Übersetze professionell in ${task.target||'Deutsch'}:\n${task.prompt}`,temperature:.1});result={...result,status:'completed',text:r.text}}else{const r=await gemini({prompt:String(task.prompt||''),temperature:.25});result={...result,status:'completed',text:r.text}}}catch(error){result={...result,status:'failed',error:String(error.message||error).slice(0,600)}}results.push(result);await client.from('app_agent_runs').update({results,updated_at:new Date().toISOString()}).eq('id',run.id)}const failed=results.some(x=>x.status==='failed');await client.from('app_agent_runs').update({results,status:failed?'failed':'completed',background_finished_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',run.id);await client.from('app_notifications').insert({user_id:user.id,kind:failed?'warning':'success',title:failed?'PIXVA Agent teilweise fehlgeschlagen':'PIXVA Agent fertig',message:run.prompt,related_id:run.id});if(emailConfigured()){const {data:u}=await client.from('app_users').select('email').eq('id',user.id).maybeSingle();if(u?.email)await sendMail(u.email,'PIXVA Agent fertig',`<p>Dein PIXVA-Auftrag ist fertig:</p><p>${String(run.prompt||'').replace(/[<>]/g,'')}</p>`).catch(()=>{})}}catch(error){await client.from('app_agent_runs').update({status:'failed',error:String(error.message||error).slice(0,800),background_finished_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',run.id)}}
 
 function actionOf(req){
   if(req.query?.action)return String(req.query.action);
@@ -81,6 +106,8 @@ async function downloadOwnFile(client,user,storagePath){
   const buffer=Buffer.from(await data.arrayBuffer());
   if(!buffer.length)throw new Error('Die Datei ist leer.');
   if(buffer.length>MAX_FILE_BYTES)throw new Error('Datei ist größer als 15 MB.');
+  const localName=path.split('/').pop()||'datei';
+  if(!sniffAllowed(buffer,localName))throw new Error('Dateiinhalt passt nicht zum Dateityp. Upload wurde aus Sicherheitsgründen blockiert.');
   return{buffer,path};
 }
 function textChunks(text,size=3600,overlap=400){
@@ -192,11 +219,12 @@ async function overview(client,user){
     ]);
     admin={errors,users};
   }
+  const hydratedRuns=await hydrateRuns(client,runs);
   return{
-    brand,memories,products,files,runs,notifications:notes,versions,snapshots,jobs,admin,
+    brand,memories,products,files,runs:hydratedRuns,notifications:notes,versions,snapshots,jobs,admin,
     system:{database:true,privateStorage:true,geminiConfigured:Boolean(process.env.GEMINI_API_KEY),
       openaiConfigured:Boolean(process.env.OPENAI_API_KEY),soraConfigured:Boolean(process.env.OPENAI_API_KEY),
-      supabaseServiceConfigured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),paypalUntouched:true}
+      supabaseServiceConfigured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),paypalUntouched:true,semanticSearch:Boolean(process.env.OPENAI_API_KEY),backgroundJobs:true,emailConfigured:emailConfigured(),twoFactor:true,instagramPublishing:true}
   };
 }
 async function extractFileText(buffer,mime,name){
@@ -263,16 +291,50 @@ async function removeUserStorage(client,userId){
 export default async function handler(req,res){
   const action=actionOf(req);const client=db();
 
+  if(action==='login'){
+    if(req.method!=='POST')return send(res,405,{error:'Nur POST erlaubt.'});
+    try{
+      const body=await readJson(req),username=String(body.username||'').trim(),password=String(body.password||''),code=String(body.totp||body.code||'').trim();
+      await enforcePublicRate(client,req,'login',username,12,900);
+      const {data:start,error:startError}=await client.rpc('app_login_v11_start',{p_username:username,p_password:password});
+      if(startError)throw startError;if(start?.error)return send(res,401,{error:start.error});
+      if(start?.requires2fa){
+        if(!code)return send(res,200,{requires2fa:true,message:'2FA-Code oder Wiederherstellungscode eingeben.'});
+        const {data:twofa}=await client.from('app_user_2fa').select('*').eq('user_id',start.userId).eq('enabled',true).maybeSingle();
+        let valid=false;if(twofa?.secret_cipher){try{valid=verifyTotp(decryptText(twofa.secret_cipher),code)}catch{}}
+        if(!valid)valid=await consumeRecoveryCode(client,start.userId,code);
+        if(!valid)return send(res,401,{requires2fa:true,error:'2FA-Code ist ungültig.'});
+        const {data:finish,error:finishError}=await client.rpc('app_login_v11_finish',{p_user_id:start.userId});if(finishError)throw finishError;
+        await audit(client,{id:start.userId},'login_2fa',start.userId,{});if(emailConfigured()){const {data:u}=await client.from('app_users').select('email').eq('id',start.userId).maybeSingle();if(u?.email)waitUntil(sendMail(u.email,'PIXVA · Neue Anmeldung','<p>Bei deinem PIXVA-Konto wurde gerade eine Anmeldung mit 2FA durchgeführt.</p>').catch(()=>{}))}return send(res,200,finish);
+      }
+      await audit(client,start?.user,'login',start?.user?.id||null,{});if(emailConfigured()&&start?.user?.email)waitUntil(sendMail(start.user.email,'PIXVA · Neue Anmeldung','<p>Bei deinem PIXVA-Konto wurde gerade eine neue Anmeldung durchgeführt.</p>').catch(()=>{}));return send(res,200,start);
+    }catch(error){return send(res,500,{error:error.message||'Anmeldung fehlgeschlagen.'})}
+  }
+
+  if(action==='recovery-email-request'){
+    if(req.method!=='POST')return send(res,405,{error:'Nur POST erlaubt.'});
+    const generic={ok:true,message:'Wenn für dieses Konto eine E-Mail hinterlegt und der Mailversand eingerichtet ist, wurde ein Wiederherstellungslink versendet.'};
+    try{
+      const body=await readJson(req),identity=String(body.identity||body.username||body.email||'').trim().toLowerCase();
+      await enforcePublicRate(client,req,'recovery-email',identity,6,900);if(!identity||!emailConfigured())return send(res,200,generic);
+      const {data:users}=await client.from('app_users').select('id,username,email').or(`username.eq.${identity},email.eq.${identity}`).limit(1);const target=users?.[0];if(!target?.email)return send(res,200,generic);
+      const token=randomBytes(32).toString('base64url'),hash=createHash('sha256').update(token).digest('hex');
+      await client.from('app_email_reset_tokens').insert({user_id:target.id,token_hash:hash,expires_at:new Date(Date.now()+30*60*1000).toISOString()});
+      const base=requestBase(req),link=`${base}/pixva-recovery.html?token=${encodeURIComponent(token)}&username=${encodeURIComponent(target.username)}`;
+      await sendMail(target.email,'PIXVA · Passwort wiederherstellen',`<p>Für dein PIXVA-Konto wurde eine Passwort-Wiederherstellung angefordert.</p><p><a href="${link}">Passwort jetzt ändern</a></p><p>Der Link ist 30 Minuten gültig.</p>`);
+      return send(res,200,generic);
+    }catch{return send(res,200,generic)}
+  }
+
+
   if(action==='recover-password'){
     if(req.method!=='POST')return send(res,405,{error:'Nur POST erlaubt.'});
     try{
-      const body=await readJson(req),username=String(body.username||'').trim(),code=String(body.code||'').trim().toUpperCase(),password=String(body.newPassword||'');
-      if(!username||!code||password.length<10)return send(res,400,{error:'Benutzername, Wiederherstellungscode und neues Passwort (mindestens 10 Zeichen) sind erforderlich.'});
+      const body=await readJson(req),username=String(body.username||'').trim(),code=String(body.code||'').trim().toUpperCase(),resetToken=String(body.token||'').trim(),password=String(body.newPassword||'');
+      if(!username||password.length<10)return send(res,400,{error:'Benutzername und neues Passwort (mindestens 10 Zeichen) sind erforderlich.'});
       await enforcePublicRate(client,req,'recover-password',username,8,900);
-      const hash=createHash('sha256').update(code).digest('hex');
-      const {data,error}=await client.rpc('app_reset_password_with_recovery',{p_username:username,p_code_hash:hash,p_new_password:password});
-      if(error)throw error;if(data?.error)return send(res,400,{error:data.error});
-      return send(res,200,{ok:true,message:'Passwort geändert. Du kannst dich jetzt wieder bei PIXVA anmelden.'});
+      if(resetToken){const tokenHash=createHash('sha256').update(resetToken).digest('hex'),{data:rows}=await client.from('app_email_reset_tokens').select('*').eq('token_hash',tokenHash).is('used_at',null).gt('expires_at',new Date().toISOString()).limit(1),row=rows?.[0];if(!row)return send(res,400,{error:'Wiederherstellungslink ist ungültig oder abgelaufen.'});const {data,error}=await client.rpc('app_reset_password_by_user',{p_user_id:row.user_id,p_new_password:password});if(error)throw error;if(data?.error)return send(res,400,{error:data.error});await client.from('app_email_reset_tokens').update({used_at:new Date().toISOString()}).eq('id',row.id);return send(res,200,{ok:true,message:'Passwort geändert. Du kannst dich jetzt wieder bei PIXVA anmelden.'})}
+      if(!code)return send(res,400,{error:'Wiederherstellungscode fehlt.'});const hash=createHash('sha256').update(code).digest('hex'),{data,error}=await client.rpc('app_reset_password_with_recovery',{p_username:username,p_code_hash:hash,p_new_password:password});if(error)throw error;if(data?.error)return send(res,400,{error:data.error});return send(res,200,{ok:true,message:'Passwort geändert. Du kannst dich jetzt wieder bei PIXVA anmelden.'});
     }catch(error){return send(res,500,{error:error.message||'Passwort konnte nicht wiederhergestellt werden.'})}
   }
 
@@ -280,6 +342,54 @@ export default async function handler(req,res){
 
   try{
     const body=['POST','PUT','PATCH'].includes(req.method)?await readJson(req):{},token=readToken(req);
+
+    if(action==='2fa-setup'&&req.method==='POST'){
+      const secret=base32Encode(randomBytes(20)),label=encodeURIComponent(`PIXVA:${user.username}`),issuer=encodeURIComponent('PIXVA'),uri=`otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`,qrDataUrl=await QRCode.toDataURL(uri,{margin:1,width:240});
+      await client.from('app_user_2fa').upsert({user_id:user.id,secret_cipher:encryptText(secret),enabled:false,confirmed_at:null,updated_at:new Date().toISOString()},{onConflict:'user_id'});await audit(client,user,'2fa_setup_started',user.id,{});return send(res,200,{secret,uri,qrDataUrl});
+    }
+    if(action==='2fa-confirm'&&req.method==='POST'){
+      const code=String(body.code||'').trim(),{data:row}=await client.from('app_user_2fa').select('*').eq('user_id',user.id).maybeSingle();if(!row?.secret_cipher)return send(res,400,{error:'2FA wurde noch nicht vorbereitet.'});let valid=false;try{valid=verifyTotp(decryptText(row.secret_cipher),code)}catch{}if(!valid)return send(res,400,{error:'Authenticator-Code ist ungültig.'});await client.from('app_user_2fa').update({enabled:true,confirmed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('user_id',user.id);await audit(client,user,'2fa_enabled',user.id,{});return send(res,200,{ok:true});
+    }
+    if(action==='2fa-disable'&&req.method==='POST'){
+      const code=String(body.code||'').trim(),{data:row}=await client.from('app_user_2fa').select('*').eq('user_id',user.id).eq('enabled',true).maybeSingle();if(!row?.secret_cipher)return send(res,400,{error:'2FA ist nicht aktiviert.'});let valid=false;try{valid=verifyTotp(decryptText(row.secret_cipher),code)}catch{}if(!valid)valid=await consumeRecoveryCode(client,user.id,code);if(!valid)return send(res,400,{error:'2FA-Code ist ungültig.'});await client.from('app_user_2fa').delete().eq('user_id',user.id);await audit(client,user,'2fa_disabled',user.id,{});return send(res,200,{ok:true});
+    }
+    if(action==='security-state'&&req.method==='GET'){
+      const [{data:twofa},{data:profile}]=await Promise.all([client.from('app_user_2fa').select('enabled,confirmed_at').eq('user_id',user.id).maybeSingle(),client.from('app_users').select('email,team_role').eq('id',user.id).maybeSingle()]);return send(res,200,{twoFactorEnabled:Boolean(twofa?.enabled),twoFactorConfirmedAt:twofa?.confirmed_at||null,email:profile?.email||'',teamRole:profile?.team_role||'member',emailConfigured:emailConfigured()});
+    }
+    if(action==='profile-email-save'&&req.method==='POST'){
+      const email=String(body.email||'').trim().toLowerCase();if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return send(res,400,{error:'E-Mail-Adresse ist ungültig.'});const {error}=await client.from('app_users').update({email:email||null}).eq('id',user.id);if(error)throw error;await audit(client,user,'email_changed',user.id,{hasEmail:Boolean(email)});return send(res,200,{ok:true,email});
+    }
+    if(action==='team-list'&&req.method==='GET'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const [{data:users,error},{data:logs},{data:approvals}]=await Promise.all([client.from('app_users').select('id,username,email,role,team_role,active,created_at').order('created_at',{ascending:true}),client.from('app_audit_log').select('*').order('created_at',{ascending:false}).limit(100),client.from('app_approvals').select('*').order('created_at',{ascending:false}).limit(100)]);if(error)throw error;return send(res,200,{users:users||[],audit:logs||[],approvals:approvals||[]});
+    }
+    if(action==='team-update'&&req.method==='POST'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const target=String(body.userId||''),teamRole=String(body.teamRole||'member');if(!['owner','manager','designer','member','viewer'].includes(teamRole))return send(res,400,{error:'Unbekannte Team-Rolle.'});const patch={team_role:teamRole};if(typeof body.email==='string')patch.email=body.email.trim().toLowerCase()||null;const {error}=await client.from('app_users').update(patch).eq('id',target);if(error)throw error;await audit(client,user,'team_role_changed',target,{teamRole});return send(res,200,{ok:true});
+    }
+    if(action==='approval-create'&&req.method==='POST'){
+      const projectId=String(body.projectId||'');if(!projectId)return send(res,400,{error:'Projekt fehlt.'});const {data:project}=await client.from('app_projects').select('id,name,owner_id').eq('id',projectId).eq('owner_id',user.id).maybeSingle();if(!project)return send(res,404,{error:'Projekt nicht gefunden.'});const {data,error}=await client.from('app_approvals').insert({user_id:user.id,project_id:project.id,requested_by:user.id,title:String(body.title||project.name||'Freigabe').slice(0,160),note:String(body.note||'').slice(0,2000)}).select().single();if(error)throw error;await audit(client,user,'approval_requested',user.id,{approvalId:data.id,projectId});return send(res,200,{approval:data});
+    }
+    if(action==='approval-update'&&req.method==='POST'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const status=String(body.status||'');if(!['approved','rejected'].includes(status))return send(res,400,{error:'Ungültiger Freigabestatus.'});const {data,error}=await client.from('app_approvals').update({status,reviewed_by:user.id,reviewed_at:new Date().toISOString(),note:String(body.note||'').slice(0,2000)}).eq('id',String(body.id||'')).select().single();if(error)throw error;await audit(client,user,`approval_${status}`,data.user_id,{approvalId:data.id});await client.from('app_notifications').insert({user_id:data.user_id,kind:status==='approved'?'success':'warning',title:status==='approved'?'Projekt freigegeben':'Projekt abgelehnt',message:data.title,related_id:data.id});return send(res,200,{approval:data});
+    }
+    if(action==='agent-start'&&req.method==='POST'){
+      const runId=String(body.runId||''),{data:run,error}=await client.from('app_agent_runs').select('*').eq('id',runId).eq('user_id',user.id).maybeSingle();if(error)throw error;if(!run)return send(res,404,{error:'Agent-Auftrag nicht gefunden.'});if(['running','completed'].includes(run.status))return send(res,200,{ok:true,status:run.status});const hasPaidMedia=(run.plan?.tasks||[]).some(t=>t.type==='image'||t.type==='video');if(hasPaidMedia&&body.allowPaidMedia!==true)return send(res,400,{error:'Dieser Agent-Auftrag enthält kostenpflichtige Medien. Ausdrückliche Bestätigung fehlt.'});const base=requestBase(req);if(!base)return send(res,500,{error:'APP_URL fehlt.'});waitUntil(runAgentBackground(client,user,run,token,base));return send(res,202,{ok:true,status:'running',message:'PIXVA arbeitet im Hintergrund weiter.'});
+    }
+    if(action==='product-ean-lookup'&&req.method==='POST'){
+      const ean=String(body.ean||'').replace(/\D/g,'').slice(0,18);if(!ean)return send(res,400,{error:'EAN fehlt.'});await enforceRate(client,req,'ean',30,60);const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(ean)}.json?fields=code,product_name,brands,quantity,categories,selected_images`);const d=await r.json().catch(()=>({}));if(!r.ok||d.status!==1||!d.product)return send(res,404,{error:'Zu dieser EAN wurde kein Produkt gefunden.'});const p=d.product,image=p.selected_images?.front?.display?.de||p.selected_images?.front?.display?.en||'';return send(res,200,{product:{ean,name:p.product_name||'',brand:p.brands||'',weight:p.quantity||'',category:p.categories||'',image_url:image,normal_price:null,offer_price:null,notes:'EAN-Daten online gefunden – vor Verwendung prüfen.'}});
+    }
+    if(action==='product-photo-recognize'&&req.method==='POST'){
+      await enforceRate(client,req,'product-photo',12,60);const {buffer}=await downloadOwnFile(client,user,body.storagePath),mime=String(body.mimeType||'image/jpeg');const r=await gemini({json:true,temperature:0,inline:{buffer,mimeType:mime},prompt:'Erkenne das Produkt auf dem Bild. Lies EAN nur wenn eindeutig sichtbar. Erfinde nichts. Antworte JSON: {"ean":"","name":"","brand":"","weight":"","category":"","notes":""}'});try{await client.storage.from(BUCKET).remove([ownPath(user,body.storagePath)])}catch{}return send(res,200,{product:parseJsonText(r.text,{ean:'',name:'',brand:'',weight:'',category:'',notes:r.text})});
+    }
+    if(action==='instagram-save'&&req.method==='POST'){
+      const accountId=String(body.accountId||'').trim(),accessToken=String(body.accessToken||'').trim(),displayName=String(body.displayName||'').trim();if(!accountId||!accessToken)return send(res,400,{error:'Instagram User ID und Access Token fehlen.'});const {error}=await client.from('app_social_accounts').upsert({user_id:user.id,provider:'instagram',account_id:accountId,display_name:displayName,access_token_cipher:encryptText(accessToken),updated_at:new Date().toISOString()},{onConflict:'user_id,provider'});if(error)throw error;await audit(client,user,'instagram_connected',user.id,{accountId,displayName});return send(res,200,{ok:true});
+    }
+    if(action==='instagram-status'&&req.method==='GET'){
+      const {data:row}=await client.from('app_social_accounts').select('account_id,display_name,updated_at').eq('user_id',user.id).eq('provider','instagram').maybeSingle();return send(res,200,{connected:Boolean(row),account:row||null,graphVersion:String(process.env.META_GRAPH_VERSION||'v26.0')});
+    }
+    if(action==='instagram-disconnect'&&req.method==='POST'){await client.from('app_social_accounts').delete().eq('user_id',user.id).eq('provider','instagram');await audit(client,user,'instagram_disconnected',user.id,{});return send(res,200,{ok:true});}
+    if(action==='instagram-publish'&&req.method==='POST'){
+      await enforceRate(client,req,'instagram-publish',10,3600);const caption=String(body.caption||'').slice(0,2200),storagePath=ownPath(user,body.storagePath),{data:account}=await client.from('app_social_accounts').select('*').eq('user_id',user.id).eq('provider','instagram').maybeSingle();if(!account)return send(res,400,{error:'Instagram ist noch nicht verbunden.'});let accessToken;try{accessToken=decryptText(account.access_token_cipher)}catch{return send(res,500,{error:'Instagram-Verbindung konnte nicht entschlüsselt werden.'})}const {data:signed,error:signedError}=await client.storage.from(BUCKET).createSignedUrl(storagePath,1800);if(signedError||!signed?.signedUrl)throw signedError||new Error('Bildlink konnte nicht erstellt werden.');const version=String(process.env.META_GRAPH_VERSION||'v26.0'),createBody=new URLSearchParams({image_url:signed.signedUrl,caption,access_token:accessToken}),createResp=await fetch(`https://graph.facebook.com/${version}/${encodeURIComponent(account.account_id)}/media`,{method:'POST',body:createBody}),created=await createResp.json().catch(()=>({}));if(!createResp.ok||!created.id)throw new Error(created?.error?.message||'Instagram konnte keinen Media-Container erstellen.');const pubResp=await fetch(`https://graph.facebook.com/${version}/${encodeURIComponent(account.account_id)}/media_publish`,{method:'POST',body:new URLSearchParams({creation_id:created.id,access_token:accessToken})}),published=await pubResp.json().catch(()=>({}));if(!pubResp.ok||!published.id)throw new Error(published?.error?.message||'Instagram-Veröffentlichung fehlgeschlagen.');await audit(client,user,'instagram_published',user.id,{mediaId:published.id});return send(res,200,{ok:true,mediaId:published.id});
+    }
 
     if(action==='overview'&&req.method==='GET')return send(res,200,await overview(client,user));
 
@@ -337,7 +447,8 @@ export default async function handler(req,res){
       try{
         const text=await extractFileText(buffer,mime,name),chunks=textChunks(text);
         await client.from('app_knowledge_chunks').delete().eq('file_id',file.id).eq('user_id',user.id);
-        if(chunks.length){const {error}=await client.from('app_knowledge_chunks').insert(chunks.map((content,index)=>({file_id:file.id,user_id:user.id,chunk_index:index,content})));if(error)throw error}
+        let embeddings=[];try{for(let i=0;i<chunks.length;i+=32)embeddings.push(...await openAIEmbeddings(chunks.slice(i,i+32)))}catch{}
+        if(chunks.length){const {error}=await client.from('app_knowledge_chunks').insert(chunks.map((content,index)=>({file_id:file.id,user_id:user.id,chunk_index:index,content,embedding:embeddings[index]||null})));if(error)throw error}
         const {data:done,error}=await client.from('app_knowledge_files').update({extracted_text:text.slice(0,200000),status:'ready',error:'',updated_at:new Date().toISOString()}).eq('id',file.id).eq('user_id',user.id).select().single();if(error)throw error;
         return send(res,200,{file:done,chunks:chunks.length,characters:text.length});
       }catch(error){await client.from('app_knowledge_files').update({status:'failed',error:String(error.message||error).slice(0,800),updated_at:new Date().toISOString()}).eq('id',file.id);throw error}
@@ -363,11 +474,12 @@ export default async function handler(req,res){
     if(action==='knowledge-ask'&&req.method==='POST'){
       await enforceRate(client,req,'knowledge-ask',20,60);
       const question=String(body.question||'').trim().slice(0,5000);if(!question)return send(res,400,{error:'Frage fehlt.'});
-      const {data:chunks,error}=await client.from('app_knowledge_chunks').select('content,chunk_index,file_id,app_knowledge_files(original_name)').eq('user_id',user.id).limit(1000);if(error)throw error;
-      if(!chunks?.length)return send(res,400,{error:'Noch keine Wissensdateien verarbeitet.'});
-      const relevant=relevantChunks(chunks,question,10),context=relevant.map((c,i)=>`[${i+1}] ${c.app_knowledge_files?.original_name||'Datei'}\n${c.content}`).join('\n\n');
+      let relevant=[];
+      try{const [queryEmbedding]=await openAIEmbeddings([question]);if(queryEmbedding){const {data:semantic}=await client.rpc('app_match_knowledge',{p_user_id:user.id,p_embedding:queryEmbedding,p_match_count:10});if(Array.isArray(semantic)&&semantic.length){const fileIds=[...new Set(semantic.map(x=>x.file_id))],{data:fileRows}=await client.from('app_knowledge_files').select('id,original_name').in('id',fileIds),names=Object.fromEntries((fileRows||[]).map(x=>[x.id,x.original_name]));relevant=semantic.map(x=>({...x,app_knowledge_files:{original_name:names[x.file_id]||'Datei'}}))}}}catch{}
+      if(!relevant.length){const {data:chunks,error}=await client.from('app_knowledge_chunks').select('content,chunk_index,file_id,app_knowledge_files(original_name)').eq('user_id',user.id).limit(1000);if(error)throw error;if(!chunks?.length)return send(res,400,{error:'Noch keine Wissensdateien verarbeitet.'});relevant=relevantChunks(chunks,question,10)}
+      const context=relevant.map((c,i)=>`[${i+1}] ${c.app_knowledge_files?.original_name||'Datei'}\n${c.content}`).join('\n\n');
       const result=await gemini({prompt:`Du bist PIXVA. Beantworte die Frage ausschließlich aus dem privaten Wissenskontext. Wenn die Information dort nicht steht, sage das klar. Nenne am Ende die verwendeten [Nummern].\n\nFRAGE:\n${question}\n\nKONTEXT:\n${context}`});
-      return send(res,200,{answer:result.text,sources:relevant.map((c,i)=>({index:i+1,file:c.app_knowledge_files?.original_name||'Datei'}))});
+      return send(res,200,{answer:result.text,sources:relevant.map((c,i)=>({index:i+1,file:c.app_knowledge_files?.original_name||'Datei',similarity:c.similarity??null})),semantic:relevant.some(x=>x.similarity!==undefined)});
     }
 
     if(action==='web-search'&&req.method==='POST'){
@@ -508,7 +620,7 @@ Antworte ausschließlich JSON:
       if(req.query?.deep==='1'&&user.role==='admin'){try{deep=(await gemini({prompt:'Antworte nur mit PIXVA_OK',temperature:0})).text}catch(e){deep=`Fehler: ${e.message}`}}
       return send(res,200,{database:true,privateStorage:Boolean(bucket&&!bucketError),bucketPublic:bucket?.public??null,
         geminiConfigured:Boolean(process.env.GEMINI_API_KEY),openaiConfigured:Boolean(process.env.OPENAI_API_KEY),
-        serviceRoleConfigured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),geminiDeepTest:deep,paypalUntouched:true});
+        serviceRoleConfigured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),geminiDeepTest:deep,paypalUntouched:true,semanticSearch:Boolean(process.env.OPENAI_API_KEY),backgroundJobs:true,emailConfigured:emailConfigured(),twoFactor:true,instagramPublishing:true});
     }
 
     return send(res,404,{error:'Unbekannte PIXVA-Aktion.'});

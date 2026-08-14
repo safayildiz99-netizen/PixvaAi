@@ -14,7 +14,7 @@ function isAdvertisingPrompt(value) {
 }
 
 function isPixvaPrompt(value) {
-  return /yildiz\s*ai/i.test(value);
+  return /(?:pixva|yildiz\s*ai)/i.test(value);
 }
 
 function buildPrompt(prompt, style, hasReference) {

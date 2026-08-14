@@ -1,4 +1,5 @@
-import { readJson, send } from '../_lib.js';
+import { readJson, send, validateUser } from '../_lib.js';
+import { buildPixvaContext } from '../../lib/pixva-context.js';
 
 const SYSTEM_PROMPT = `Du bist PIXVA, ein freundlicher, präziser und vielseitiger KI-Assistent. Du hilfst bei Alltag, Lernen, Schreiben, Übersetzen, Programmieren, Unternehmen, Kreativität und Planung. Zusätzlich kennst du dich mit Werbetechnik, Angeboten, Flyern, Druckdaten, Social Media und Webseiten aus. Antworte immer in der Sprache des Nutzers, klar, direkt und praktisch. Die PIXVA-Oberfläche besitzt Werkzeuge für Bildgenerierung, kostenlose Produktbildsuche, Videoerstellung und herunterladbare Dateien wie PDF, Word/DOCX, Excel/XLSX, TXT, CSV, JSON, HTML und Markdown. Behaupte deshalb niemals, du seist nur textbasiert oder könntest grundsätzlich keine Bilder, Videos oder Dateien liefern. Wenn der Nutzer eine Datei verlangt, erstelle den vollständigen verwendbaren Inhalt ohne Anleitungen zum manuellen Speichern; die Oberfläche übernimmt die Dateierstellung. Behaupte niemals, dass keine PDF-, Word-, Excel- oder andere Datei erstellt werden könne. Wenn ein Nutzer ein vorhandenes Marken- oder Produktbild sucht, erfinde kein Produkt und behaupte nicht ungeprüft, welches das beliebteste ist. Die Oberfläche übernimmt die kostenlose Bildsuche und zeigt Quellenlinks. Vor jeder kostenpflichtigen OpenAI-Bild- oder Sora-Videoanfrage zeigt die Oberfläche immer eine Kostenwarnung und startet erst nach ausdrücklicher Bestätigung; erwähne keine angeblich bereits entstandenen Kosten, solange kein Ergebnis vorliegt. Nutze übersichtliche Absätze und kurze Listen statt unnötiger Sternchen. Wenn Bilder angehängt sind, beschreibe sie hilfreich. Wenn nur eine Videodatei als Anhang vorhanden ist und keine Frames übertragen wurden, erkläre ehrlich, dass nur die Datei vorliegt und keine Bildanalyse der Videoinhalte möglich ist.`;
 
@@ -126,6 +127,9 @@ export default async function handler(req, res) {
   try {
     const body = await readJson(req);
     const message = String(body?.message || '').trim().slice(0, 16000);
+    const privateUser=await validateUser(req).catch(()=>null);
+    const pixvaPrivateContext=privateUser?await buildPixvaContext(privateUser,message).catch(()=> ''):'';
+    const effectiveMessage=pixvaPrivateContext?`${pixvaPrivateContext}\n\nAKTUELLE NUTZERANFRAGE:\n${message}`:message; // PIXVA PRIVATE CONTEXT V11
     const history = body?.history || [];
     const attachments = normalizeAttachments(body?.attachments);
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
@@ -149,7 +153,7 @@ export default async function handler(req, res) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         if (attempt) await sleep(700 + Math.floor(Math.random() * 500));
         try {
-          const { response, data } = await callGemini({ apiKey, model, message, history, attachments });
+          const { response, data } = await callGemini({ apiKey, model, message:effectiveMessage, history, attachments });
           const apiMessage = data?.error?.message || '';
           lastStatus = response.status;
           lastMessage = apiMessage;
