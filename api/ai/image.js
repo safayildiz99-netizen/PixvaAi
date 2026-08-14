@@ -59,9 +59,9 @@ function buildPrompt(prompt, style, hasReference) {
 
   if (isYildizPrompt(clean) && isAdvertisingPrompt(clean)) {
     instructions.push(
-      'Brand: Yildiz AI, spelled exactly "Yildiz AI"',
+      'Brand: PIXVA, spelled exactly "PIXVA"',
       'Use a deep navy/black premium background with electric blue and warm yellow accents',
-      'Include the exact main headline "Yildiz AI"',
+      'Include the exact main headline "PIXVA"',
       'Include the exact subheadline "Die moderne KI für Bilder, Videos und kreative Projekte"',
       'Include the exact call to action "Jetzt entdecken"',
       'Show an elegant modern workspace and a believable futuristic AI interface, without copying an existing company interface',

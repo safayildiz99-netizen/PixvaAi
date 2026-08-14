@@ -120,7 +120,7 @@ function drawEmpty(ctx, width, height, scene) {
   ctx.fill();
   ctx.font = `800 ${Math.max(34, width / 18)}px Arial`;
   ctx.fillStyle = '#fff';
-  ctx.fillText(scene.title || 'Yildiz AI', width * .08, height * .72);
+  ctx.fillText(scene.title || 'PIXVA', width * .08, height * .72);
 }
 
 function drawOverlay(ctx, width, height, scene, index, localProgress) {
@@ -406,7 +406,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
     const approved = window.confirm(`Kostenhinweis: ${missingCount} echte OpenAI-Szenenbilder können zusammen ungefähr ${(missingCount * 0.04).toFixed(2)}–${(missingCount * 0.20).toFixed(2)} US-Dollar kosten. Wirklich starten?`);
     if (!approved) { setStatus('Kostenpflichtige Stapelerstellung abgebrochen.'); return; }
     setGeneratingAll(true);
-    setStatus('Yildiz AI erstellt die Szenenbilder nacheinander …');
+    setStatus('PIXVA erstellt die Szenenbilder nacheinander …');
     try {
       for (const scene of scenes) {
         if (!scene.imageUrl && !scene.videoUrl) await generateSceneImage(scene, true);
@@ -546,7 +546,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
     try {
       const file = new File([resultBlob], `${safeName(projectName)}.${resultExt || 'mp4'}`, { type:resultBlob.type || 'video/mp4' });
       if (navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))) {
-        await navigator.share({ files:[file], title:projectName, text:'Erstellt mit Yildiz AI' });
+        await navigator.share({ files:[file], title:projectName, text:'Erstellt mit PIXVA' });
         setStatus('Teilen geöffnet. Wähle Instagram aus.');
       } else {
         downloadBlob(resultBlob,file.name);
@@ -602,7 +602,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
     setStatus('Projekt-ZIP wird erstellt …');
     const zip = new JSZip();
     zip.file('projekt.json', JSON.stringify({ projectName, format: formatKey, musicStyle, musicVolume, scenes }, null, 2));
-    zip.file('README.txt', 'Yildiz AI Medienprojekt\nEnthält Projektdatei, Szenenbilder, Storyboard und – falls bereits gerendert – das Video.');
+    zip.file('README.txt', 'PIXVA Medienprojekt\nEnthält Projektdatei, Szenenbilder, Storyboard und – falls bereits gerendert – das Video.');
     const media = zip.folder('medien');
     for (let index = 0; index < scenes.length; index += 1) {
       const scene = scenes[index];
@@ -688,7 +688,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
             <div className="video-media-transform" style={{ transform: `translate(calc(-50% + ${Number(selectedScene?.mediaX || 0)}%), calc(-50% + ${Number(selectedScene?.mediaY || 0)}%)) scale(${Number(selectedScene?.mediaScale || 1)}) rotate(${Number(selectedScene?.mediaRotation || 0)}deg)`, opacity: Number(selectedScene?.mediaOpacity ?? 1) }}>
               {selectedScene?.videoUrl ? <video src={selectedScene.videoUrl} controls playsInline/> : selectedScene?.imageUrl ? <img src={selectedScene.imageUrl} alt={selectedScene.title}/> : <div className="empty-preview"><FileImage size={42}/>Bild oder Video für diese Szene hochladen</div>}
             </div>
-            {selectedScene?.showText && <div className="preview-text-overlay free-position" onPointerDown={startTextDrag} onPointerMove={moveTextDrag} onPointerUp={endTextDrag} onPointerCancel={endTextDrag} style={{ left: `${Number(selectedScene.textX ?? 7)}%`, top: `${Number(selectedScene.textY ?? 76)}%`, color: selectedScene.textColor || '#fff', background: `linear-gradient(90deg, rgba(0,0,0,${selectedScene.overlayOpacity ?? .72}), transparent)`, fontFamily: selectedScene.fontFamily || 'Arial', textAlign: selectedScene.textAlign || 'left' }}><small style={{ color: selectedScene.accentColor || '#ffd400' }}>YILDIZ AI</small><h3 style={{ fontSize: `${1.6 * Number(selectedScene.fontScale || 1)}rem`, fontWeight: selectedScene.fontWeight || 800 }}>{selectedScene.title}</h3><p>{selectedScene.prompt}</p></div>}
+            {selectedScene?.showText && <div className="preview-text-overlay free-position" onPointerDown={startTextDrag} onPointerMove={moveTextDrag} onPointerUp={endTextDrag} onPointerCancel={endTextDrag} style={{ left: `${Number(selectedScene.textX ?? 7)}%`, top: `${Number(selectedScene.textY ?? 76)}%`, color: selectedScene.textColor || '#fff', background: `linear-gradient(90deg, rgba(0,0,0,${selectedScene.overlayOpacity ?? .72}), transparent)`, fontFamily: selectedScene.fontFamily || 'Arial', textAlign: selectedScene.textAlign || 'left' }}><small style={{ color: selectedScene.accentColor || '#ffd400' }}>PIXVA</small><h3 style={{ fontSize: `${1.6 * Number(selectedScene.fontScale || 1)}rem`, fontWeight: selectedScene.fontWeight || 800 }}>{selectedScene.title}</h3><p>{selectedScene.prompt}</p></div>}
           </div>
           <div className="video-preview-actions">
             <label className="clip-upload"><Upload size={16}/>Bild/Video<input type="file" accept="image/*,video/*" onChange={(event) => selectedScene && uploadMedia(selectedScene, event)}/></label>

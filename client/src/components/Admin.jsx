@@ -36,10 +36,10 @@ const DEFAULT_UI_SETTINGS = {
   customPlans: [],
   navItems: DEFAULT_NAV_ITEMS,
   texts: {
-    appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
-    statusTitle:'Yildiz AI · Gemini + OpenAI + Sora',
-    welcome:'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und hochladen.',
-    composer:'Frag Yildiz AI …',
+    appTitle:'PIXVA Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
+    statusTitle:'PIXVA · Gemini + OpenAI + Sora',
+    welcome:'Hallo! Ich bin PIXVA. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und hochladen.',
+    composer:'Frag PIXVA …',
     flyerTitle:'Angebote & Flyer', flyerSubtitle:'Bearbeitbare Vorlagen für Angebote, Produkte und Preise.',
     imageTitle:'Motive & Editor', imageSubtitle:'Bilder, Motive, Texte und Ebenen direkt bearbeiten.',
     videoTitle:'Video-Studio', videoSubtitle:'Szenen, Texte, Musik und Videos in einem Projekt.',
@@ -512,7 +512,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       setSettingsDraft(saved);
       setViewHistory({ past: [], future: [] });
       onSettingsChanged?.(saved);
-      setStatus('Ansicht und Abo-Preise gespeichert. Die Änderungen sind sofort in Yildiz AI aktiv.');
+      setStatus('Ansicht und Abo-Preise gespeichert. Die Änderungen sind sofort in PIXVA aktiv.');
     } catch (error) {
       setStatus(error.message);
     }
@@ -520,7 +520,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
 
   const previewTitleKey = previewPage === 'chat' ? 'appTitle' : `${previewPage}Title`;
   const previewSubtitleKey = previewPage === 'chat' ? 'welcome' : `${previewPage}Subtitle`;
-  const previewTitle = settingsDraft.texts[previewTitleKey] || DEFAULT_UI_SETTINGS.texts[previewTitleKey] || settingsDraft.navItems.find((item)=>item.id===previewPage)?.label || 'Yildiz AI';
+  const previewTitle = settingsDraft.texts[previewTitleKey] || DEFAULT_UI_SETTINGS.texts[previewTitleKey] || settingsDraft.navItems.find((item)=>item.id===previewPage)?.label || 'PIXVA';
   const previewSubtitle = settingsDraft.texts[previewSubtitleKey] || DEFAULT_UI_SETTINGS.texts[previewSubtitleKey] || '';
 
   return <section className="admin-page admin-control-center">
@@ -582,11 +582,11 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         <div className="paypal-settings-grid">
           <label className="checkbox-row"><input type="checkbox" checked={Boolean(settingsDraft.paymentsEnabled)} onChange={(event)=>patchSettings({paymentsEnabled:event.target.checked})}/>Echte Zahlungen aktivieren</label>
           <label>Zahlungsanbieter<select value={settingsDraft.paymentProvider || 'paypal'} onChange={(event)=>patchSettings({paymentProvider:event.target.value})}><option value="paypal">PayPal</option><option value="disabled">Deaktiviert</option></select></label>
-          <label>Angezeigtes Empfängerkonto<input value={settingsDraft.paymentMerchantLabel || ''} onChange={(event)=>patchSettings({paymentMerchantLabel:event.target.value})} placeholder="z. B. Yildiz AI / zahlung@firma.de"/><small>Nur Anzeige. Das echte Empfängerkonto wird durch PAYPAL_CLIENT_ID und PAYPAL_CLIENT_SECRET bestimmt.</small></label>
+          <label>Angezeigtes Empfängerkonto<input value={settingsDraft.paymentMerchantLabel || ''} onChange={(event)=>patchSettings({paymentMerchantLabel:event.target.value})} placeholder="z. B. PIXVA / zahlung@firma.de"/><small>Nur Anzeige. Das echte Empfängerkonto wird durch PAYPAL_CLIENT_ID und PAYPAL_CLIENT_SECRET bestimmt.</small></label>
           <label>Zugangsdauer pro Zahlung<input type="number" min="1" max="365" value={Number(settingsDraft.paidAccessDays || 30)} onChange={(event)=>patchSettings({paidAccessDays:Math.max(1,Number(event.target.value)||30)})}/><small>Tage, danach läuft der bezahlte Zugang ab.</small></label>
         </div>
         <div className={`service-row ${billingConfig?.configured ? 'ok' : 'bad'}`}>{billingConfig?.configured ? <CheckCircle2/> : <XCircle/>}{billingConfig?.configured ? `PayPal ${billingConfig.environment === 'live' ? 'LIVE' : 'Sandbox'} verbunden` : 'PayPal-Zugang in Vercel noch nicht vollständig eingetragen'}</div>
-        <div className="info-box">Kartendaten und PayPal-Passwörter werden niemals in Yildiz AI gespeichert. Zum Wechsel des Empfängerkontos werden in Vercel die API-Zugangsdaten des gewünschten PayPal-Business-Kontos eingetragen.</div>
+        <div className="info-box">Kartendaten und PayPal-Passwörter werden niemals in PIXVA gespeichert. Zum Wechsel des Empfängerkontos werden in Vercel die API-Zugangsdaten des gewünschten PayPal-Business-Kontos eingetragen.</div>
       </article>
       <div className="admin-stat-grid subscription-admin-stats">
         {catalog.map((plan)=><article key={plan.id}><BadgeEuro size={20}/><span>{plan.name}</span><strong>{subscriptionSummary?.[plan.id] || 0}</strong><small>{formatPlanPrice(settingsDraft.planPrices?.[plan.id] ?? plan.examplePrice)} / Monat</small></article>)}
@@ -650,7 +650,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
           <header><div><h3>{chatData.username}</h3><span>Letzte Synchronisierung: {formatDate(chatData.updatedAt)}</span></div><small>{chatData.chats.length} Chats</small></header>
           <div className="admin-chat-layout">
             <nav>{chatData.chats.length ? chatData.chats.map((session) => <button key={session.id} className={(selectedSession?.id || '') === session.id ? 'active' : ''} onClick={() => setSelectedChatId(session.id)}><b>{session.title || 'Neuer Chat'}</b><span>{formatDate(session.updatedAt || session.createdAt)}</span></button>) : <p>Keine Cloud-Chats vorhanden.</p>}</nav>
-            <div className="admin-message-view">{selectedSession ? (selectedSession.messages || []).map((message, index) => <article key={message.id || index} className={message.role === 'user' ? 'user' : 'assistant'}><strong>{message.role === 'user' ? chatData.username : 'Yildiz AI'}</strong><p>{message.content || '–'}</p>{Array.isArray(message.attachments) && message.attachments.length > 0 && <small>{message.attachments.length} Anhang/Anhänge gespeichert</small>}</article>) : <div className="admin-empty"><MessageSquareText/><span>Kein Chat ausgewählt.</span></div>}</div>
+            <div className="admin-message-view">{selectedSession ? (selectedSession.messages || []).map((message, index) => <article key={message.id || index} className={message.role === 'user' ? 'user' : 'assistant'}><strong>{message.role === 'user' ? chatData.username : 'PIXVA'}</strong><p>{message.content || '–'}</p>{Array.isArray(message.attachments) && message.attachments.length > 0 && <small>{message.attachments.length} Anhang/Anhänge gespeichert</small>}</article>) : <div className="admin-empty"><MessageSquareText/><span>Kein Chat ausgewählt.</span></div>}</div>
           </div>
         </>}
       </section>

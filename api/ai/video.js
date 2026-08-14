@@ -15,7 +15,7 @@ function errorMessage(status, data) {
   if (status === 403) return 'Sora ist für dieses OpenAI-Projekt noch nicht freigegeben.';
   if (status === 429) return 'Das OpenAI-Guthaben oder Sora-Limit ist erreicht.';
   if (/inpaint image must match|match the requested width and height/i.test(raw)) {
-    return 'Das Referenzbild hatte nicht exakt die Videoauflösung. Yildiz AI hat es nicht korrekt vorbereiten können.';
+    return 'Das Referenzbild hatte nicht exakt die Videoauflösung. PIXVA hat es nicht korrekt vorbereiten können.';
   }
   return raw || `OpenAI-Videoanfrage fehlgeschlagen (${status}).`;
 }

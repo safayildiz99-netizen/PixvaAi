@@ -28,7 +28,7 @@ const NAV_DEFINITIONS = {
 const DEFAULT_NAV_ITEMS = Object.values(NAV_DEFINITIONS).map(({id,label})=>({id,label,visible:true}));
 
 const titles = {
-  chat:'Yildiz AI Chat', flyer:'Angebote & Flyer', image:'Motive & Editor',
+  chat:'PIXVA Chat', flyer:'Angebote & Flyer', image:'Motive & Editor',
   video:'Video-Studio', website:'Website-Builder', projects:'Projekte', plans:'Abos & Preise', account:'Mein Konto', admin:'Admin & Einstellungen'
 };
 
@@ -51,10 +51,10 @@ const DEFAULT_UI_SETTINGS = {
   customPlans: [],
   navItems: DEFAULT_NAV_ITEMS,
   texts: {
-    appTitle:'Yildiz AI Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
-    statusTitle:'Yildiz AI · Gemini + OpenAI + Sora',
-    welcome:'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und hochladen.',
-    composer:'Frag Yildiz AI …',
+    appTitle:'PIXVA Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
+    statusTitle:'PIXVA · Gemini + OpenAI + Sora',
+    welcome:'Hallo! Ich bin PIXVA. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und hochladen.',
+    composer:'Frag PIXVA …',
     flyerTitle:'Angebote & Flyer', flyerSubtitle:'Bearbeitbare Vorlagen für Angebote, Produkte und Preise.',
     imageTitle:'Motive & Editor', imageSubtitle:'Bilder, Motive, Texte und Ebenen direkt bearbeiten.',
     videoTitle:'Video-Studio', videoSubtitle:'Szenen, Texte, Musik und Videos in einem Projekt.',
@@ -215,7 +215,7 @@ export default function App(){
     setView('video');
   }
 
-  if(loading) return <div className="app-loader"><Sparkles/>Yildiz AI Studio lädt …</div>;
+  if(loading) return <div className="app-loader"><Sparkles/>PIXVA Studio lädt …</div>;
   if(!activeUser) return <Login onLogin={loggedIn} onGuest={enterGuest} allowGuest={uiSettings.allowGuest!==false}/>;
 
   const uiText={...DEFAULT_UI_SETTINGS.texts,...(uiSettings.texts||{})};
@@ -226,7 +226,7 @@ export default function App(){
 
   return <div className={`app-shell ${sidebar?'':'sidebar-collapsed'} ${uiSettings.compactSidebar?'compact-sidebar':''}`} style={{'--sidebar-width':`${Math.max(210,Math.min(360,Number(uiTheme.sidebarWidth||255)))}px`,'--y-blue':uiTheme.accentBlue,'--y-yellow':uiTheme.accentYellow}}>
     <aside className="sidebar">
-      <div className="sidebar-brand"><img className="sidebar-logo" src="/yildiz-ai-logo.png" alt="Yildiz AI"/><span className="sr-only">Yildiz AI</span><button onClick={()=>setSidebar(false)}><PanelLeftClose size={18}/></button></div>
+      <div className="sidebar-brand"><img className="sidebar-logo" src="/pixva-logo.png" alt="PIXVA"/><span className="sr-only">PIXVA</span><button onClick={()=>setSidebar(false)}><PanelLeftClose size={18}/></button></div>
       {uiSettings.showFlyer!==false&&<button className="new-project" onClick={()=>changeView('flyer')}><LayoutTemplate size={18}/>{uiText.newDesign}{!featureAllowed('flyer')&&<LockKeyhole className="nav-lock" size={14}/>}</button>}
       <nav>{nav.map((item)=>{const Icon=item.icon;const locked=!featureAllowed(item.id);return <button key={item.id} className={`${view===item.id?'active':''} ${locked?'locked':''}`} onClick={()=>changeView(item.id)}><Icon size={19}/><span>{item.label}</span>{locked&&<LockKeyhole className="nav-lock" size={14}/>}</button>})}</nav>
       <div className="sidebar-bottom">

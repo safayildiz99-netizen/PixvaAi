@@ -915,7 +915,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       const blob = await (await fetch(data)).blob();
       const file = new File([blob], `${safeName(projectName)}.png`, { type:'image/png' });
       if (navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))) {
-        await navigator.share({ files:[file], title:projectName, text:'Erstellt mit Yildiz AI' });
+        await navigator.share({ files:[file], title:projectName, text:'Erstellt mit PIXVA' });
         setStatus('Teilen geöffnet. Wähle Instagram aus.');
       } else {
         downloadDataUrl(data, `${safeName(projectName)}.png`);
@@ -1161,7 +1161,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     const safe = safeName(projectName);
     zip.file(`${safe}.png`, data.split(',')[1], { base64: true });
     zip.file('projekt.json', JSON.stringify({ name: projectName, type: mode, format: formatKey, canvas: fabricRef.current.toJSON(customProps) }, null, 2));
-    zip.file('README.txt', 'Yildiz AI Designprojekt\nEnthält PNG und bearbeitbare Ebenen/Projektinformationen.');
+    zip.file('README.txt', 'PIXVA Designprojekt\nEnthält PNG und bearbeitbare Ebenen/Projektinformationen.');
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -1290,7 +1290,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
 
         <div className="panel-section">
           <h3><Type size={17}/> Schrift im KI-Bild ändern</h3>
-          <p>Text, der direkt im erzeugten Bild steckt, ist Teil der Pixel. Markiere ihn einmal; Yildiz AI deckt ihn ab und setzt eine echte bearbeitbare Textebene darüber.</p>
+          <p>Text, der direkt im erzeugten Bild steckt, ist Teil der Pixel. Markiere ihn einmal; PIXVA deckt ihn ab und setzt eine echte bearbeitbare Textebene darüber.</p>
           <button className="wide" onClick={markRasterTextArea}><Type size={17}/>Schriftbereich markieren</button>
           <label>Neuer Text<textarea rows={2} value={rasterText.text} onChange={(event)=>setRasterText({...rasterText,text:event.target.value})}/></label>
           <label>Schrift<select value={rasterText.fontFamily} onChange={(event)=>setRasterText({...rasterText,fontFamily:event.target.value})}>{fontOptions.map((font)=><option key={font}>{font}</option>)}</select></label>

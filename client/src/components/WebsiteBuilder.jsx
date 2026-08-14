@@ -38,7 +38,7 @@ export default function WebsiteBuilder({ project, onSaved, canSave = true, uiTex
     const zip=new JSZip();
     zip.file('index.html',html);
     zip.file('CNAME',String(data.domain||'').replace(/^https?:\/\//,'').replace(/\/.*$/,'').trim());
-    zip.file('README.txt',`Yildiz AI Website\n\n1. Dateien zu GitHub, Vercel oder einem Webhoster hochladen.\n2. Wunschdomain: ${data.domain||'nicht festgelegt'}\n3. Eine .com/.de-Domain muss bei einem Domainanbieter registriert werden; sie ist normalerweise nicht kostenlos.`);
+    zip.file('README.txt',`PIXVA Website\n\n1. Dateien zu GitHub, Vercel oder einem Webhoster hochladen.\n2. Wunschdomain: ${data.domain||'nicht festgelegt'}\n3. Eine .com/.de-Domain muss bei einem Domainanbieter registriert werden; sie ist normalerweise nicht kostenlos.`);
     const blob=await zip.generateAsync({type:'blob'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');

@@ -141,7 +141,7 @@ async function normalizeImageDataUrlForPdf(dataUrl) {
   return canvas.toDataURL('image/jpeg', 0.9);
 }
 
-async function createFileAttachment(type, content, title = 'Yildiz AI', imageUrl = '') {
+async function createFileAttachment(type, content, title = 'PIXVA', imageUrl = '') {
   const base = safeFileName(title, 'yildiz-ai');
   let blob;
   let name;
@@ -150,10 +150,10 @@ async function createFileAttachment(type, content, title = 'Yildiz AI', imageUrl
   if (type === 'pdf') {
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const margin = 16;
-    pdf.setProperties({ title, creator: 'Yildiz AI' });
+    pdf.setProperties({ title, creator: 'PIXVA' });
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(18);
-    pdf.text(String(title || 'Yildiz AI').slice(0, 90), margin, 18);
+    pdf.text(String(title || 'PIXVA').slice(0, 90), margin, 18);
     let cursorY = 28;
     if (imageUrl) {
       const source = String(imageUrl).startsWith('data:image/') ? imageUrl : await fetchRemoteImageDataUrl(imageUrl);
@@ -218,15 +218,15 @@ function xmlEscape(value) {
 
 async function createDocxBlob(title, content) {
   const zip = new JSZip();
-  const paragraphs = [String(title || 'Yildiz AI'), ...String(content || '').split(/\r?\n/)]
+  const paragraphs = [String(title || 'PIXVA'), ...String(content || '').split(/\r?\n/)]
     .map((line, index) => `<w:p><w:r>${index === 0 ? '<w:rPr><w:b/><w:sz w:val="32"/></w:rPr>' : ''}<w:t xml:space="preserve">${xmlEscape(line || ' ')}</w:t></w:r></w:p>`)
     .join('');
   zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`);
   zip.folder('_rels').file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`);
   zip.folder('word').file('document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>`);
   zip.folder('word').folder('_rels').file('document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
-  zip.folder('docProps').file('core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/"><dc:title>${xmlEscape(title || 'Yildiz AI')}</dc:title><dc:creator>Yildiz AI</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`);
-  zip.folder('docProps').file('app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Yildiz AI</Application></Properties>`);
+  zip.folder('docProps').file('core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/"><dc:title>${xmlEscape(title || 'PIXVA')}</dc:title><dc:creator>PIXVA</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`);
+  zip.folder('docProps').file('app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>PIXVA</Application></Properties>`);
   return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
 }
 
@@ -247,16 +247,16 @@ async function createXlsxBlob(title, content) {
   const rows = lines.length ? lines.map((line) => {
     const delimiter = line.includes('\t') ? '\t' : line.includes(';') ? ';' : line.includes(',') ? ',' : null;
     return delimiter ? line.split(delimiter).map((cell) => cell.trim()) : [line];
-  }) : [['Yildiz AI']];
-  rows.unshift([String(title || 'Yildiz AI')]);
+  }) : [['PIXVA']];
+  rows.unshift([String(title || 'PIXVA')]);
   const sheetRows = rows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, cellIndex) => `<c r="${spreadsheetColumn(cellIndex)}${rowIndex + 1}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(cell)}</t></is></c>`).join('')}</row>`).join('');
   zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`);
   zip.folder('_rels').file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`);
-  zip.folder('xl').file('workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Yildiz AI" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+  zip.folder('xl').file('workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="PIXVA" sheetId="1" r:id="rId1"/></sheets></workbook>`);
   zip.folder('xl').folder('_rels').file('workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
   zip.folder('xl').folder('worksheets').file('sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`);
-  zip.folder('docProps').file('core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${xmlEscape(title || 'Yildiz AI')}</dc:title><dc:creator>Yildiz AI</dc:creator></cp:coreProperties>`);
-  zip.folder('docProps').file('app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Yildiz AI</Application></Properties>`);
+  zip.folder('docProps').file('core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${xmlEscape(title || 'PIXVA')}</dc:title><dc:creator>PIXVA</dc:creator></cp:coreProperties>`);
+  zip.folder('docProps').file('app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>PIXVA</Application></Properties>`);
   return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
@@ -493,7 +493,7 @@ function drawOverlay(ctx, width, height, title, caption, localProgress, index) {
   ctx.fillText(`0${index + 1}`, width * 0.07, height * 0.78);
   ctx.fillStyle = '#fff';
   ctx.font = `800 ${Math.max(30, width / 18)}px Arial`;
-  ctx.fillText(String(title || 'Yildiz AI').slice(0, 42), width * 0.07, height * 0.84, width * 0.86);
+  ctx.fillText(String(title || 'PIXVA').slice(0, 42), width * 0.07, height * 0.84, width * 0.86);
   ctx.fillStyle = 'rgba(255,255,255,.82)';
   ctx.font = `500 ${Math.max(16, width / 38)}px Arial`;
   ctx.fillText(String(caption || 'Automatisch erstellt mit Musik').slice(0, 76), width * 0.07, height * 0.9, width * 0.86);
@@ -579,7 +579,7 @@ function fileMessageAttachment(item) {
 const CHAT_DB = 'yildiz-ai-chat-history-v2';
 const CHAT_STORE = 'sessions';
 const MAX_CLOUD_MEDIA_CHARS = 3_500_000;
-const WELCOME_MESSAGE = { id: 'welcome', role: 'assistant', createdAt: Date.now(), content: 'Hallo! Ich bin Yildiz AI. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und per Drag & Drop hochladen.' };
+const WELCOME_MESSAGE = { id: 'welcome', role: 'assistant', createdAt: Date.now(), content: 'Hallo! Ich bin PIXVA. Du kannst mir Fragen stellen, Bilder und Videos direkt erzeugen sowie Dateien erstellen und per Drag & Drop hochladen.' };
 
 function makeChatSession() {
   return {
@@ -854,7 +854,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
     appendGenerationMessage(runId, {
       id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
       content: 'Kostenlose Bildversion erstellt · 0,00 €. Die Qualität und Verfügbarkeit des externen Gratisdienstes kann schwanken.',
-      attachments: [{ kind: 'image-link', name: 'Kostenlos erzeugtes Bild', title: clean.slice(0, 100) || 'Yildiz AI Bild', previewUrl: imageUrl, imageUrl, sourceUrl: imageUrl, source: 'Kostenloser externer Bilddienst' }]
+      attachments: [{ kind: 'image-link', name: 'Kostenlos erzeugtes Bild', title: clean.slice(0, 100) || 'PIXVA Bild', previewUrl: imageUrl, imageUrl, sourceUrl: imageUrl, source: 'Kostenloser externer Bilddienst' }]
     });
     setGenerationStatus(runId, 'Kostenlose Bildversion fertig · 0,00 €');
   }
@@ -1129,13 +1129,13 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
   function exportCurrentChat() {
     const session = chatSessions.find((item) => item.id === activeChatId);
     const lines = (messages || []).map((message) => {
-      const speaker = message.role === 'assistant' ? 'Yildiz AI' : 'Du';
+      const speaker = message.role === 'assistant' ? 'PIXVA' : 'Du';
       const attachmentNames = Array.isArray(message.attachments) && message.attachments.length
         ? `\nAnhänge: ${message.attachments.map((item) => item.name || item.kind).join(', ')}`
         : '';
       return `${speaker}: ${message.content || ''}${attachmentNames}`;
     });
-    const blob = new Blob([`Yildiz AI Chat\n${session?.title || 'Chat'}\n\n${lines.join('\n\n')}`], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([`PIXVA Chat\n${session?.title || 'Chat'}\n\n${lines.join('\n\n')}`], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -1195,7 +1195,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
       id, kind: 'video', name: file.name || 'video.mp4', size: file.size,
       mimeType: file.type || 'video/mp4', previewUrl, frames: [], extracting: true, blob: file
     }].slice(-4));
-    setStatus('Yildiz AI liest vier Vorschaubilder aus dem Video …');
+    setStatus('PIXVA liest vier Vorschaubilder aus dem Video …');
     try {
       const frames = await extractVideoFrames(file, previewUrl);
       setAttachments((old) => old.map((item) => item.id === id ? { ...item, frames, extracting: false } : item));
@@ -1278,7 +1278,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
     const generatedAttachments = [imageAttachment];
     if (requestedFileType(clean) === 'pdf') {
       try {
-        generatedAttachments.push(await createFileAttachment('pdf', 'Mit Yildiz AI erstelltes Bild.', clean.slice(0, 72) || 'Yildiz AI Bild', imageSource));
+        generatedAttachments.push(await createFileAttachment('pdf', 'Mit PIXVA erstelltes Bild.', clean.slice(0, 72) || 'PIXVA Bild', imageSource));
       } catch {}
     }
     appendGenerationMessage(runId, {
@@ -1435,7 +1435,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
   async function attachRequestedFile(runId, clean, answer) {
     const type = requestedFileType(clean);
     if (!type) return false;
-    const title = clean.replace(/\b(als|in)\s+(pdf|csv|json|html?|markdown|md-datei|docx|word|word-datei|xlsx|excel|excel-datei|tabelle|txt|textdatei)\b.*$/i, '').trim().slice(0, 80) || 'Yildiz AI Datei';
+    const title = clean.replace(/\b(als|in)\s+(pdf|csv|json|html?|markdown|md-datei|docx|word|word-datei|xlsx|excel|excel-datei|tabelle|txt|textdatei)\b.*$/i, '').trim().slice(0, 80) || 'PIXVA Datei';
     const file = await createFileAttachment(type, answer, title);
     appendGenerationMessage(runId, {
       id: crypto.randomUUID(), role: 'assistant', createdAt: Date.now(),
@@ -1497,7 +1497,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
       if (!planAllowsPaid) {
         paidChoice = 'free';
         const neededPlan = videoAction ? 'Studio Pro' : 'Creator';
-        setPlanNotice(`${planName} enthält keine kostenpflichtige ${videoAction ? 'Sora-Video' : 'OpenAI-Bild'}erstellung. Yildiz AI verwendet automatisch die kostenlose Alternative. ${neededPlan} kannst du während der Beta für 0,00 € aktivieren.`);
+        setPlanNotice(`${planName} enthält keine kostenpflichtige ${videoAction ? 'Sora-Video' : 'OpenAI-Bild'}erstellung. PIXVA verwendet automatisch die kostenlose Alternative. ${neededPlan} kannst du während der Beta für 0,00 € aktivieren.`);
         setStatus(`Kostenlose Alternative aktiv · dein aktueller Zugang: ${planName}`);
       } else if (freeOnly || isGuest) {
         paidChoice = 'free';
@@ -1573,7 +1573,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
       } else if (imageAction) {
         await generateImageMessage(clean, selectedAttachments, controller.signal, requestId, runId);
       } else {
-        setGenerationStatus(runId, 'Yildiz AI denkt …');
+        setGenerationStatus(runId, 'PIXVA denkt …');
         const result = await api('/api/ai/chat', {
           method: 'POST', signal: controller.signal,
           body: JSON.stringify({ message: clean, history, attachments: outgoingAttachments })
@@ -1605,7 +1605,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
     try {
       setStatus('Datei wird für Instagram vorbereitet …');
       const file = await mediaSourceToFile(source, item?.name || item?.title || 'yildiz-ai');
-      const payload = { files:[file], title:item?.title || 'Yildiz AI', text:item?.caption || item?.title || 'Erstellt mit Yildiz AI' };
+      const payload = { files:[file], title:item?.title || 'PIXVA', text:item?.caption || item?.title || 'Erstellt mit PIXVA' };
       if (navigator.share && (!navigator.canShare || navigator.canShare({ files:[file] }))) {
         await navigator.share(payload);
         setStatus('Teilen geöffnet. Wähle jetzt Instagram aus.');
@@ -1729,7 +1729,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
         <p className="chat-save-note">{cloudEnabled ? 'Chats sind privat an dieses Konto gebunden und werden geräteübergreifend synchronisiert.' : 'Gast-Chats bleiben nur auf diesem Gerät.'} Mit „Chat speichern“ kannst du zusätzlich eine TXT-Datei herunterladen.</p>
       </aside>
       <section className="chat-shell">
-      <div className="local-ai-banner"><Cloud size={17}/><div><b>{uiText.statusTitle || 'Yildiz AI · Gemini + OpenAI + Sora'}</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
+      <div className="local-ai-banner"><Cloud size={17}/><div><b>{uiText.statusTitle || 'PIXVA · Gemini + OpenAI + Sora'}</b><span>{status} · Keine lokale GPU und keine Pflicht-Anmeldung</span></div></div>
       <div className="chat-messages">
         {messages.map((message, index) => (
           <article className={`message ${message.role}`} key={message.id || `${message.role}-${index}`}>
@@ -1829,7 +1829,7 @@ export default function Chat({ onOpenImageProject, onOpenVideoProject, accountId
           <input ref={anyFileRef} type="file" multiple onChange={onAnyFileUpload} hidden />
         </div>
         <div className="drop-hint">Ziehe Bilder, Videos oder Dateien hier hinein – oder mache direkt ein Foto/Video.</div>
-        <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder={`${uiText.composer || 'Frag Yildiz AI …'} · z. B. „Suche mir ein Produktbild als PDF“`} onKeyDown={(e) => {
+        <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder={`${uiText.composer || 'Frag PIXVA …'} · z. B. „Suche mir ein Produktbild als PDF“`} onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
         }} />
         <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !hasPayload}><ArrowUp size={20} /></button>

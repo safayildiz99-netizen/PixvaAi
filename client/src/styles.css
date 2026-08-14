@@ -2,7 +2,7 @@
 @media(max-width:1100px){.editor-layout,.website-builder{grid-template-columns:280px 1fr}.scene-card{grid-template-columns:40px 1fr}.scene-preview{grid-column:2}.admin-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.app-shell{grid-template-columns:1fr}.sidebar{position:fixed;width:255px;transform:translateX(0)}.sidebar-collapsed .sidebar{transform:translateX(-110%)}.workspace{grid-column:1}.mobile-menu{display:block}.topbar{padding:0 14px}.mode-toggle{display:none}.editor-layout,.website-builder{grid-template-columns:1fr}.tool-panel,.site-controls{max-height:none;border-right:0;border-bottom:1px solid #292929}.canvas-scroll{padding:16px;display:block}.canvas-holder{width:max-content;transform-origin:top left;transform:scale(.65);margin-bottom:-250px}.scene-card{grid-template-columns:36px 1fr}.scene-preview{grid-column:1/-1}.studio-header,.page-heading,.merge-panel{align-items:stretch;flex-direction:column}.header-actions{flex-wrap:wrap}.header-actions input{width:100%}.admin-grid{grid-template-columns:1fr}.video-studio,.projects-page,.admin-page{padding:14px}.chat-shell{padding:22px 14px}.message.user .message-body{max-width:90%}}
 
-/* Yildiz AI Marken-Update: hellblau + gelb */
+/* PIXVA Marken-Update: hellblau + gelb */
 :root{--y-blue:#63c7ff;--y-blue-2:#168fe5;--y-yellow:#ffd400;--y-surface:#101821;--y-border:#27445a}
 body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173247}.topbar{background:rgba(7,16,24,.92);border-color:#173247}.sidebar button:hover,.sidebar button.active{background:linear-gradient(90deg,rgba(99,199,255,.18),rgba(255,212,0,.08));color:#fff;border-color:#2f6b91}.new-project{border-color:var(--y-blue-2)!important;background:linear-gradient(135deg,rgba(22,143,229,.28),rgba(255,212,0,.12))!important}.primary-btn,.send-btn{background:linear-gradient(135deg,var(--y-blue),var(--y-yellow))!important;color:#06111a!important;border:0!important}.mode-toggle button.active{background:linear-gradient(135deg,#167fc0,#d5b300);color:#fff}.chat-input-wrap{border-color:#315e7c;background:#10202c}.message.user .message-body{background:#112838;border-color:#347aa5}.avatar{background:#132b3b;color:var(--y-blue)}.message.user .avatar{background:var(--y-yellow)}.quick-row button:hover{border-color:var(--y-blue);color:#fff}.sidebar-logo{width:150px;height:38px;object-fit:contain;object-position:left center}.brand-badge img{width:min(280px,100%);height:auto;display:block}.brand-badge{background:#fff;border-color:#9bdcff;padding:12px 18px}.login-page{background:radial-gradient(circle at 20% 15%,rgba(99,199,255,.24),transparent 34%),radial-gradient(circle at 80% 80%,rgba(255,212,0,.16),transparent 30%),#050b10}.login-card{border-color:#315e7c;box-shadow:0 30px 100px #000,0 0 70px rgba(99,199,255,.08)}input:focus,textarea:focus,select:focus{border-color:var(--y-blue);box-shadow:0 0 0 3px rgba(99,199,255,.12)}.user-avatar{background:linear-gradient(135deg,var(--y-blue),var(--y-yellow))}.warning-banner{border-color:#a88d00}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
@@ -20,7 +20,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 /* Eigener Passwortbereich für Admins und Mitarbeiter */
 .account-page{padding:24px;max-width:1050px;margin:0 auto}.account-layout{display:grid;grid-template-columns:minmax(250px,.75fr) minmax(360px,1.25fr);gap:16px}.account-card{background:#0d1922;border:1px solid #294b62;border-radius:17px;padding:20px;display:grid;align-content:start;gap:14px}.account-card h3{display:flex;align-items:center;gap:8px;margin:0}.account-card form{display:grid;gap:13px}.account-summary{justify-items:start}.account-summary h3{font-size:1.35rem;margin:3px 0}.account-summary span,.account-summary p{color:#8fa7b7;margin:0}.account-avatar-large{width:68px;height:68px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(135deg,var(--y-blue),var(--y-yellow));color:#071018;font-size:1.25rem;font-weight:900}.security-note{display:flex;gap:9px;align-items:flex-start;padding:11px;border-radius:11px;background:rgba(99,199,255,.08);color:#b9d6e8;font-size:.8rem;line-height:1.45}.password-required{padding:10px 12px;border-radius:10px;background:rgba(255,212,0,.11);border:1px solid rgba(255,212,0,.42);color:#ffe98a;font-size:.83rem}.success-box{display:flex;align-items:center;gap:8px;padding:10px 13px;border-radius:10px;background:rgba(81,203,135,.1);border:1px solid rgba(81,203,135,.38);color:#bdf4d3;font-size:.86rem}.admin-grid-two{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:760px){.account-page{padding:14px}.account-layout,.admin-grid-two{grid-template-columns:1fr}}
 
-/* Yildiz AI Medien-Studio Pro */
+/* PIXVA Medien-Studio Pro */
 .advanced-video{max-width:1500px;margin:0 auto}.video-global-controls{display:grid;grid-template-columns:220px 220px 180px auto auto;gap:10px;align-items:end;background:#0e1b25;border:1px solid #27445a;border-radius:16px;padding:14px;margin-bottom:18px}.video-global-controls button,.render-actions button{display:flex;align-items:center;justify-content:center;gap:8px;background:#162733;border:1px solid #35566c;color:#e7f2f8;border-radius:10px;padding:10px 12px}.duration-pill{align-self:center;justify-self:end;background:rgba(255,212,0,.12);border:1px solid rgba(255,212,0,.4);color:#ffe45a;border-radius:999px;padding:8px 13px;font-weight:800}.scene-preview img{width:100%;height:100%;min-height:155px;max-height:230px;object-fit:cover;border-radius:10px;background:#06111a}.render-panel{margin-top:18px;background:linear-gradient(135deg,rgba(99,199,255,.12),rgba(255,212,0,.08));border:1px solid #315e7c;border-radius:16px;padding:18px;display:flex;align-items:center;justify-content:space-between;gap:18px}.render-panel h3{margin:0 0 5px}.render-panel p{margin:0;color:#9db6c7;max-width:760px;line-height:1.5}.render-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.render-progress{height:10px;background:#10202c;border:1px solid #27445a;border-radius:999px;overflow:hidden;margin:12px 0}.render-progress span{display:block;height:100%;background:linear-gradient(90deg,#63c7ff,#ffd400);transition:width .2s}.video-result{display:grid;grid-template-columns:minmax(260px,680px) auto;gap:16px;align-items:center;background:#0d1821;border:1px solid #27445a;border-radius:16px;padding:14px;margin-top:14px}.video-result video{width:100%;max-height:520px;border-radius:12px;background:#000}.video-result button{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;padding:12px}.hidden-render-canvas{position:fixed;left:-99999px;top:-99999px;width:1px;height:1px;pointer-events:none}.scene-settings>button{display:flex;align-items:center;justify-content:center;gap:7px;background:#1c1c1c;color:#ddd;border:1px solid #333;border-radius:9px;padding:9px}.video-placeholder{min-height:120px;display:grid;place-items:center}.account-page{padding:24px}.account-layout{display:grid;grid-template-columns:320px minmax(320px,650px);gap:18px}.account-card{background:#111d26;border:1px solid #27445a;border-radius:16px;padding:20px;display:grid;gap:14px}.account-card h3{display:flex;align-items:center;gap:8px;margin:0}.account-card form{display:grid;gap:12px}.account-summary{align-content:start}.account-avatar-large{width:76px;height:76px;border-radius:24px;display:grid;place-items:center;background:linear-gradient(135deg,#63c7ff,#ffd400);color:#06111a;font-weight:900;font-size:1.5rem}.account-summary span,.account-summary p{color:#90a9ba}.security-note,.password-required,.success-box{display:flex;align-items:center;gap:8px;padding:11px;border-radius:10px;background:rgba(99,199,255,.09);border:1px solid rgba(99,199,255,.25);color:#c8e5f6}.password-required{background:rgba(255,212,0,.09);border-color:rgba(255,212,0,.3);color:#ffe98a}.success-box{background:rgba(58,211,140,.1);border-color:rgba(58,211,140,.32);color:#bff5d7}
 @media(max-width:1100px){.video-global-controls{grid-template-columns:1fr 1fr 1fr}.duration-pill{justify-self:start}.video-result{grid-template-columns:1fr}.account-layout{grid-template-columns:1fr}}
 @media(max-width:760px){.video-global-controls{grid-template-columns:1fr}.render-panel{align-items:stretch;flex-direction:column}.render-actions{justify-content:stretch}.render-actions button{flex:1}.scene-settings{flex-wrap:wrap}.scene-settings label{width:100%}.account-page{padding:14px}}
@@ -33,7 +33,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 .composer-file{width:88px;height:66px}
 
 /* =========================================================
-   Yildiz AI Workspace Pro – Chatverlauf, Design- und Videoeditor
+   PIXVA Workspace Pro – Chatverlauf, Design- und Videoeditor
    ========================================================= */
 .chat-workspace-pro{display:grid;grid-template-columns:minmax(0,1fr) 290px;min-height:calc(100vh - 66px)}
 .chat-workspace-pro>.chat-shell{width:100%;max-width:980px;min-width:0}
@@ -54,7 +54,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 @media(max-width:1250px){.editor-pro-shell{grid-template-columns:270px minmax(0,1fr)}.inspector-panel{grid-column:1/-1;max-height:none;border-left:0;border-top:1px solid #173247;grid-template-columns:repeat(3,1fr)}.video-editor-main{grid-template-columns:210px minmax(300px,1fr)}.video-inspector-panel{grid-column:1/-1;max-height:none;grid-template-columns:repeat(3,1fr)}}
 @media(max-width:900px){.chat-workspace-pro{grid-template-columns:1fr}.chat-history-panel{position:static;max-height:330px;min-height:0;border-left:0;border-top:1px solid #173247}.editor-pro-shell{grid-template-columns:1fr}.editor-tools-pro,.inspector-panel{max-height:none;border:0;border-bottom:1px solid #173247}.inspector-panel{display:grid;grid-template-columns:1fr}.video-editor-main{grid-template-columns:1fr}.video-media-panel,.video-inspector-panel{grid-template-columns:1fr;max-height:none}.canvas-footer-pro{grid-template-columns:1fr}.canvas-holder{transform-origin:top left}.video-stage-preview .empty-preview{min-height:260px}}
 
-/* === Yildiz AI Creator Studio V2 === */
+/* === PIXVA Creator Studio V2 === */
 .chat-workspace-pro{grid-template-columns:285px minmax(0,1fr)}
 .chat-history-panel{grid-column:1;border-left:0;border-right:1px solid #173247;top:66px}
 .chat-workspace-pro>.chat-shell{grid-column:2;max-width:1050px}
@@ -98,7 +98,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
   .video-editor-main{grid-template-columns:1fr}.video-media-panel,.video-inspector-panel,.video-preview-workspace{grid-column:1;grid-row:auto;max-height:none}
 }
 
-/* === Yildiz AI Stabil V3: gerade Arbeitsflächen und kompakte Werkzeuge === */
+/* === PIXVA Stabil V3: gerade Arbeitsflächen und kompakte Werkzeuge === */
 .editor-pro-shell{
   display:grid!important;
   grid-template-columns:320px minmax(0,1fr)!important;
@@ -287,7 +287,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
   .chat-history-panel{position:static!important;max-height:300px!important}
 }
 
-/* === Yildiz AI Stabil V4: echte Canvas-Abmessungen, keine abgeschnittenen Elemente === */
+/* === PIXVA Stabil V4: echte Canvas-Abmessungen, keine abgeschnittenen Elemente === */
 .canvas-zoom-frame{
   position:relative!important;
   flex:0 0 auto!important;
@@ -330,7 +330,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 }
 
 
-/* === Yildiz AI Stabil V5: Vorlage entspricht Vorschau + externe Bearbeitung === */
+/* === PIXVA Stabil V5: Vorlage entspricht Vorschau + externe Bearbeitung === */
 .export-controls{display:flex!important;flex-wrap:wrap!important;gap:7px!important;align-items:center!important}
 .external-mode{width:158px!important;min-width:145px!important;height:38px!important;background:#0d1a24!important;border:1px solid #315e7c!important;color:#eaf6ff!important;border-radius:9px!important;padding:0 9px!important}
 .canva-btn{background:linear-gradient(135deg,#7d2ae8,#00c4cc)!important;border-color:transparent!important;color:#fff!important}
@@ -361,7 +361,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 .video-inspector-panel h4{margin:8px 0 0;color:#ffd400;font-size:.83rem;text-transform:uppercase;letter-spacing:.06em}
 @media(max-width:1000px){.editor-pro-shell{grid-template-columns:1fr!important;grid-template-rows:auto!important}.editor-tools-pro,.inspector-panel,.editor-canvas-pro{grid-column:1!important;grid-row:auto!important;max-height:none!important}.editor-canvas-pro{min-height:700px}.video-editor-main{grid-template-columns:1fr!important}.video-media-panel,.video-inspector-panel,.video-preview-workspace{grid-column:1!important}}
 
-/* === Yildiz AI PRO-KERN V1: Chat-Aktionen, Medienkosten und Admin-Limits === */
+/* === PIXVA PRO-KERN V1: Chat-Aktionen, Medienkosten und Admin-Limits === */
 .chat-history-top-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .chat-history-top-actions .chat-export-button{padding:9px 7px;font-size:.72rem}
 .chat-history-top-actions .danger-soft{border-color:#69404a;color:#ffc9d1}
@@ -435,7 +435,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
   .message-edit-box{min-width:0}
 }
 
-/* === Yildiz AI Admin-Kontrollzentrum V2 === */
+/* === PIXVA Admin-Kontrollzentrum V2 === */
 .global-announcement{margin:12px 24px 0;padding:10px 14px;border:1px solid rgba(99,199,255,.35);background:rgba(99,199,255,.08);color:#d7efff;border-radius:11px;font-size:.82rem}
 .app-shell.compact-sidebar{grid-template-columns:92px minmax(0,1fr)}
 .compact-sidebar .sidebar{padding-inline:8px}.compact-sidebar .sidebar-logo{max-width:62px}.compact-sidebar .sidebar-brand{justify-content:center;padding:0}.compact-sidebar .sidebar-brand button{display:none}.compact-sidebar .sidebar nav button,.compact-sidebar .new-project,.compact-sidebar .sidebar-bottom>button{justify-content:center}.compact-sidebar .sidebar nav button span,.compact-sidebar .sidebar-bottom>button span,.compact-sidebar .user-box>div:nth-child(2){display:none}.compact-sidebar .new-project{font-size:0}.compact-sidebar .new-project svg{font-size:initial}.compact-sidebar .user-box{justify-content:center;flex-wrap:wrap}.compact-sidebar .user-box>button{width:100%;justify-content:center}
@@ -445,7 +445,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 @media(max-width:1100px){.admin-stat-grid{grid-template-columns:1fr 1fr}.admin-view-grid{grid-template-columns:1fr}.admin-chat-audit{grid-template-columns:240px 1fr}.admin-chat-layout{grid-template-columns:190px 1fr}}
 @media(max-width:760px){.app-shell.compact-sidebar{grid-template-columns:1fr}.admin-heading{position:static}.admin-stat-grid{grid-template-columns:1fr}.account-actions,.temporary-password,.admin-view-actions{align-items:stretch;flex-direction:column!important}.admin-chat-audit{grid-template-columns:1fr}.admin-chat-users{border-right:0;border-bottom:1px solid #24475d;max-height:290px}.admin-chat-layout{grid-template-columns:1fr}.admin-chat-layout>nav{border-right:0;border-bottom:1px solid #24475d;max-height:220px}.admin-message-view{max-height:none}.admin-toggle-grid{grid-template-columns:1fr}.mini-app-preview{grid-template-columns:105px 1fr}}
 
-/* === Yildiz AI V4: Mobile, Dateien, kostenlose Bildsuche und Live-Admin-Editor === */
+/* === PIXVA V4: Mobile, Dateien, kostenlose Bildsuche und Live-Admin-Editor === */
 .app-shell{grid-template-columns:var(--sidebar-width,255px) minmax(0,1fr)}
 .sidebar{width:var(--sidebar-width,255px)}
 .sidebar-backdrop,.chat-history-backdrop{display:none}
@@ -520,7 +520,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
   .live-view-stage{grid-template-columns:88px minmax(0,1fr);height:580px}.live-view-stage aside button svg{display:none}.live-view-stage aside button span{font-size:.57rem}.live-welcome{font-size:.72rem}.live-status,.live-composer{font-size:.66rem}.visual-floating-tools b{display:none}
 }
 
-/* Yildiz AI V5 – Kostenwarnung, kostenlose Alternativen und Live-Vorschau */
+/* PIXVA V5 – Kostenwarnung, kostenlose Alternativen und Live-Vorschau */
 .free-only-toggle{display:inline-flex;align-items:center;gap:6px;border:1px solid #5a4d20;background:#2d2813;color:#ffe77d;border-radius:999px;padding:7px 10px;font-size:.7rem;font-weight:800;white-space:nowrap}
 .free-only-toggle.active{border-color:#65d49d;background:#10352a;color:#9ff2c5}
 .upload-pill.active{border-color:#ffd400;background:#352f0e;color:#fff2a4;animation:yildizMicPulse 1.1s ease-in-out infinite}
@@ -550,7 +550,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
   .visual-device-switcher{width:100%}.visual-device-switcher button{flex:1;justify-content:center}.live-view-stage.device-mobile{height:630px}.live-view-stage.device-tablet{height:640px}
 }
 
-/* Yildiz AI V6 – Beta-Abos, Planrechte, Datenschutz und Mehrseiten-Liveeditor */
+/* PIXVA V6 – Beta-Abos, Planrechte, Datenschutz und Mehrseiten-Liveeditor */
 .sidebar nav button.locked,.new-project .nav-lock{color:#8aa0ad}.sidebar nav button.locked{opacity:.78}.nav-lock{margin-left:auto;color:#e7c94b}
 .plan-unlock-banner{display:flex;align-items:center;gap:10px;margin:12px 16px 0;padding:12px 14px;border:1px solid #7d6b24;border-radius:13px;background:linear-gradient(90deg,rgba(255,212,0,.12),rgba(99,199,255,.07));color:#fff2a7;font-size:.82rem}
 
@@ -635,7 +635,7 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
   .live-inline-editor.multiline{min-height:78px}
 }
 
-/* Yildiz AI V9: Vollbild-Bildeditor, Instagram-Teilen, flexible Abos und Kostenübersicht */
+/* PIXVA V9: Vollbild-Bildeditor, Instagram-Teilen, flexible Abos und Kostenübersicht */
 .canvas-holder{background:transparent!important}
 .instagram-btn{background:linear-gradient(135deg,#7b2cff,#d62976 55%,#feda75)!important;color:#fff!important;border-color:transparent!important;font-weight:800}
 .image-fit-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:8px}
@@ -655,3 +655,62 @@ body,.workspace{background:#071018}.sidebar{background:#08131d;border-color:#173
 .live-plan-cards{grid-template-columns:repeat(auto-fit,minmax(105px,1fr))!important}
 @media(max-width:1100px){.usage-metrics-expanded{grid-template-columns:repeat(2,minmax(0,1fr))!important}.new-plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.usage-metrics-expanded,.usage-mini-costs,.new-plan-grid,.image-fit-actions{grid-template-columns:1fr!important}.instagram-btn{width:100%}.plan-access-checkboxes{grid-template-columns:1fr}}
+
+/* PIXVA BRAND V1 */
+:root{
+  --pixva-purple:#634793;
+  --pixva-indigo:#3C368C;
+  --pixva-blue:#3473A1;
+  --pixva-cyan:#1393B9;
+  --pixva-teal:#46A89F;
+  --pixva-bg:#061018;
+  --pixva-panel:#0C1D29;
+  --pixva-border:#244A5E;
+  --pixva-text:#F5FBFF;
+  --pixva-muted:#9FB9C8;
+  --pixva-gradient:linear-gradient(135deg,#634793 0%,#3C368C 24%,#3473A1 50%,#1393B9 72%,#46A89F 100%);
+}
+html,body,#root{background:var(--pixva-bg);color:var(--pixva-text)}
+body{
+  background:
+    radial-gradient(circle at 12% 8%,rgba(99,71,147,.18),transparent 28%),
+    radial-gradient(circle at 88% 88%,rgba(70,168,159,.14),transparent 30%),
+    var(--pixva-bg)
+}
+.sidebar{background:linear-gradient(180deg,#08131d 0%,#061018 100%)!important;border-right-color:var(--pixva-border)!important}
+.topbar{background:rgba(6,16,24,.92)!important;border-bottom-color:var(--pixva-border)!important}
+.sidebar-brand{height:86px!important}
+.sidebar-logo{width:92px!important;height:80px!important;object-fit:contain!important;object-position:left center!important;flex:0 0 auto}
+.sidebar button:hover,.sidebar button.active{
+  background:linear-gradient(90deg,rgba(99,71,147,.24),rgba(19,147,185,.18),rgba(70,168,159,.10))!important;
+  color:#fff!important
+}
+.sidebar button.active{box-shadow:inset 3px 0 0 var(--pixva-cyan)}
+.new-project,.primary-btn,.send-btn,.chat-send,button.primary{
+  background:var(--pixva-gradient)!important;color:#fff!important;border-color:transparent!important;
+  box-shadow:0 8px 28px rgba(19,147,185,.16)
+}
+.new-project:hover,.primary-btn:hover,.send-btn:hover,.chat-send:hover,button.primary:hover{filter:brightness(1.08)}
+input,textarea,select{background:var(--pixva-panel)!important;color:var(--pixva-text)!important;border-color:var(--pixva-border)!important}
+input:focus,textarea:focus,select:focus{border-color:var(--pixva-cyan)!important;box-shadow:0 0 0 3px rgba(19,147,185,.13)!important}
+.login-page{
+  background:
+    radial-gradient(circle at 18% 12%,rgba(99,71,147,.28),transparent 35%),
+    radial-gradient(circle at 82% 82%,rgba(70,168,159,.20),transparent 34%),
+    #050D14!important
+}
+.login-card{
+  background:linear-gradient(180deg,rgba(13,29,41,.97),rgba(7,18,27,.98))!important;
+  border-color:var(--pixva-border)!important;
+  box-shadow:0 30px 100px #000,0 0 80px rgba(19,147,185,.10)!important
+}
+.brand-badge{background:transparent!important;border:0!important;padding:0!important}
+.brand-badge img{width:min(285px,100%)!important;height:auto!important;display:block}
+.user-avatar,.message.user .avatar{background:var(--pixva-gradient)!important;color:#fff!important}
+.mode-toggle button.active{
+  background:linear-gradient(135deg,rgba(99,71,147,.92),rgba(19,147,185,.92),rgba(70,168,159,.92))!important;color:#fff!important
+}
+.chat-input-wrap,.message.user .message-body{border-color:#2D6077!important;background:#102633!important}
+.avatar{background:#122B39!important;color:#7ED9DD!important}
+a{color:#5CC4D8}
+::selection{background:rgba(19,147,185,.34);color:#fff}

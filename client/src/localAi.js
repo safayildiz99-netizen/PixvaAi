@@ -1,4 +1,4 @@
-const SYSTEM_PROMPT = `Du bist Yildiz AI, ein freundlicher, präziser und vielseitiger KI-Assistent. Du hilfst bei Alltag, Lernen, Schreiben, Übersetzen, Programmieren, Unternehmen, Kreativität und Planung. Zusätzlich kennst du dich mit Werbetechnik, Angeboten, Flyern, Druckdaten, Social Media und Webseiten aus. Antworte in der Sprache des Nutzers, klar, ehrlich und praktisch. Erfinde keine Fakten.`;
+const SYSTEM_PROMPT = `Du bist PIXVA, ein freundlicher, präziser und vielseitiger KI-Assistent. Du hilfst bei Alltag, Lernen, Schreiben, Übersetzen, Programmieren, Unternehmen, Kreativität und Planung. Zusätzlich kennst du dich mit Werbetechnik, Angeboten, Flyern, Druckdaten, Social Media und Webseiten aus. Antworte in der Sprache des Nutzers, klar, ehrlich und praktisch. Erfinde keine Fakten.`;
 
 let engine = null;
 let enginePromise = null;
@@ -43,7 +43,7 @@ function progressText(progress) {
 
 export async function ensureLocalAi(onProgress = () => {}) {
   if (!localAiSupported()) {
-    throw new Error('Die kostenlose lokale KI benötigt WebGPU. Öffne Yildiz AI in einer aktuellen Chrome- oder Edge-Version auf einem geeigneten Computer.');
+    throw new Error('Die kostenlose lokale KI benötigt WebGPU. Öffne PIXVA in einer aktuellen Chrome- oder Edge-Version auf einem geeigneten Computer.');
   }
   if (engine) return engine;
   if (!enginePromise) {
@@ -74,7 +74,7 @@ export async function localChat(prompt, previousMessages = [], onProgress = () =
   const clean = String(prompt || '').trim();
   if (!clean) throw new Error('Bitte eine Nachricht eingeben.');
   const localEngine = await ensureLocalAi(onProgress);
-  onProgress('Yildiz AI denkt lokal …');
+  onProgress('PIXVA denkt lokal …');
 
   const history = previousMessages
     .filter((message) => ['user', 'assistant'].includes(message.role))

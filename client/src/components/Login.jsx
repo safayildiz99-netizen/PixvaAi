@@ -17,7 +17,7 @@ export default function Login({ onLogin, onGuest, allowGuest = true }) {
   }
 
   return <main className="login-page"><section className="login-card">
-    <div className="brand-badge"><img src="/yildiz-ai-logo.png" alt="Yildiz AI"/></div>
+    <div className="brand-badge"><img src="/pixva-logo.png" alt="PIXVA"/></div>
     <h1>Deine KI für alles.</h1>
     <p>Allgemeine KI, Designs, Flyer, Webseiten und Videos – im Browser und ohne lokale GPU.</p>
     {allowGuest&&<button className="guest-btn" type="button" onClick={onGuest}><UserRound size={18}/>Ohne Anmeldung starten</button>}
