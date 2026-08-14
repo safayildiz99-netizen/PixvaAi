@@ -14,7 +14,7 @@ const TABS=[
   ['brand','Brand & Memory',MemoryStick],['tools','Prüfen & Übersetzen',FileCheck2],
   ['security','Sicherheit & Daten',ShieldCheck],['team','Team & Freigaben',UsersRound],['integrations','Integrationen',Instagram],['status','Status',Database]
 ];
-const emptyBrand={company_name:'',logo_path:'',primary_color:'#7258ff',secondary_color:'#39d6d0',font_family:'Inter',address:'',opening_hours:'',instagram:'',language:'de',design_style:'modern-premium',notes:''};
+const emptyBrand={company_name:'',logo_path:'',logo_data_url:'',primary_color:'#7258ff',secondary_color:'#39d6d0',font_family:'Inter',address:'',opening_hours:'',instagram:'',language:'de',design_style:'modern-premium',notes:'',company_type:'supermarkt',company_type_other:'',owner_name:'',website:'',company_email:'',company_phone:'',private_phone:''};
 const emptyProduct={ean:'',name:'',brand:'',weight:'',category:'',normal_price:'',offer_price:'',image_url:'',notes:''};
 const fmtDate=v=>{try{return new Date(v).toLocaleString('de-DE')}catch{return''}};
 const money=v=>v===null||v===undefined||v===''?'—':`${Number(v).toFixed(2).replace('.',',')} €`;
@@ -30,10 +30,10 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   const [flyerCheck,setFlyerCheck]=useState(null),[recoveryCodes,setRecoveryCodes]=useState([]),[deleteForm,setDeleteForm]=useState({password:'',confirmation:''}),[status,setStatus]=useState(null);
   const [securityState,setSecurityState]=useState(null),[twofaSetup,setTwofaSetup]=useState(null),[twofaCode,setTwofaCode]=useState('');
   const [email,setEmail]=useState(''),[team,setTeam]=useState(null),[instagram,setInstagram]=useState(null);
-  const emptyAccount={username:'',password:'',firstName:'',lastName:'',email:'',phone:'',birthDate:'',role:'user',teamRole:'member'};
+  const emptyAccount={username:'',password:'',firstName:'',lastName:'',email:'',phone:'',birthDate:'',role:'user',teamRole:'member',isCompany:true,companyName:'',companyType:'supermarkt',companyTypeOther:'',companyOwner:'',companyEmail:'',companyPhone:'',privatePhone:'',companyWebsite:'',companyInstagram:'',companyAddress:'',companyLogoDataUrl:''};
   const [newAccount,setNewAccount]=useState(emptyAccount);
   const [instagramForm,setInstagramForm]=useState({accountId:'',displayName:'',accessToken:'',caption:''}),[approvalForm,setApprovalForm]=useState({projectId:'',title:'',note:''});
-  const productPhoto=useRef(null),instagramFile=useRef(null);
+  const productPhoto=useRef(null),instagramFile=useRef(null),newAccountLogoFile=useRef(null);
   const prevUnread=useRef(new Set()),productFile=useRef(null),knowledgeFile=useRef(null),flyerFile=useRef(null),brandLogoFile=useRef(null);
 
   async function load(silent=false){
@@ -68,8 +68,17 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     return ticket;
   }
 
+  async function fileToDataUrl(file){
+    return await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result||''));
+      reader.onerror=()=>reject(new Error('Logo konnte nicht gelesen werden.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function saveBrand(){try{const r=await call('brand-save',brand);setBrand({...emptyBrand,...r.brand});setMessage('Brand Kit gespeichert.');await load(true)}catch{}}
-  async function uploadBrandLogo(){const file=brandLogoFile.current?.files?.[0];if(!file)return;try{const ticket=await privateUpload(file,'brand-logo');const next={...brand,logo_path:ticket.path};setBrand(next);await call('brand-save',next);setMessage('Kundenlogo privat gespeichert.');await load(true)}catch{}finally{if(brandLogoFile.current)brandLogoFile.current.value=''}}
+  async function uploadBrandLogo(){const file=brandLogoFile.current?.files?.[0];if(!file)return;try{const ticket=await privateUpload(file,'brand-logo');const logoDataUrl=await fileToDataUrl(file);const next={...brand,logo_path:ticket.path,logo_data_url:logoDataUrl};setBrand(next);await call('brand-save',next);setMessage('Kundenlogo gespeichert und für Designs vorgemerkt.');await load(true)}catch{}finally{if(brandLogoFile.current)brandLogoFile.current.value=''}}
   async function saveMemory(){try{await call('memory-save',memory);setMemory({category:'company',title:'',content:''});setMessage('Memory gespeichert.');await load(true)}catch{}}
   async function deleteMemory(id){if(!confirm('Memory wirklich löschen?'))return;try{await call('memory-delete',{id});await load(true)}catch{}}
   async function saveProduct(){try{await call('product-save',product);setProduct(emptyProduct);setMessage('Produkt gespeichert.');await load(true)}catch{}}
@@ -140,12 +149,19 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     if(!newAccount.username.trim())return setError('Benutzername fehlt.');
     if(newAccount.password.length<8)return setError('Passwort braucht mindestens 8 Zeichen.');
     try{
-      await call('team-create',newAccount);
+      let payload={...newAccount};
+      const logoFile=newAccountLogoFile.current?.files?.[0];
+      if(logoFile){
+        payload.companyLogoDataUrl=await fileToDataUrl(logoFile);
+      }
+      await call('team-create',payload);
       setNewAccount(emptyAccount);
-      setMessage('Konto erfolgreich erstellt.');
+      if(newAccountLogoFile.current)newAccountLogoFile.current.value='';
+      setMessage('Konto erfolgreich erstellt. Firmenprofil, Demo-Website und Vorlagen wurden angelegt.');
       await loadTeam();
     }catch{}
   }
+
   async function changeTeamRole(target,teamRole){try{await call('team-update',{userId:target.id,teamRole,email:target.email||''});setMessage('Team-Rolle gespeichert.');await loadTeam()}catch{}}
   async function reviewApproval(id,status){try{await call('approval-update',{id,status});setMessage(status==='approved'?'Freigegeben.':'Abgelehnt.');await loadTeam()}catch{}}
   async function requestApproval(){if(!approvalForm.projectId)return setError('Projekt-ID fehlt.');try{await call('approval-create',approvalForm);setApprovalForm({projectId:'',title:'',note:''});setMessage('Freigabe angefordert.')}catch{}}
@@ -208,17 +224,34 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     </div>}
 
     {tab==='brand'&&<div className="pixva-grid two">
-      <article className="pixva-card"><div className="pixva-card-title"><WandSparkles/><div><h3>Brand Kit</h3><p>PIXVA nutzt diese Daten für deine Designs.</p></div></div>
-        <div className="pixva-form-grid"><label>Firmenname<input value={brand.company_name} onChange={e=>setBrand({...brand,company_name:e.target.value})}/></label>
+      <article className="pixva-card"><div className="pixva-card-title"><WandSparkles/><div><h3>Brand Kit</h3><p>PIXVA nutzt diese Daten für Bilder, Flyer und Websites.</p></div></div>
+        <div className="pixva-form-grid">
+          <label>Firmenname<input value={brand.company_name} onChange={e=>setBrand({...brand,company_name:e.target.value})}/></label>
+          <label>Branche<select value={brand.company_type||'supermarkt'} onChange={e=>setBrand({...brand,company_type:e.target.value})}><option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="sonstiges">Sonstiges</option></select></label>
+          {(brand.company_type||'')==='sonstiges'&&<label>Sonstiges genauer<input value={brand.company_type_other||''} onChange={e=>setBrand({...brand,company_type_other:e.target.value})}/></label>}
+          <label>Inhaber / Ansprechpartner<input value={brand.owner_name||''} onChange={e=>setBrand({...brand,owner_name:e.target.value})}/></label>
           <label>Sprache<select value={brand.language} onChange={e=>setBrand({...brand,language:e.target.value})}><option value="de">Deutsch</option><option value="tr">Türkisch</option><option value="en">Englisch</option><option value="ar">Arabisch</option></select></label>
-          <label>Primärfarbe<input type="color" value={brand.primary_color} onChange={e=>setBrand({...brand,primary_color:e.target.value})}/></label><label>Sekundärfarbe<input type="color" value={brand.secondary_color} onChange={e=>setBrand({...brand,secondary_color:e.target.value})}/></label>
-          <label>Schrift<input value={brand.font_family} onChange={e=>setBrand({...brand,font_family:e.target.value})}/></label><label>Designstil<input value={brand.design_style} onChange={e=>setBrand({...brand,design_style:e.target.value})}/></label>
-          <label>Instagram<input value={brand.instagram} onChange={e=>setBrand({...brand,instagram:e.target.value})}/></label><label>Adresse<input value={brand.address} onChange={e=>setBrand({...brand,address:e.target.value})}/></label>
-        </div><label>Öffnungszeiten<textarea rows={2} value={brand.opening_hours} onChange={e=>setBrand({...brand,opening_hours:e.target.value})}/></label><label>Brand-Notizen<textarea rows={3} value={brand.notes} onChange={e=>setBrand({...brand,notes:e.target.value})}/></label>
-        <div className="pixva-inline"><button className="pixva-primary" onClick={saveBrand}><Save size={16}/>Brand Kit speichern</button><label className="pixva-upload compact"><Upload size={15}/>Kundenlogo<input ref={brandLogoFile} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadBrandLogo}/></label></div>
+          <label>Primärfarbe<input type="color" value={brand.primary_color} onChange={e=>setBrand({...brand,primary_color:e.target.value})}/></label>
+          <label>Sekundärfarbe<input type="color" value={brand.secondary_color} onChange={e=>setBrand({...brand,secondary_color:e.target.value})}/></label>
+          <label>Schrift<input value={brand.font_family} onChange={e=>setBrand({...brand,font_family:e.target.value})}/></label>
+          <label>Designstil<input value={brand.design_style} onChange={e=>setBrand({...brand,design_style:e.target.value})}/></label>
+          <label>Firmen-E-Mail<input value={brand.company_email||''} onChange={e=>setBrand({...brand,company_email:e.target.value})}/></label>
+          <label>Firmen-Telefon<input value={brand.company_phone||''} onChange={e=>setBrand({...brand,company_phone:e.target.value})}/></label>
+          <label>Privates Telefon<input value={brand.private_phone||''} onChange={e=>setBrand({...brand,private_phone:e.target.value})}/></label>
+          <label>Website<input value={brand.website||''} onChange={e=>setBrand({...brand,website:e.target.value})}/></label>
+          <label>Instagram<input value={brand.instagram} onChange={e=>setBrand({...brand,instagram:e.target.value})}/></label>
+          <label>Adresse<input value={brand.address} onChange={e=>setBrand({...brand,address:e.target.value})}/></label>
+        </div>
+        <label>Öffnungszeiten<textarea rows={2} value={brand.opening_hours} onChange={e=>setBrand({...brand,opening_hours:e.target.value})}/></label>
+        <label>Brand-Notizen<textarea rows={3} value={brand.notes} onChange={e=>setBrand({...brand,notes:e.target.value})} placeholder="z. B. Logo immer einbauen, Kontakt im Footer, freundlicher Ton"/></label>
+        {(brand.logo_data_url||brand.logo_path)&&<div className="pixva-answer"><b>Aktuelles Logo</b>{brand.logo_data_url?<img src={brand.logo_data_url} alt="Firmenlogo" style={{maxWidth:220,maxHeight:120,objectFit:'contain',background:'rgba(255,255,255,.92)',padding:10,borderRadius:12,marginTop:8}}/>:<small>Logo in privatem Storage gespeichert.</small>}</div>}
+        <div className="pixva-inline"><button className="pixva-primary" onClick={saveBrand}><Save size={16}/>Brand Kit speichern</button><label className="pixva-upload compact"><Upload size={15}/>Logo hochladen<input ref={brandLogoFile} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadBrandLogo}/></label></div>
       </article>
-      <article className="pixva-card"><h3>PIXVA Memory</h3><div className="pixva-form-grid"><label>Kategorie<select value={memory.category} onChange={e=>setMemory({...memory,category:e.target.value})}><option value="company">Firma</option><option value="design">Designstil</option><option value="product">Produkte</option><option value="language">Sprache</option><option value="workflow">Arbeitsweise</option><option value="general">Allgemein</option></select></label><label>Titel<input value={memory.title} onChange={e=>setMemory({...memory,title:e.target.value})}/></label></div>
-        <label>Was soll PIXVA dauerhaft wissen?<textarea rows={4} value={memory.content} onChange={e=>setMemory({...memory,content:e.target.value})}/></label><button className="pixva-primary" onClick={saveMemory}><MemoryStick size={16}/>Merken</button>
+      <article className="pixva-card">
+        <h3>PIXVA Memory</h3>
+        <div className="pixva-form-grid"><label>Kategorie<select value={memory.category} onChange={e=>setMemory({...memory,category:e.target.value})}><option value="company">Firma</option><option value="design">Designstil</option><option value="product">Produkte</option><option value="language">Sprache</option><option value="workflow">Arbeitsweise</option><option value="general">Allgemein</option></select></label><label>Titel<input value={memory.title} onChange={e=>setMemory({...memory,title:e.target.value})}/></label></div>
+        <label>Was soll PIXVA dauerhaft wissen?<textarea rows={4} value={memory.content} onChange={e=>setMemory({...memory,content:e.target.value})}/></label>
+        <button className="pixva-primary" onClick={saveMemory}><MemoryStick size={16}/>Merken</button>
         <div className="pixva-table">{memories.map(m=><div className="pixva-row" key={m.id}><div><b>{m.title}</b><span>{m.category}</span><small>{m.content}</small></div><button onClick={()=>deleteMemory(m.id)}><Trash2 size={15}/></button></div>)}</div>
       </article>
     </div>}
@@ -258,19 +291,43 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
       <article className="pixva-card">
         <h3>Neues Konto erstellen</h3>
         {user.role!=='admin'?<p>Nur Admins können neue Konten erstellen.</p>:<>
-          <p>Nur Benutzername und Passwort sind Pflicht. E-Mail, Telefon und Geburtsdatum sind optional.</p>
+          <p>Nur Benutzername und Passwort sind Pflicht. Firma, Logo und Kontaktdaten können direkt mitangelegt werden.</p>
+          <div className="pixva-inline">
+            <label style={{display:'flex',gap:8,alignItems:'center'}}><input type="checkbox" checked={newAccount.isCompany!==false} onChange={e=>setNewAccount({...newAccount,isCompany:e.target.checked})}/>Als Firma anlegen</label>
+          </div>
           <div className="pixva-form-grid">
             <label>Benutzername *<input value={newAccount.username} onChange={e=>setNewAccount({...newAccount,username:e.target.value})} placeholder="z. B. max.mustermann"/></label>
             <label>Passwort *<input type="password" value={newAccount.password} onChange={e=>setNewAccount({...newAccount,password:e.target.value})} placeholder="mindestens 8 Zeichen"/></label>
             <label>Vorname<input value={newAccount.firstName} onChange={e=>setNewAccount({...newAccount,firstName:e.target.value})}/></label>
             <label>Nachname<input value={newAccount.lastName} onChange={e=>setNewAccount({...newAccount,lastName:e.target.value})}/></label>
-            <label>E-Mail <small>optional</small><input type="email" value={newAccount.email} onChange={e=>setNewAccount({...newAccount,email:e.target.value})} placeholder="optional"/></label>
-            <label>Telefon <small>optional</small><input type="tel" value={newAccount.phone} onChange={e=>setNewAccount({...newAccount,phone:e.target.value})} placeholder="optional"/></label>
+            <label>Normale E-Mail <small>optional</small><input type="email" value={newAccount.email} onChange={e=>setNewAccount({...newAccount,email:e.target.value})} placeholder="optional"/></label>
+            <label>Private Tel. <small>optional</small><input type="tel" value={newAccount.phone} onChange={e=>setNewAccount({...newAccount,phone:e.target.value})} placeholder="optional"/></label>
             <label>Geburtsdatum <small>optional</small><input type="date" value={newAccount.birthDate} onChange={e=>setNewAccount({...newAccount,birthDate:e.target.value})}/></label>
             <label>Systemrolle<select value={newAccount.role} onChange={e=>setNewAccount({...newAccount,role:e.target.value})}><option value="user">Benutzer</option><option value="admin">Admin</option></select></label>
             <label>Team-Rolle<select value={newAccount.teamRole} onChange={e=>setNewAccount({...newAccount,teamRole:e.target.value})}><option value="owner">Owner</option><option value="manager">Manager</option><option value="designer">Designer</option><option value="member">Mitarbeiter</option><option value="viewer">Nur ansehen</option></select></label>
           </div>
+
+          {newAccount.isCompany!==false&&<>
+            <hr/>
+            <h3>Firmenprofil</h3>
+            <div className="pixva-form-grid">
+              <label>Firmenname<input value={newAccount.companyName} onChange={e=>setNewAccount({...newAccount,companyName:e.target.value})}/></label>
+              <label>Typ / Branche<select value={newAccount.companyType||'supermarkt'} onChange={e=>setNewAccount({...newAccount,companyType:e.target.value})}><option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="sonstiges">Sonstiges</option></select></label>
+              {(newAccount.companyType||'')==='sonstiges'&&<label>Sonstiges genauer<input value={newAccount.companyTypeOther||''} onChange={e=>setNewAccount({...newAccount,companyTypeOther:e.target.value})} placeholder="z. B. Friseur, Dachdecker, Restaurant"/></label>}
+              <label>Firmeninhaber / Ansprechpartner<input value={newAccount.companyOwner||''} onChange={e=>setNewAccount({...newAccount,companyOwner:e.target.value})}/></label>
+              <label>Firmen-E-Mail<input type="email" value={newAccount.companyEmail||''} onChange={e=>setNewAccount({...newAccount,companyEmail:e.target.value})}/></label>
+              <label>Firmen-Telefon<input type="tel" value={newAccount.companyPhone||''} onChange={e=>setNewAccount({...newAccount,companyPhone:e.target.value})}/></label>
+              <label>Zusätzliche private Tel.<input type="tel" value={newAccount.privatePhone||''} onChange={e=>setNewAccount({...newAccount,privatePhone:e.target.value})}/></label>
+              <label>Website<input value={newAccount.companyWebsite||''} onChange={e=>setNewAccount({...newAccount,companyWebsite:e.target.value})} placeholder="https://..."/></label>
+              <label>Instagram<input value={newAccount.companyInstagram||''} onChange={e=>setNewAccount({...newAccount,companyInstagram:e.target.value})} placeholder="@firma"/></label>
+              <label>Adresse<input value={newAccount.companyAddress||''} onChange={e=>setNewAccount({...newAccount,companyAddress:e.target.value})} placeholder="Straße, PLZ Ort"/></label>
+            </div>
+            <label className="pixva-upload"><Upload size={15}/>Firmenlogo hochladen (wird für Bilder, Flyer und Website vorgemerkt)<input ref={newAccountLogoFile} type="file" accept="image/png,image/jpeg,image/webp"/></label>
+            {newAccount.companyLogoDataUrl&&<div className="pixva-answer"><img src={newAccount.companyLogoDataUrl} alt="Logo Vorschau" style={{maxWidth:220,maxHeight:120,objectFit:'contain',background:'rgba(255,255,255,.92)',padding:10,borderRadius:12}}/></div>}
+          </>}
+
           <button className="pixva-primary" onClick={createAccount}>Konto erstellen</button>
+          <small>Bei Firmenkonten werden außerdem Branchenvorlagen, Flyer-Regeln und eine Demo-Website im passenden Theme angelegt.</small>
         </>}
         <hr/>
         <h3>Freigabe anfordern</h3>

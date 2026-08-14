@@ -364,37 +364,41 @@ export default async function handler(req,res){
     }
     if(action==='team-create'&&req.method==='POST'){
       if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
-      const username=String(body.username||'').trim();
-      const password=String(body.password||'');
-      const role=String(body.role||'user');
-      const teamRole=String(body.teamRole||'member');
-      const firstName=String(body.firstName||'').trim();
-      const lastName=String(body.lastName||'').trim();
-      const email=String(body.email||'').trim();
-      const phone=String(body.phone||'').trim();
-      const birthDate=String(body.birthDate||'').trim();
-
-      const {data,error}=await client.rpc('app_create_user_profile',{
+      const payload={
         p_token:token,
-        p_username:username,
-        p_password:password,
-        p_role:role,
-        p_team_role:teamRole,
-        p_first_name:firstName||null,
-        p_last_name:lastName||null,
-        p_email:email||null,
-        p_phone:phone||null,
-        p_birth_date:birthDate||null
-      });
+        p_username:String(body.username||'').trim(),
+        p_password:String(body.password||''),
+        p_role:String(body.role||'user'),
+        p_team_role:String(body.teamRole||'member'),
+        p_first_name:String(body.firstName||'').trim()||null,
+        p_last_name:String(body.lastName||'').trim()||null,
+        p_email:String(body.email||'').trim()||null,
+        p_phone:String(body.phone||'').trim()||null,
+        p_birth_date:String(body.birthDate||'').trim()||null,
+        p_is_company:body.isCompany!==false,
+        p_company_name:String(body.companyName||'').trim()||null,
+        p_company_type:String(body.companyType||'supermarkt').trim()||'supermarkt',
+        p_company_type_other:String(body.companyTypeOther||'').trim()||null,
+        p_owner_name:String(body.companyOwner||'').trim()||null,
+        p_company_email:String(body.companyEmail||'').trim()||null,
+        p_company_phone:String(body.companyPhone||'').trim()||null,
+        p_private_phone:String(body.privatePhone||'').trim()||null,
+        p_website:String(body.companyWebsite||'').trim()||null,
+        p_instagram:String(body.companyInstagram||'').trim()||null,
+        p_address:String(body.companyAddress||'').trim()||null,
+        p_logo_data_url:String(body.companyLogoDataUrl||'').trim()||null
+      };
+      const {data,error}=await client.rpc('app_create_company_profile',payload);
       if(error)throw error;
       if(data?.error)return send(res,400,{error:data.error});
       await audit(client,user,'account_created',data?.user?.id||null,{
-        username,
-        role,
-        teamRole,
-        hasEmail:Boolean(email),
-        hasPhone:Boolean(phone),
-        hasBirthDate:Boolean(birthDate)
+        username:payload.p_username,
+        role:payload.p_role,
+        teamRole:payload.p_team_role,
+        isCompany:payload.p_is_company,
+        companyName:payload.p_company_name,
+        companyType:payload.p_company_type,
+        hasLogo:Boolean(payload.p_logo_data_url)
       });
       return send(res,200,data);
     }
@@ -432,11 +436,20 @@ export default async function handler(req,res){
 
     if(action==='brand-save'&&req.method==='POST'){
       const brand={user_id:user.id,company_name:String(body.company_name||'').slice(0,160),logo_path:String(body.logo_path||'').slice(0,600),
+        logo_data_url:String(body.logo_data_url||'').slice(0,6000000),
         primary_color:String(body.primary_color||'#7258ff').slice(0,30),secondary_color:String(body.secondary_color||'#39d6d0').slice(0,30),
         font_family:String(body.font_family||'Inter').slice(0,100),address:String(body.address||'').slice(0,500),
         opening_hours:String(body.opening_hours||'').slice(0,1000),instagram:String(body.instagram||'').slice(0,200),
         language:String(body.language||'de').slice(0,20),design_style:String(body.design_style||'modern-premium').slice(0,100),
-        notes:String(body.notes||'').slice(0,3000),updated_at:new Date().toISOString()};
+        notes:String(body.notes||'').slice(0,3000),
+        company_type:String(body.company_type||'').slice(0,100),
+        company_type_other:String(body.company_type_other||'').slice(0,160),
+        owner_name:String(body.owner_name||'').slice(0,160),
+        website:String(body.website||'').slice(0,300),
+        company_email:String(body.company_email||'').slice(0,200),
+        company_phone:String(body.company_phone||'').slice(0,80),
+        private_phone:String(body.private_phone||'').slice(0,80),
+        updated_at:new Date().toISOString()};
       if(brand.logo_path)ownPath(user,brand.logo_path);
       const {data,error}=await client.from('app_brand_kits').upsert(brand,{onConflict:'user_id'}).select().single();if(error)throw error;
       return send(res,200,{brand:data});
@@ -581,7 +594,7 @@ Mögliche task.type-Werte: "text", "image", "video", "translation".
 image: prompt + aspect (square|post|story|landscape) + title.
 video: prompt + aspect (portrait|landscape) + seconds (4|8|12) + title.
 text/translation: prompt + title.
-Nutze Brand Kit, Memory, Produktdaten und Wissen. Ändere Logos/Marken nicht eigenmächtig. Bei mehreren Formaten getrennte Tasks.
+Nutze Brand Kit, Memory, Produktdaten und Wissen. Wenn Firmenlogo, Firmenname, Telefonnummern, E-Mail, Website, Instagram oder Adresse vorliegen, integriere diese Daten bei Flyern, Angebotsbildern und passenden Designs standardmäßig sinnvoll. Bei Website-Aufträgen verwende dieselbe Branche und dasselbe Theme wie im Firmenprofil. Ändere Logos/Marken nicht eigenmächtig. Bei mehreren Formaten getrennte Tasks.
 AUFTRAG: ${prompt}
 KONTEXT: ${JSON.stringify(context)}
 Antworte ausschließlich JSON:
