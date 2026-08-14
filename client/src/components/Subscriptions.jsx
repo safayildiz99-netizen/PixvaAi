@@ -83,11 +83,11 @@ export default function Subscriptions({
   return <section className="subscriptions-page">
     <div className="subscription-hero">
       <div>
-        <span className="subscription-kicker"><Sparkles size={16}/> Yildiz AI</span>
+        <span className="subscription-kicker"><Sparkles size={16}/> PIXVA</span>
         <h2>{uiText.plansTitle || 'Wähle den passenden Zugang.'}</h2>
         <p><strong>{paymentsEnabled ? 'Sichere Zahlung über PayPal.' : (uiText.plansSubtitle || 'Alle Beta-Abos können ohne Zahlung getestet werden.')}</strong><br/>
           {paymentsEnabled
-            ? `Bezahlte Zugänge gelten jeweils ${paidAccessDays} Tage. Nach dem Klick wirst du zu PayPal weitergeleitet; Yildiz AI erhält keine PayPal-Passwörter oder Kartendaten.`
+            ? `Bezahlte Zugänge gelten jeweils ${paidAccessDays} Tage. Nach dem Klick wirst du zu PayPal weitergeleitet; PIXVA erhält keine PayPal-Passwörter oder Kartendaten.`
             : 'Der kostenlose Modus bleibt aktiv. Der Admin kann Zahlungen später einschalten, ohne die angezeigten Preise zu entfernen.'}
         </p>
       </div>
@@ -142,7 +142,7 @@ export default function Subscriptions({
     </div>
 
     <div className="subscription-facts">
-      <article><LockKeyhole size={20}/><div><b>Sicherer PayPal-Checkout</b><span>{paymentsEnabled ? 'Die Zahlung erfolgt auf der PayPal-Seite. Yildiz AI speichert keine vollständigen Zahlungsdaten.' : 'Zahlungen sind derzeit ausgeschaltet.'}</span></div></article>
+      <article><LockKeyhole size={20}/><div><b>Sicherer PayPal-Checkout</b><span>{paymentsEnabled ? 'Die Zahlung erfolgt auf der PayPal-Seite. PIXVA speichert keine vollständigen Zahlungsdaten.' : 'Zahlungen sind derzeit ausgeschaltet.'}</span></div></article>
       <article><Video size={20}/><div><b>Medienkosten bleiben getrennt</b><span>OpenAI- und Sora-Kosten sind keine Abo-Kosten. Der Admin kontrolliert weiterhin Limits und Kostenabfragen.</span></div></article>
       <article><ShieldCheck size={20}/><div><b>Serverseitig bestätigt</b><span>Der Zugang wird erst aktiviert, nachdem PayPal den bezahlten Betrag als abgeschlossen bestätigt hat.</span></div></article>
     </div>

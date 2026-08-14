@@ -1,6 +1,6 @@
 import { send } from '../_lib.js';
 
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36 YildizAI/1.0';
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36 PIXVA/1.0';
 
 function cleanQuery(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 180);
