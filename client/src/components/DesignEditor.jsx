@@ -414,7 +414,31 @@ async function pixvaCompanyTemplate(canvas,width,height,mode,brand={}){
   return t;
 }
 
+
+function pixvaBrainBrand(brain){
+  const c=brain?.company||{};
+  return{
+    company_name:c.companyName||'',
+    company_type:c.companyType||'sonstiges',
+    company_type_other:c.companyTypeOther||'',
+    owner_name:c.ownerName||'',
+    company_email:c.companyEmail||'',
+    company_phone:c.companyPhone||'',
+    private_phone:c.privatePhone||c.personalPhone||'',
+    website:c.website||'',
+    instagram:c.instagram||'',
+    address:c.address||'',
+    logo_data_url:c.logoDataUrl||c.logoUrl||'',
+    logo_path:c.logoPath||'',
+    primary_color:c.primaryColor||'#7258ff',
+    secondary_color:c.secondaryColor||'#39d6d0'
+  };
+}
+
 export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {}, costPromptMode = 'all', customPlans = [] }) {
+  const [companyBrand, setCompanyBrand] = useState(null);
+  const [pixvaBrain, setPixvaBrain] = useState(null);
+
   const elementRef = useRef(null);
   const fabricRef = useRef(null);
   const historyRef = useRef([]);
@@ -647,6 +671,32 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     canvas.requestRenderAll();
     snapshot();
   }, [format]);
+
+
+  /* PIXVA BRAIN GUARANTEED TEMPLATE V11.6 */
+  useEffect(()=>{
+    if(project?.id)return;
+    let cancelled=false;
+    const timer=window.setTimeout(async()=>{
+      try{
+        const brain=await api('/api/pixva?action=brain-context');
+        if(cancelled)return;
+        setPixvaBrain(brain);
+        const brand=pixvaBrainBrand(brain);
+        setCompanyBrand(brand);
+        const canvas=fabricRef.current;
+        if(!canvas||!brain?.isCompany)return;
+        if(typeof pixvaCompanyTemplate==='function'){
+          await pixvaCompanyTemplate(canvas,canvas.width,canvas.height,mode,brand);
+          setBackground(canvas.backgroundColor||brand.primary_color||'#f4f0e8');
+          setStatus(`PIXVA Brain: ${brain.company?.companyName||'Firma'} · ${brain.company?.industryLabel||''} · Firmenlogo & Kontaktdaten aktiv`);
+        }
+      }catch(error){
+        if(!cancelled)setStatus(`PIXVA Brain konnte Firmenprofil nicht laden: ${error.message}`);
+      }
+    },180);
+    return()=>{cancelled=true;window.clearTimeout(timer)};
+  },[project?.id,mode]);
 
   function addText() {
     const canvas = fabricRef.current;
@@ -1322,7 +1372,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       <div className="editor-pro-shell">
       <aside className="tool-panel editor-tools-pro">
         <div className="panel-section">
-          <label>Projektname<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
+          <div className="pixva-brain-chip">PIXVA Brain arbeitet hier mit{pixvaBrain?.isCompany?` · ${pixvaBrain.company?.industryLabel||''}`:''}</div><label>Projektname<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
           <label>Format<select value={formatKey} onChange={(event) => setFormatKey(event.target.value)}>{Object.entries(formats).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
           <label>Vorlagenmodus<select value={templateVariant} onChange={(event) => setTemplateVariant(event.target.value)}><option value="editable">Voll bearbeitbar (empfohlen)</option><option value="reference">Nur Originalbild – nicht alle Ebenen editierbar</option></select></label>
           <div className="template-gallery">

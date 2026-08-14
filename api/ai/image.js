@@ -1,5 +1,7 @@
+import sharp from 'sharp';
+import { brainInstructions, getPixvaBrainContext } from '../../lib/pixva-brain.js';
 import { randomUUID } from 'node:crypto';
-import { readJson, send } from '../_lib.js';
+import { readJson, send, validateUser } from '../_lib.js';
 import { authorizeUsage, finishUsage } from '../_usage.js';
 
 const sizeMap = {
@@ -190,12 +192,67 @@ async function generateWithModel({ apiKey, model, prompt, size, quality, backgro
   return { ok: false, response: { status: 502 }, data: { error: { message: 'OpenAI hat keine Bilddatei geliefert.' } } };
 }
 
+
+function pixvaXml(value){return String(value||'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]))}
+function pixvaDataUrl(value){
+  const m=String(value||'').match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
+  return m?{type:m[1],buffer:Buffer.from(m[2],'base64')}:null;
+}
+async function pixvaResultBuffer(result){
+  const data=pixvaDataUrl(result?.imageDataUrl);
+  if(data)return data.buffer;
+  if(result?.imageUrl){
+    const r=await fetch(result.imageUrl);
+    if(r.ok)return Buffer.from(await r.arrayBuffer());
+  }
+  return null;
+}
+async function pixvaLogoBuffer(company){
+  const data=pixvaDataUrl(company?.logoDataUrl);
+  if(data)return data.buffer;
+  if(company?.logoUrl){
+    const r=await fetch(company.logoUrl);
+    if(r.ok)return Buffer.from(await r.arrayBuffer());
+  }
+  return null;
+}
+async function pixvaBrandImageResult(result,brain,advertising){
+  if(!brain?.isCompany)return result;
+  const source=await pixvaResultBuffer(result),logo=await pixvaLogoBuffer(brain.company);
+  if(!source||!logo)return result;
+  const meta=await sharp(source).metadata();
+  const width=meta.width||1024,height=meta.height||1024;
+  const margin=Math.max(18,Math.round(width*.025));
+  const logoW=Math.min(Math.round(width*(advertising?.20:.14)),300);
+  const logoPrepared=await sharp(logo).resize({width:logoW,height:Math.round(height*.12),fit:'inside',withoutEnlargement:true}).png().toBuffer();
+  const lm=await sharp(logoPrepared).metadata();
+  const boxW=(lm.width||logoW)+margin*2,boxH=(lm.height||80)+margin;
+  const left=width-boxW-margin,top=height-boxH-margin;
+
+  const c=brain.company||{};
+  const contact=[c.companyPhone,c.companyEmail,c.website,c.instagram].filter(Boolean).join(' · ').slice(0,135);
+  const company=String(c.companyName||'').slice(0,55);
+  const footerH=advertising?Math.max(86,Math.round(height*.09)):0;
+  const layers=[];
+  if(advertising){
+    const svg=`<svg width="${width}" height="${footerH}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="rgba(6,23,34,.90)"/><text x="${margin}" y="${Math.round(footerH*.40)}" fill="white" font-family="Arial,sans-serif" font-size="${Math.max(18,Math.round(width*.023))}" font-weight="700">${pixvaXml(company)}</text><text x="${margin}" y="${Math.round(footerH*.72)}" fill="#b9d1dc" font-family="Arial,sans-serif" font-size="${Math.max(12,Math.round(width*.014))}">${pixvaXml(contact)}</text></svg>`;
+    layers.push({input:Buffer.from(svg),left:0,top:height-footerH});
+  }
+  const logoTop=advertising?Math.max(margin,height-footerH+Math.round((footerH-(lm.height||70))/2)):top;
+  const logoLeft=width-(lm.width||logoW)-margin;
+  layers.push({input:logoPrepared,left:Math.max(0,logoLeft),top:Math.max(0,logoTop)});
+  const output=await sharp(source).composite(layers).webp({quality:92}).toBuffer();
+  return{...result,imageDataUrl:`data:image/webp;base64,${output.toString('base64')}`,imageUrl:undefined,mimeType:'image/webp',pixvaBrandApplied:true};
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Nur POST-Anfragen sind erlaubt.' });
 
   let requestId = '';
   try {
     const body = await readJson(req);
+    const pixvaUser=await validateUser(req);
+    const pixvaBrain=await getPixvaBrainContext(pixvaUser).catch(()=>null);
     const prompt = String(body?.prompt || '').trim().slice(0, 3000);
     const aspect = Object.hasOwn(sizeMap, body?.aspect) ? String(body.aspect) : 'post';
     const style = String(body?.style || (isAdvertisingPrompt(prompt) ? 'poster' : 'realistic'));
@@ -221,7 +278,7 @@ export default async function handler(req, res) {
     await authorizeUsage(req, { requestId, kind: 'image', model: primaryModel, units: 1, estimatedCostUsd });
     await moderatePrompt(apiKey, prompt, referenceImage);
 
-    const finalPrompt = buildPrompt(prompt, style, Boolean(referenceImage));
+    const finalPrompt = buildPrompt(brainInstructions(pixvaBrain,'image',prompt), style, Boolean(referenceImage));
     let lastStatus = 500;
     let lastData = {};
 
@@ -229,8 +286,9 @@ export default async function handler(req, res) {
       const attempt = await generateWithModel({ apiKey, model, prompt: finalPrompt, size, quality, background, referenceImage, outputFormat });
       if (attempt.ok) {
         await finishUsage(req, { requestId, status: 'completed', actualCostUsd: estimatedCostUsd });
+        const pixvaResult=await pixvaBrandImageResult(attempt.result,pixvaBrain,isAdvertisingPrompt(prompt)).catch(()=>attempt.result);
         return send(res, 200, {
-          ...attempt.result,
+          ...pixvaResult,
           requestId,
           estimatedCostUsd,
           quality,

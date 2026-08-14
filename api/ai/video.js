@@ -1,6 +1,7 @@
+import { brainInstructions, getPixvaBrainContext } from '../../lib/pixva-brain.js';
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { readJson, send } from '../_lib.js';
+import { readJson, send, validateUser } from '../_lib.js';
 import { authorizeUsage, bindUsageProvider, finishUsage, verifyUsageAccess } from '../_usage.js';
 
 function query(req) {
@@ -106,7 +107,10 @@ async function moderatePrompt(apiKey, prompt, referenceImage) {
 
 async function createVideo(req, res, apiKey) {
   const body = await readJson(req);
-  const prompt = String(body?.prompt || '').trim().slice(0, 4000);
+  const pixvaUser=await validateUser(req);
+  const pixvaBrain=await getPixvaBrainContext(pixvaUser).catch(()=>null);
+  const rawPrompt = String(body?.prompt || '').trim().slice(0, 4000);
+  const prompt = brainInstructions(pixvaBrain,'video',rawPrompt).slice(0,4000);
   if (!prompt) return send(res, 400, { error: 'Bitte gib einen Video-Prompt ein.' });
 
   const requestedModel = String(body?.model || process.env.OPENAI_VIDEO_MODEL || 'sora-2-pro').trim();

@@ -6,6 +6,7 @@ import { waitUntil } from '@vercel/functions';
 import QRCode from 'qrcode';
 import nodemailer from 'nodemailer';
 import { readJson, readToken, send, validateUser } from './_lib.js';
+import { brainInstructions, deterministicBlueprint, getPixvaBrainContext, upsertCompanyProfile } from '../lib/pixva-brain.js';
 
 export const config={maxDuration:300};
 const BUCKET='pixva-private';
@@ -50,6 +51,14 @@ async function persistGeneratedImage(client,user,imageDataUrl,title='pixva-agent
 async function internalCall(base,token,path,options={}){const r=await fetch(`${base}${path}`,{...options,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',...(options.headers||{})}}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error||`Interner PIXVA-Aufruf fehlgeschlagen (${r.status}).`);return d}
 async function hydrateRuns(client,runs){const copy=JSON.parse(JSON.stringify(runs||[]));for(const run of copy){for(const item of(run.results||[])){if(item.storagePath&&!item.image){try{const {data}=await client.storage.from(BUCKET).createSignedUrl(item.storagePath,3600);if(data?.signedUrl)item.image=data.signedUrl}catch{}}}}return copy}
 async function runAgentBackground(client,user,run,token,base){const tasks=Array.isArray(run?.plan?.tasks)?run.plan.tasks:[],results=[];await client.from('app_agent_runs').update({status:'running',auto_run:true,background_started_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',run.id);try{for(const task of tasks){let result={taskId:task.id||randomUUID(),title:task.title||'PIXVA Aufgabe',type:task.type||'text',at:new Date().toISOString()};try{if(task.type==='image'){const r=await internalCall(base,token,'/api/ai/image',{method:'POST',body:JSON.stringify({prompt:task.prompt,aspect:task.aspect||'post',style:'poster'})}),storagePath=r.imageDataUrl?await persistGeneratedImage(client,user,r.imageDataUrl,task.title):null;result={...result,status:'completed',storagePath,image:r.imageUrl||'',provider:r.provider||''}}else if(task.type==='video'){const r=await internalCall(base,token,'/api/ai/video?action=create',{method:'POST',body:JSON.stringify({prompt:task.prompt,aspect:task.aspect||'portrait',seconds:String(task.seconds||4),requestId:randomUUID()})});result={...result,status:r.status||'queued',videoId:r.id||'',requestId:r.requestId||''}}else if(task.type==='translation'){const r=await gemini({prompt:`Übersetze professionell in ${task.target||'Deutsch'}:\n${task.prompt}`,temperature:.1});result={...result,status:'completed',text:r.text}}else{const r=await gemini({prompt:String(task.prompt||''),temperature:.25});result={...result,status:'completed',text:r.text}}}catch(error){result={...result,status:'failed',error:String(error.message||error).slice(0,600)}}results.push(result);await client.from('app_agent_runs').update({results,updated_at:new Date().toISOString()}).eq('id',run.id)}const failed=results.some(x=>x.status==='failed');await client.from('app_agent_runs').update({results,status:failed?'failed':'completed',background_finished_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',run.id);await client.from('app_notifications').insert({user_id:user.id,kind:failed?'warning':'success',title:failed?'PIXVA Agent teilweise fehlgeschlagen':'PIXVA Agent fertig',message:run.prompt,related_id:run.id});if(emailConfigured()){const {data:u}=await client.from('app_users').select('email').eq('id',user.id).maybeSingle();if(u?.email)await sendMail(u.email,'PIXVA Agent fertig',`<p>Dein PIXVA-Auftrag ist fertig:</p><p>${String(run.prompt||'').replace(/[<>]/g,'')}</p>`).catch(()=>{})}}catch(error){await client.from('app_agent_runs').update({status:'failed',error:String(error.message||error).slice(0,800),background_finished_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',run.id)}}
+
+
+function pixvaBrainJson(text){
+  try{return JSON.parse(String(text||''))}catch{}
+  const match=String(text||'').match(/\{[\s\S]*\}/);
+  if(!match)return null;
+  try{return JSON.parse(match[0])}catch{return null}
+}
 
 function actionOf(req){
   if(req.query?.action)return String(req.query.action);
@@ -342,6 +351,7 @@ export default async function handler(req,res){
       });
       if(error)throw error;
       if(data?.error)return send(res,400,{error:data.error});
+      if(data?.user?.id)await upsertCompanyProfile(data.user.id,{...body,source:'registration'}).catch(()=>{});
       if(data?.user?.id){
         await client.from('app_users').update({
           account_type:body.isCompany===true?'company':'private',
@@ -445,6 +455,7 @@ export default async function handler(req,res){
       const {data,error}=await client.rpc('app_create_company_profile',payload);
       if(error)throw error;
       if(data?.error)return send(res,400,{error:data.error});
+      if(data?.user?.id)await upsertCompanyProfile(data.user.id,{...body,source:'registration'}).catch(()=>{});
       if(data?.user?.id){
         await client.from('app_users').update({
           account_type:body.isCompany!==false?'company':'private',
@@ -526,6 +537,7 @@ export default async function handler(req,res){
         updated_at:new Date().toISOString()};
       if(brand.logo_path)ownPath(user,brand.logo_path);
       const {data,error}=await client.from('app_brand_kits').upsert(brand,{onConflict:'user_id'}).select().single();if(error)throw error;
+      await upsertCompanyProfile(user.id,{...body,source:'brand-save'}).catch(()=>{});
       return send(res,200,{brand:data});
     }
 
@@ -737,6 +749,32 @@ Antworte ausschließlich JSON:
       const {data:version,error}=await client.from('app_project_versions').select('*').eq('id',body.id).eq('owner_id',user.id).maybeSingle();if(error)throw error;if(!version)return send(res,404,{error:'Version nicht gefunden.'});
       const {data:project,error:updateError}=await client.from('app_projects').update({name:version.name,data:version.data,updated_at:new Date().toISOString()}).eq('id',version.project_id).eq('owner_id',user.id).select().single();if(updateError)throw updateError;
       return send(res,200,{project});
+    }
+
+    if(action==='brain-context'&&req.method==='GET'){
+      const brain=await getPixvaBrainContext(user);
+      return send(res,200,brain);
+    }
+
+    if(action==='brain-blueprint'&&req.method==='POST'){
+      await enforceRate(client,req,'brain-blueprint',30,60);
+      const target=String(body.target||'general').slice(0,30);
+      const instruction=String(body.instruction||'').slice(0,3000);
+      const brain=await getPixvaBrainContext(user);
+      const fallback=deterministicBlueprint(brain,target);
+      if(!brain.isCompany)return send(res,200,{blueprint:fallback,brain});
+      try{
+        const prompt=`Du bist das zentrale PIXVA Brain. Erstelle für das Modul "${target}" einen JSON-Entwurf, der exakt zum Firmenprofil passt.
+${brainInstructions(brain,target,instruction)}
+Antworte NUR als JSON.
+Für website: {"headline":"","intro":"","services":["","","",""],"cta":"","primary":"","secondary":""}
+Für flyer/image: {"headline":"","subject":"","offer":"","subline":"","cta":"","imagePrompt":"","primary":"","secondary":""}
+Erfinde KEINE Firmenkontaktdaten.`;
+        const result=await gemini({prompt,temperature:.2});
+        return send(res,200,{blueprint:{...fallback,...(pixvaBrainJson(result.text)||{})},brain});
+      }catch{
+        return send(res,200,{blueprint:fallback,brain,fallback:true});
+      }
     }
 
     if(action==='status'&&req.method==='GET'){
