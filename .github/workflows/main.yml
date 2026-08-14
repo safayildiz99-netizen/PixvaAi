@@ -1,79 +1,427 @@
-name: PIXVA Phase 3.1 Final Polish FIX
+-- PIXVA V10 COMPLETE AI SUITE
+-- Ergänzt die bestehende PIXVA V9/V9.2-Datenbank.
+-- Zahlungs-/PayPal-Tabellen und Zahlungslogik werden NICHT verändert.
 
-on:
-  workflow_dispatch:
+begin;
 
-permissions:
-  contents: write
+create extension if not exists pgcrypto;
+create schema if not exists private;
 
-jobs:
-  final_polish:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Repository laden
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+create table if not exists public.app_brand_kits (
+  user_id uuid primary key references public.app_users(id) on delete cascade,
+  company_name text not null default '',
+  logo_path text not null default '',
+  primary_color text not null default '#7258ff',
+  secondary_color text not null default '#39d6d0',
+  font_family text not null default 'Inter',
+  address text not null default '',
+  opening_hours text not null default '',
+  instagram text not null default '',
+  language text not null default 'de',
+  design_style text not null default 'modern-premium',
+  notes text not null default '',
+  updated_at timestamptz not null default now()
+);
 
-      - name: Geldsystem vor Änderung sichern
-        shell: bash
-        run: |
-          sha256sum api/billing.js > /tmp/billing.before
-          if [ -f V9.2-PAYPAL-UPDATE.sql ]; then sha256sum V9.2-PAYPAL-UPDATE.sql > /tmp/paypal.before; fi
-          cp client/src/components/Subscriptions.jsx /tmp/Subscriptions.before.jsx
+create table if not exists public.app_memory_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  category text not null default 'general',
+  title text not null,
+  content text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists app_memory_items_user_idx on public.app_memory_items(user_id, updated_at desc);
 
-      - name: PIXVA Final-Dateien vorbereiten
-        shell: bash
-        run: |
-          echo 'LyogUElYVkEgRklOQUwgUE9MSVNIIFYzCiAgIExldHp0ZXIgdmlzdWVsbGVyIFNjaGxpZmY6IGtlaW5lIGFsdGVuIGdlbGIvb2xpdi9ncmF1ZW4gTWFya2VuYWt6ZW50ZSBtZWhyLgogICBQSVhWQS1Mb2dvIGJsZWlidCB1bnZlcsOkbmRlcnQuCiovCjpyb290ewogIC0tcGl4dmEtdmlvbGV0OiM2NzQ1OUE7CiAgLS1waXh2YS1pbmRpZ286IzM0MzU4QzsKICAtLXBpeHZhLWJsdWU6IzIzN0ZBRTsKICAtLXBpeHZhLWN5YW46IzE2OUJCODsKICAtLXBpeHZhLXRlYWw6IzQ5QjI5QjsKICAtLXBpeHZhLWluazojMDQxMDE5OwogIC0tcGl4dmEtbmF2OiMwNjE3MjI7CiAgLS1waXh2YS1jYXJkOiMwQTIwMkQ7CiAgLS1waXh2YS1jYXJkLTI6IzBEMjczNDsKICAtLXBpeHZhLWxpbmU6IzI0NTM2NzsKICAtLXBpeHZhLWxpbmUtYnJpZ2h0OiMzNDc5OEQ7CiAgLS1waXh2YS1jb3B5OiNGNEZBRkQ7CiAgLS1waXh2YS1zdWI6IzlEQjlDNjsKICAtLXBpeHZhLWJyYW5kLWdyYWRpZW50OmxpbmVhci1ncmFkaWVudCgxMzVkZWcsIzY3NDU5QSAwJSwjMzQzNThDIDI1JSwjMjM3RkFFIDUyJSwjMTY5QkI4IDcyJSwjNDlCMjlCIDEwMCUpOwogIC0teWVsbG93OiM0OUIyOUIhaW1wb3J0YW50OwogIC0tYWNjZW50OiMxNjlCQjghaW1wb3J0YW50Owp9CgovKiBHbG9iYWxlIFJ1aGUgdW5kIFByZW1pdW0tS29udHJhc3QgKi8KYm9keXsKICBiYWNrZ3JvdW5kOgogICAgcmFkaWFsLWdyYWRpZW50KGNpcmNsZSBhdCA5JSA1JSxyZ2JhKDEwMyw2OSwxNTQsLjE2KSx0cmFuc3BhcmVudCAyNSUpLAogICAgcmFkaWFsLWdyYWRpZW50KGNpcmNsZSBhdCA5MyUgNiUscmdiYSgyMiwxNTUsMTg0LC4xMCksdHJhbnNwYXJlbnQgMjQlKSwKICAgIGxpbmVhci1ncmFkaWVudCgxODBkZWcsIzA1MTMxRCAwJSwjMDMwQzEzIDEwMCUpIWltcG9ydGFudDsKfQoud29ya3NwYWNlLWNvbnRlbnR7YmFja2dyb3VuZDp0cmFuc3BhcmVudCFpbXBvcnRhbnR9Ci53b3Jrc3BhY2UtY29udGVudDo6YWZ0ZXJ7CiAgY29udGVudDoiIjtwb3NpdGlvbjpmaXhlZDtpbnNldDowO3BvaW50ZXItZXZlbnRzOm5vbmU7ei1pbmRleDowOwogIGJhY2tncm91bmQ6cmFkaWFsLWdyYWRpZW50KGNpcmNsZSBhdCA3MiUgMzUlLHJnYmEoMzUsMTI3LDE3NCwuMDM1KSx0cmFuc3BhcmVudCAyOCUpOwp9CgovKiBMb2dvIHVuZCBsaW5rZSBOYXZpZ2F0aW9uICovCi5zaWRlYmFyewogIGJhY2tncm91bmQ6bGluZWFyLWdyYWRpZW50KDE4MGRlZywjMDcxQTI2IDAlLCMwNDExMUEgMTAwJSkhaW1wb3J0YW50OwogIGJvcmRlci1yaWdodDoxcHggc29saWQgIzFDNDY1OSFpbXBvcnRhbnQ7Cn0KLnNpZGViYXItbG9nb3tmaWx0ZXI6bm9uZSFpbXBvcnRhbnQ7dHJhbnNmb3JtOm5vbmUhaW1wb3J0YW50fQouc2lkZWJhciBuYXYgYnV0dG9uLC5zaWRlYmFyLWJvdHRvbT5idXR0b257CiAgYm9yZGVyLXJhZGl1czoxMnB4IWltcG9ydGFudDsKICBtaW4taGVpZ2h0OjQycHghaW1wb3J0YW50Owp9Ci5zaWRlYmFyIG5hdiBidXR0b24uYWN0aXZlLC5zaWRlYmFyLWJvdHRvbT5idXR0b24uYWN0aXZlLC5uZXctcHJvamVjdHsKICBiYWNrZ3JvdW5kOnZhcigtLXBpeHZhLWJyYW5kLWdyYWRpZW50KSFpbXBvcnRhbnQ7CiAgYm94LXNoYWRvdzowIDlweCAyNHB4IHJnYmEoMjIsMTU1LDE4NCwuMTUpLGluc2V0IDAgMXB4IDAgcmdiYSgyNTUsMjU1LDI1NSwuMTApIWltcG9ydGFudDsKfQouc2lkZWJhciBuYXYgYnV0dG9uOm5vdCguYWN0aXZlKTpob3Zlciwuc2lkZWJhci1ib3R0b20+YnV0dG9uOm5vdCguYWN0aXZlKTpob3ZlcnsKICBiYWNrZ3JvdW5kOmxpbmVhci1ncmFkaWVudCg5MGRlZyxyZ2JhKDEwMyw2OSwxNTQsLjE1KSxyZ2JhKDIyLDE1NSwxODQsLjEwKSxyZ2JhKDczLDE3OCwxNTUsLjA2KSkhaW1wb3J0YW50OwogIGJvcmRlci1jb2xvcjojMjQ1NTZBIWltcG9ydGFudDsKfQoKLyogVG9wYmFyICovCi50b3BiYXJ7CiAgYmFja2dyb3VuZDpyZ2JhKDQsMTYsMjUsLjk0KSFpbXBvcnRhbnQ7CiAgYm9yZGVyLWJvdHRvbToxcHggc29saWQgIzFFNEI1RCFpbXBvcnRhbnQ7Cn0KLnRvcGJhciBoMXtmb250LXdlaWdodDo3NTAhaW1wb3J0YW50O2xldHRlci1zcGFjaW5nOi0uMDJlbSFpbXBvcnRhbnR9Ci5tb2RlLXRvZ2dsZXtiYWNrZ3JvdW5kOiMwQTIwMkMhaW1wb3J0YW50O2JvcmRlcjoxcHggc29saWQgIzI0NTQ2NyFpbXBvcnRhbnQ7cGFkZGluZzozcHghaW1wb3J0YW50fQoubW9kZS10b2dnbGUgYnV0dG9uLmFjdGl2ZXtiYWNrZ3JvdW5kOnZhcigtLXBpeHZhLWJyYW5kLWdyYWRpZW50KSFpbXBvcnRhbnR9CgovKiBEZXIgc2ljaHRiYXJlIE1vZGVsbC1CYW5uZXI6IG9saXZlL2dyw7xuIGtvbXBsZXR0IGVudGZlcm5lbiAqLwouY2hhdC1pbnRybywKLmNoYXQtbW9kZWwtYmFubmVyLAouY2hhdC1tb2RlbC1pbmZvLAouYXNzaXN0YW50LWluZm8sCi5tb2RlbC1jYXJkLAoubW9kZWwtaW5mbywKW2NsYXNzKj0ibW9kZWwtYmFubmVyIl0sCltjbGFzcyo9ImFzc2lzdGFudC1pbmZvIl17CiAgYmFja2dyb3VuZDoKICAgIGxpbmVhci1ncmFkaWVudCgxMjBkZWcscmdiYSgxMDMsNjksMTU0LC4xMykgMCUscmdiYSgzNSwxMjcsMTc0LC4xMSkgNDglLHJnYmEoNzMsMTc4LDE1NSwuMDgpIDEwMCUpLAogICAgIzBBMjAyQyFpbXBvcnRhbnQ7CiAgYm9yZGVyOjFweCBzb2xpZCAjMkU2Njc4IWltcG9ydGFudDsKICBib3gtc2hhZG93Omluc2V0IDAgMXB4IDAgcmdiYSgyNTUsMjU1LDI1NSwuMDM1KSwwIDEwcHggMjhweCByZ2JhKDAsMCwwLC4xMCkhaW1wb3J0YW50OwogIGNvbG9yOiNFOEY1RjghaW1wb3J0YW50Owp9Ci5jaGF0LWludHJvOjpiZWZvcmUsLmNoYXQtbW9kZWwtYmFubmVyOjpiZWZvcmUsLmNoYXQtbW9kZWwtaW5mbzo6YmVmb3JlewogIGNvbG9yOiM1NUM5Q0YhaW1wb3J0YW50Owp9Ci5jaGF0LWludHJvIHNtYWxsLC5jaGF0LW1vZGVsLWJhbm5lciBzbWFsbCwuY2hhdC1tb2RlbC1pbmZvIHNtYWxsLC5hc3Npc3RhbnQtaW5mbyBzbWFsbCwubW9kZWwtaW5mbyBzbWFsbHsKICBjb2xvcjojOEZCMEJGIWltcG9ydGFudDsKfQoKLyogQ2hhdC1TcGFsdGVuICovCi5jaGF0LXNpZGViYXIsLmNoYXQtbGlzdC1wYW5lbCwuY2hhdC1oaXN0b3J5LXBhbmVsewogIGJhY2tncm91bmQ6bGluZWFyLWdyYWRpZW50KDE4MGRlZywjMDcxQjI3IDAlLCMwNTE0MUUgMTAwJSkhaW1wb3J0YW50OwogIGJvcmRlci1yaWdodDoxcHggc29saWQgIzFGNEI1RCFpbXBvcnRhbnQ7Cn0KLmNoYXQtc2lkZWJhciBpbnB1dCwuY2hhdC1saXN0LXBhbmVsIGlucHV0LC5jaGF0LWhpc3RvcnktcGFuZWwgaW5wdXR7CiAgYmFja2dyb3VuZDojMDkyMTJFIWltcG9ydGFudDsKICBib3JkZXItY29sb3I6IzI3NUE2RCFpbXBvcnRhbnQ7Cn0KLmNoYXQtaXRlbSwuY2hhdC1saXN0LWl0ZW17CiAgYmFja2dyb3VuZDojMDkyMDJDIWltcG9ydGFudDsKICBib3JkZXI6MXB4IHNvbGlkICMyMDRDNUYhaW1wb3J0YW50OwogIGJvcmRlci1yYWRpdXM6MTFweCFpbXBvcnRhbnQ7CiAgdHJhbnNpdGlvbjp0cmFuc2Zvcm0gLjE2cyBlYXNlLGJvcmRlci1jb2xvciAuMTZzIGVhc2UsYmFja2dyb3VuZCAuMTZzIGVhc2UsYm94LXNoYWRvdyAuMTZzIGVhc2UhaW1wb3J0YW50Owp9Ci5jaGF0LWl0ZW06aG92ZXIsLmNoYXQtbGlzdC1pdGVtOmhvdmVyewogIGJhY2tncm91bmQ6bGluZWFyLWdyYWRpZW50KDEyMGRlZyxyZ2JhKDEwMyw2OSwxNTQsLjExKSxyZ2JhKDIyLDE1NSwxODQsLjA5KSksIzBBMjAyQyFpbXBvcnRhbnQ7CiAgYm9yZGVyLWNvbG9yOiMzNTc4OEIhaW1wb3J0YW50OwogIHRyYW5zZm9ybTp0cmFuc2xhdGVZKC0xcHgpOwp9Ci5jaGF0LWl0ZW0uYWN0aXZlLC5jaGF0LWxpc3QtaXRlbS5hY3RpdmV7CiAgYmFja2dyb3VuZDpsaW5lYXItZ3JhZGllbnQoMTI1ZGVnLHJnYmEoMTAzLDY5LDE1NCwuMjApLHJnYmEoMzUsMTI3LDE3NCwuMTcpLHJnYmEoNzMsMTc4LDE1NSwuMTApKSwjMEEyMDJDIWltcG9ydGFudDsKICBib3JkZXItY29sb3I6IzNEOTRBMiFpbXBvcnRhbnQ7CiAgYm94LXNoYWRvdzppbnNldCAzcHggMCAwICM0MkM0QkUsMCA4cHggMjVweCByZ2JhKDAsMCwwLC4xMikhaW1wb3J0YW50Owp9CgovKiBOYWNocmljaHRlbiAqLwoubWVzc2FnZS51c2VyIC5tZXNzYWdlLWJvZHl7CiAgYmFja2dyb3VuZDpsaW5lYXItZ3JhZGllbnQoMTM1ZGVnLCMwRDMxNDEgMCUsIzBCMjgzNiAxMDAlKSFpbXBvcnRhbnQ7CiAgYm9yZGVyOjFweCBzb2xpZCAjMkI2NjdBIWltcG9ydGFudDsKICBib3gtc2hhZG93OjAgMTBweCAyOHB4IHJnYmEoMCwwLDAsLjExKSFpbXBvcnRhbnQ7Cn0KLm1lc3NhZ2UuYXNzaXN0YW50IC5hdmF0YXIsLm1lc3NhZ2UudXNlciAuYXZhdGFyewogIGJhY2tncm91bmQ6dmFyKC0tcGl4dmEtYnJhbmQtZ3JhZGllbnQpIWltcG9ydGFudDsKICBib3JkZXI6MCFpbXBvcnRhbnQ7CiAgYm94LXNoYWRvdzowIDdweCAyMHB4IHJnYmEoMjIsMTU1LDE4NCwuMTQpIWltcG9ydGFudDsKfQoubWVzc2FnZS1hY3Rpb25zIGJ1dHRvbnsKICBiYWNrZ3JvdW5kOiMwOTIwMkMhaW1wb3J0YW50O2JvcmRlcjoxcHggc29saWQgIzI0NEY2MiFpbXBvcnRhbnQ7Y29sb3I6Izg2QUJCOSFpbXBvcnRhbnQKfQoubWVzc2FnZS1hY3Rpb25zIGJ1dHRvbjpob3ZlcnsKICBiYWNrZ3JvdW5kOmxpbmVhci1ncmFkaWVudCgxMzVkZWcscmdiYSgxMDMsNjksMTU0LC4xNikscmdiYSgyMiwxNTUsMTg0LC4xNCkpIWltcG9ydGFudDsKICBib3JkZXItY29sb3I6IzNCODQ5NSFpbXBvcnRhbnQ7Y29sb3I6I2ZmZiFpbXBvcnRhbnQKfQoKLyogR29vZ2xlL0JpbmcvUmVzdWx0YXQtS2FydGVuICovCi5pbWFnZS1zZWFyY2gtY2FyZCwuc2VhcmNoLWxpbmstY2FyZCwuZ2VuZXJhdGVkLWZpbGUtY2FyZCwuZ2VuZXJhdGVkLWltYWdlLWNhcmQsLmF0dGFjaG1lbnQtY2FyZCwucmVzdWx0LWNhcmQsLmZpbGUtY2FyZCwubWVkaWEtY2FyZHsKICBiYWNrZ3JvdW5kOmxpbmVhci1ncmFkaWVudCgxODBkZWcsIzBBMjIzMCwjMDcxQjI3KSFpbXBvcnRhbnQ7CiAgYm9yZGVyOjFweCBzb2xpZCAjMjU1NzZBIWltcG9ydGFudDsKICBib3JkZXItcmFkaXVzOjEzcHghaW1wb3J0YW50Owp9Ci5pbWFnZS1zZWFyY2gtY2FyZDpob3Zlciwuc2VhcmNoLWxpbmstY2FyZDpob3ZlciwuZ2VuZXJhdGVkLWZpbGUtY2FyZDpob3ZlciwuZ2VuZXJhdGVkLWltYWdlLWNhcmQ6aG92ZXIsLmF0dGFjaG1lbnQtY2FyZDpob3ZlciwucmVzdWx0LWNhcmQ6aG92ZXJ7CiAgYm9yZGVyLWNvbG9yOiMzQzg2OTghaW1wb3J0YW50OwogIGJveC1zaGFkb3c6MCAxMnB4IDM1cHggcmdiYSgwLDAsMCwuMTQpLDAgMCAwIDFweCByZ2JhKDczLDE3OCwxNTUsLjA0KSFpbXBvcnRhbnQ7Cn0KLmltYWdlLXNlYXJjaC1jYXJkIGJ1dHRvbiwuc2VhcmNoLWxpbmstY2FyZCBidXR0b24sLmdlbmVyYXRlZC1maWxlLWNhcmQgYnV0dG9uLC5nZW5lcmF0ZWQtaW1hZ2UtY2FyZCBidXR0b24sLmZpbGUtY2FyZCBidXR0b24sLm1lZGlhLWNhcmQgYnV0dG9uewogIGJhY2tncm91bmQ6IzBDMjkzNyFpbXBvcnRhbnQ7CiAgYm9yZGVyLWNvbG9yOiMyQTYwNzQhaW1wb3J0YW50Owp9Ci5pbWFnZS1zZWFyY2gtY2FyZCBidXR0b246aG92ZXIsLnNlYXJjaC1saW5rLWNhcmQgYnV0dG9uOmhvdmVyLC5nZW5lcmF0ZWQtZmlsZS1jYXJkIGJ1dHRvbjpob3ZlciwuZ2VuZXJhdGVkLWltYWdlLWNhcmQgYnV0dG9uOmhvdmVyLC5maWxlLWNhcmQgYnV0dG9uOmhvdmVyLC5tZWRpYS1jYXJkIGJ1dHRvbjpob3ZlcnsKICBiYWNrZ3JvdW5kOmxpbmVhci1ncmFkaWVudCgxMzVkZWcscmdiYSgxMDMsNjksMTU0LC4yMykscmdiYSgyMiwxNTUsMTg0LC4yMSkscmdiYSg3MywxNzgsMTU1LC4xNCkpIWltcG9ydGFudDsKICBib3JkZXItY29sb3I6IzQxOTJBMCFpbXBvcnRhbnQ7Cn0KCi8qIEVpbmdhYmUgdW50ZW4gKi8KLmNoYXQtaW5wdXQtd3JhcCwuY29tcG9zZXIsLmNoYXQtY29tcG9zZXJ7CiAgYmFja2dyb3VuZDpsaW5lYXItZ3JhZGllbnQoIzA5MUYyQiwjMDkxRjJCKSBwYWRkaW5nLWJveCx2YXIoLS1waXh2YS1icmFuZC1ncmFkaWVudCkgYm9yZGVyLWJveCFpbXBvcnRhbnQ7CiAgYm9yZGVyOjFweCBzb2xpZCB0cmFuc3BhcmVudCFpbXBvcnRhbnQ7CiAgYm9yZGVyLXJhZGl1czoxNXB4IWltcG9ydGFudDsKICBib3gtc2hhZG93OjAgMTdweCA1MHB4IHJnYmEoMCwwLDAsLjIzKSwwIDAgMjhweCByZ2JhKDIyLDE1NSwxODQsLjA0NSkhaW1wb3J0YW50Owp9Ci5zZW5kLWJ0bntiYWNrZ3JvdW5kOnZhcigtLXBpeHZhLWJyYW5kLWdyYWRpZW50KSFpbXBvcnRhbnQ7Ym9yZGVyOjAhaW1wb3J0YW50fQoKLyogUHJpbcOkcmUgQnV0dG9ucyDDvGJlcmFsbCBrb25zaXN0ZW50ICovCi5wcmltYXJ5LWJ0biwuY3VycmVudC1wbGFuLWJ0biwubmV3LXByb2plY3QsLnNlbmQtYnRuLApidXR0b25bY2xhc3MqPSJwcmltYXJ5Il06bm90KC5kYW5nZXIpewogIGJhY2tncm91bmQ6dmFyKC0tcGl4dmEtYnJhbmQtZ3JhZGllbnQpIWltcG9ydGFudDsKICBjb2xvcjp3aGl0ZSFpbXBvcnRhbnQ7Ym9yZGVyLWNvbG9yOnRyYW5zcGFyZW50IWltcG9ydGFudDsKfQpidXR0b246bm90KC5kYW5nZXIpOm5vdCguYWN0aXZlKTpob3ZlcnsKICBib3JkZXItY29sb3I6IzM3N0E4RCFpbXBvcnRhbnQ7Cn0KCi8qIEFsbGUgbmV1dHJhbGVuIEthcnRlbiBhdWYgZWluZSBGYW1pbGllIGJyaW5nZW4gKi8KLmFkbWluLWNhcmQsLnByb2plY3QtY2FyZCwuYWNjb3VudC1jYXJkLC5zdWJzY3JpcHRpb24tY2FyZCwucGxhbi1jYXJkLC5lZGl0b3ItcGFuZWwsCi5wYW5lbC1zZWN0aW9uLC5zaXRlLWNvbnRyb2xzLC52aWRlby1jb250cm9scywudGltZWxpbmUtcGFuZWwsLnRvb2wtY2FyZCwuc2V0dGluZ3MtY2FyZCwKLnN0YXQtY2FyZCwuc2VydmljZS1jYXJkLC5tb2RhbC1jYXJkLC5kaWFsb2ctY2FyZCwudXNlci10YWJsZSwuYWRtaW4tcGFuZWwsCi5hZG1pbi1zdGF0LC5hZG1pbi1zdGF0LWNhcmQsLmJldGEtcHJpY2UtY2FyZCwuY3VycmVudC1wbGFuLXN1bW1hcnl7CiAgYmFja2dyb3VuZDpsaW5lYXItZ3JhZGllbnQoMTgwZGVnLCMwQTIwMkQgMCUsIzA3MTkyMyAxMDAlKSFpbXBvcnRhbnQ7CiAgYm9yZGVyLWNvbG9yOiMyMjUxNjYhaW1wb3J0YW50OwogIGJvcmRlci1yYWRpdXM6MTRweCFpbXBvcnRhbnQ7Cn0KLmFkbWluLWNhcmQ6aG92ZXIsLnByb2plY3QtY2FyZDpob3Zlciwuc3Vic2NyaXB0aW9uLWNhcmQ6aG92ZXIsLnBsYW4tY2FyZDpob3ZlciwudG9vbC1jYXJkOmhvdmVyewogIGJvcmRlci1jb2xvcjojMzQ3NzhBIWltcG9ydGFudDsKfQoKLyogQWRtaW4vQWNjb3VudC9Qcm9qZWt0ZSBUYWJzICovCi5hZG1pbi10YWJzLC5hY2NvdW50LXRhYnN7CiAgYmFja2dyb3VuZDojMDcxQjI3IWltcG9ydGFudDsKICBib3JkZXItY29sb3I6IzIxNEY2MiFpbXBvcnRhbnQ7CiAgYm9yZGVyLXJhZGl1czoxM3B4IWltcG9ydGFudDsKfQouYWRtaW4tdGFicyBidXR0b24uYWN0aXZlLC5hY2NvdW50LXRhYnMgYnV0dG9uLmFjdGl2ZXsKICBiYWNrZ3JvdW5kOnZhcigtLXBpeHZhLWJyYW5kLWdyYWRpZW50KSFpbXBvcnRhbnQ7Cn0KLnByb2plY3QtaWNvbnsKICBiYWNrZ3JvdW5kOmxpbmVhci1ncmFkaWVudCgxMzVkZWcscmdiYSgxMDMsNjksMTU0LC4yNCkscmdiYSgyMiwxNTUsMTg0LC4xOCkscmdiYSg3MywxNzgsMTU1LC4xMSkpIWltcG9ydGFudDsKICBjb2xvcjojNjhEOUQyIWltcG9ydGFudDsKfQoKLyogRWRpdG9yIC8gVmlkZW8gLyBXZWJzaXRlIGtvbnNpc3RlbnQgKi8KLmVkaXRvci10b29sYmFyLC5lZGl0b3ItdG9wYmFyLC50b29sYm94LC5lZGl0b3Itc2lkZWJhciwubGF5ZXJzLXBhbmVsLC5wcm9wZXJ0aWVzLXBhbmVsLAoudGltZWxpbmUsLnZpZGVvLXRpbWVsaW5lLC5zaXRlLWNvbnRyb2xzewogIGJhY2tncm91bmQ6bGluZWFyLWdyYWRpZW50KDE4MGRlZywjMDgxRDI5LCMwNTE0MUUpIWltcG9ydGFudDsKICBib3JkZXItY29sb3I6IzFGNEI1RCFpbXBvcnRhbnQ7Cn0KLmVkaXRvci10b29sYmFyIGJ1dHRvbi5hY3RpdmUsLnRvb2xib3ggYnV0dG9uLmFjdGl2ZSwuc2NlbmUtY2FyZC5hY3RpdmUsLnRpbWVsaW5lLWl0ZW0uYWN0aXZlLC5jbGlwLWNhcmQuYWN0aXZlewogIGJhY2tncm91bmQ6bGluZWFyLWdyYWRpZW50KDEzNWRlZyxyZ2JhKDEwMyw2OSwxNTQsLjI2KSxyZ2JhKDIyLDE1NSwxODQsLjIwKSxyZ2JhKDczLDE3OCwxNTUsLjEzKSkhaW1wb3J0YW50OwogIGJvcmRlci1jb2xvcjojM0Q4RDlDIWltcG9ydGFudDtjb2xvcjojZmZmIWltcG9ydGFudAp9CgovKiBBYm86IE5VUiBvcHRpc2NoLCBHZWxkbG9naWsgYmxlaWJ0IHVuYmVyw7xocnQgKi8KLnN1YnNjcmlwdGlvbi1oZXJvLC5hY2NvdW50LWhlcm8sLnByb2ZpbGUtY2FyZHsKICBiYWNrZ3JvdW5kOgogICAgcmFkaWFsLWdyYWRpZW50KGNpcmNsZSBhdCAxMCUgMCxyZ2JhKDEwMyw2OSwxNTQsLjEyKSx0cmFuc3BhcmVudCAzNCUpLAogICAgcmFkaWFsLWdyYWRpZW50KGNpcmNsZSBhdCA5MiUgNCUscmdiYSg3MywxNzgsMTU1LC4wOSksdHJhbnNwYXJlbnQgMzAlKSwKICAgIGxpbmVhci1ncmFkaWVudCgxODBkZWcsIzBBMjAyRCwjMDcxOTIzKSFpbXBvcnRhbnQ7CiAgYm9yZGVyLWNvbG9yOiMyNzVDNzAhaW1wb3J0YW50Owp9Ci5wbGFuLWJhZGdlLC5mZWF0dXJlZC1iYWRnZXtiYWNrZ3JvdW5kOnZhcigtLXBpeHZhLWJyYW5kLWdyYWRpZW50KSFpbXBvcnRhbnR9CgovKiBLZWluZSBhbHRlbiBnZWxiL29saXZmYXJiZW5lbiBVSS1CYWRnZXMgbWVociAqLwouYmFkZ2U6bm90KC53YXJuaW5nKTpub3QoLmRhbmdlciksCi50YWc6bm90KC53YXJuaW5nKTpub3QoLmRhbmdlciksCi5waWxsOm5vdCgud2FybmluZyk6bm90KC5kYW5nZXIpewogIGJhY2tncm91bmQ6cmdiYSgyMiwxNTUsMTg0LC4xMikhaW1wb3J0YW50OwogIGJvcmRlci1jb2xvcjpyZ2JhKDczLDE3OCwxNTUsLjMyKSFpbXBvcnRhbnQ7CiAgY29sb3I6I0E5RTZFMSFpbXBvcnRhbnQ7Cn0KCi8qIEZvY3VzICovCmlucHV0OmZvY3VzLHRleHRhcmVhOmZvY3VzLHNlbGVjdDpmb2N1c3sKICBib3JkZXItY29sb3I6IzM1QTVCNSFpbXBvcnRhbnQ7CiAgYm94LXNoYWRvdzowIDAgMCAzcHggcmdiYSgyMiwxNTUsMTg0LC4xMSkhaW1wb3J0YW50Owp9CgovKiBMb2dpbiAqLwoubG9naW4tY2FyZHsKICBib3JkZXItY29sb3I6IzJCNjY3OSFpbXBvcnRhbnQ7CiAgYmFja2dyb3VuZDpsaW5lYXItZ3JhZGllbnQoMTgwZGVnLHJnYmEoMTAsMzIsNDUsLjk4KSxyZ2JhKDUsMTksMjksLjk5KSkhaW1wb3J0YW50Owp9Ci5sb2dpbi1jYXJkIGJ1dHRvblt0eXBlPSJzdWJtaXQiXSwubG9naW4tY2FyZCAucHJpbWFyeS1idG57CiAgYmFja2dyb3VuZDp2YXIoLS1waXh2YS1icmFuZC1ncmFkaWVudCkhaW1wb3J0YW50Owp9CgovKiBGZWluZSBUcmVubmxpbmllbiAqLwpocntib3JkZXItY29sb3I6IzFENDY1OCFpbXBvcnRhbnR9Cjo6c2VsZWN0aW9ue2JhY2tncm91bmQ6cmdiYSgyMiwxNTUsMTg0LC4zNCkhaW1wb3J0YW50O2NvbG9yOiNmZmYhaW1wb3J0YW50fQo=' | base64 --decode > /tmp/pixva-final.css
-          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKZGVmIHJlcGxhY2VfdGV4dChwYXRoKToKICAgIGlmIG5vdCBwYXRoLmV4aXN0cygpOiByZXR1cm4KICAgIHM9cGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKICAgIG9sZD1zCiAgICBmb3IgdG9rZW4gaW4gKCJZSUxESVogQUkiLCJZaWxkaXogQUkiLCJZaWxkaXotQUkiLCJZaWxkaXpBSSIpOgogICAgICAgIHM9cy5yZXBsYWNlKHRva2VuLCJQSVhWQSIpCiAgICBpZiBzIT1vbGQ6CiAgICAgICAgcGF0aC53cml0ZV90ZXh0KHMsZW5jb2Rpbmc9InV0Zi04IikKCiMgU2ljaHRiYXJlIEZyb250ZW5kLSB1bmQgS0ktVGV4dGUuCmZvciBiYXNlIGluIChQYXRoKCJjbGllbnQvc3JjIiksUGF0aCgiYXBpL2FpIikpOgogICAgaWYgYmFzZS5leGlzdHMoKToKICAgICAgICBmb3IgcCBpbiBiYXNlLnJnbG9iKCIqIik6CiAgICAgICAgICAgIGlmIHAuaXNfZmlsZSgpIGFuZCBwLnN1ZmZpeCBpbiAoIi5qcyIsIi5qc3giKToKICAgICAgICAgICAgICAgIHJlcGxhY2VfdGV4dChwKQoKIyBCaWxkZ2VuZXJhdG9yOiBhbHRlIFlpbGRpei1zcGV6aWZpc2NoZSBCcmFuZGluZy1BbndlaXN1bmcgYXVmIFBJWFZBIHVtc3RlbGxlbi4KaW1nPVBhdGgoImFwaS9haS9pbWFnZS5qcyIpCmlmIGltZy5leGlzdHMoKToKICAgIHM9aW1nLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQogICAgcz1zLnJlcGxhY2UoImZ1bmN0aW9uIGlzWWlsZGl6UHJvbXB0KHZhbHVlKSB7IiwiZnVuY3Rpb24gaXNQaXh2YVByb21wdCh2YWx1ZSkgeyIpCiAgICBzPXMucmVwbGFjZSgiaXNZaWxkaXpQcm9tcHQoY2xlYW4pIiwiaXNQaXh2YVByb21wdChjbGVhbikiKQogICAgcz1yZS5zdWIociJyZXR1cm4gL3BpeHZhXFxzKmFpL2lcXC50ZXN0XFwodmFsdWVcXCk7IiwicmV0dXJuIC8oPzpwaXh2YXx5aWxkaXpcXFxccyphaSkvaS50ZXN0KHZhbHVlKTsiLHMpCiAgICBzPXMucmVwbGFjZSgiQnJhbmQ6IFBJWFZBLCBzcGVsbGVkIGV4YWN0bHkgXCJQSVhWQVwiIiwgIkJyYW5kOiBQSVhWQSwgc3BlbGxlZCBleGFjdGx5IFwiUElYVkFcIiIpCiAgICBzPXMucmVwbGFjZSgiVXNlIGEgZGVlcCBuYXZ5L2JsYWNrIHByZW1pdW0gYmFja2dyb3VuZCB3aXRoIGVsZWN0cmljIGJsdWUgYW5kIHdhcm0geWVsbG93IGFjY2VudHMiLAogICAgICAgICAgICAgICAgIlVzZSBhIHByZW1pdW0gZGVlcCBuYXZ5IGJhY2tncm91bmQgd2l0aCBQSVhWQSB2aW9sZXQsIGJsdWUsIGN5YW4gYW5kIHRlYWwgYWNjZW50cyBtYXRjaGluZyB0aGUgUElYVkEgbG9nbyIpCiAgICBzPXMucmVwbGFjZSgiSW5jbHVkZSB0aGUgZXhhY3QgbWFpbiBoZWFkbGluZSBcIlBJWFZBXCIiLCAiSW5jbHVkZSB0aGUgZXhhY3QgbWFpbiBoZWFkbGluZSBcIlBJWFZBXCIiKQogICAgaW1nLndyaXRlX3RleHQocyxlbmNvZGluZz0idXRmLTgiKQoKIyBDU1MgRklOQUwtUE9MSVNIOiBlcm5ldXRlciBMYXVmIGVyc2V0enQgZGVuc2VsYmVuIEJsb2NrLgpzdHlsZXM9UGF0aCgiY2xpZW50L3NyYy9zdHlsZXMuY3NzIikKaWYgbm90IHN0eWxlcy5leGlzdHMoKToKICAgIHJhaXNlIFJ1bnRpbWVFcnJvcigiY2xpZW50L3NyYy9zdHlsZXMuY3NzIGZlaGx0LiIpCnM9c3R5bGVzLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQptYXJrZXI9Ii8qIFBJWFZBIEZJTkFMIFBPTElTSCBWMyIKaWYgbWFya2VyIGluIHM6CiAgICBzPXNbOnMuaW5kZXgobWFya2VyKV0ucnN0cmlwKCkrIlxuIgpjc3M9UGF0aCgiL3RtcC9waXh2YS1maW5hbC5jc3MiKS5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKc3R5bGVzLndyaXRlX3RleHQocy5yc3RyaXAoKSsiXG5cbiIrY3NzLnJzdHJpcCgpKyJcbiIsZW5jb2Rpbmc9InV0Zi04IikKCnByaW50KCJQSVhWQSBGaW5hbCBQb2xpc2ggZWluZ2VzZXR6dC4iKQo=' | base64 --decode > /tmp/pixva-final.py
-          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmJlZm9yZT1QYXRoKCIvdG1wL1N1YnNjcmlwdGlvbnMuYmVmb3JlLmpzeCIpLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQphZnRlcj1QYXRoKCJjbGllbnQvc3JjL2NvbXBvbmVudHMvU3Vic2NyaXB0aW9ucy5qc3giKS5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKZGVmIG5vcm1hbGl6ZShzKToKICAgIGZvciBvbGQgaW4gKCJZaWxkaXogQUkiLCJZSUxESVogQUkiLCJZaWxkaXotQUkiLCJZaWxkaXpBSSIpOgogICAgICAgIHM9cy5yZXBsYWNlKG9sZCwiUElYVkEiKQogICAgcmV0dXJuIHMKaWYgbm9ybWFsaXplKGJlZm9yZSkhPW5vcm1hbGl6ZShhZnRlcik6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJTdWJzY3JpcHRpb25zLmpzeDogRXMgd3VyZGUgbWVociBhbHMgbnVyIGRlciBzaWNodGJhcmUgTWFya2VubmFtZSBnZcOkbmRlcnQuIikKcHJpbnQoIlN1YnNjcmlwdGlvbnMuanN4OiBHZWxkbG9naWsgdW52ZXLDpG5kZXJ0LiIpCg==' | base64 --decode > /tmp/verify-subscriptions.py
-          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKc3R5bGVzID0gUGF0aCgiY2xpZW50L3NyYy9zdHlsZXMuY3NzIikKaWYgbm90IHN0eWxlcy5leGlzdHMoKToKICAgIHJhaXNlIFN5c3RlbUV4aXQoIkZFSExFUjogY2xpZW50L3NyYy9zdHlsZXMuY3NzIGZlaGx0LiIpCmNzcyA9IHN0eWxlcy5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKaWYgIlBJWFZBIEZJTkFMIFBPTElTSCBWMyIgbm90IGluIGNzczoKICAgIHJhaXNlIFN5c3RlbUV4aXQoIkZFSExFUjogUElYVkEgRmluYWwtQ1NTIHd1cmRlIG5pY2h0IGVpbmdlc2V0enQuIikKCnJvb3RzID0gW1BhdGgoImNsaWVudC9zcmMiKSwgUGF0aCgiYXBpL2FpIildCmFsbG93ZWQgPSB7Ii5qcyIsICIuanN4IiwgIi5jc3MiLCAiLmh0bWwifQpmb3JiaWRkZW4gPSByZS5jb21waWxlKHIiWWlsZGl6IEFJfFlJTERJWiBBSXxZaWxkaXotQUkiKQpvbGRfaGl0cyA9IFtdCnBpeHZhX2hpdHMgPSAwCgpmb3Igcm9vdCBpbiByb290czoKICAgIGlmIG5vdCByb290LmV4aXN0cygpOgogICAgICAgIGNvbnRpbnVlCiAgICBmb3IgcGF0aCBpbiByb290LnJnbG9iKCIqIik6CiAgICAgICAgaWYgbm90IHBhdGguaXNfZmlsZSgpIG9yIHBhdGguc3VmZml4Lmxvd2VyKCkgbm90IGluIGFsbG93ZWQ6CiAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgdHJ5OgogICAgICAgICAgICB0ZXh0ID0gcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgICAgICBjb250aW51ZQogICAgICAgIHBpeHZhX2hpdHMgKz0gdGV4dC5jb3VudCgiUElYVkEiKQogICAgICAgIGlmIGZvcmJpZGRlbi5zZWFyY2godGV4dCk6CiAgICAgICAgICAgIG9sZF9oaXRzLmFwcGVuZChzdHIocGF0aCkpCgppZiBvbGRfaGl0czoKICAgIHJhaXNlIFN5c3RlbUV4aXQoIkZFSExFUjogU2ljaHRiYXJlIGFsdGUgTWFya2VuYmV6ZWljaG51bmcgbm9jaCB2b3JoYW5kZW4gaW46ICIgKyAiLCAiLmpvaW4ob2xkX2hpdHNbOjIwXSkpCmlmIHBpeHZhX2hpdHMgPCAzOgogICAgcmFpc2UgU3lzdGVtRXhpdCgiRkVITEVSOiBadSB3ZW5pZ2UgUElYVkEtTWFya2llcnVuZ2VuIGltIEZyb250ZW5kLiIpCgpwcmludChmIlBJWFZBLVByw7xmdW5nIGJlc3RhbmRlbi4gR2VmdW5kZW5lIFBJWFZBLU1hcmtpZXJ1bmdlbjoge3BpeHZhX2hpdHN9IikK' | base64 --decode > /tmp/verify-brand.py
-          python -m py_compile /tmp/pixva-final.py
-          python -m py_compile /tmp/verify-subscriptions.py
-          python -m py_compile /tmp/verify-brand.py
+create table if not exists public.app_products (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  ean text not null default '',
+  name text not null,
+  brand text not null default '',
+  weight text not null default '',
+  category text not null default '',
+  normal_price numeric(12,2),
+  offer_price numeric(12,2),
+  image_url text not null default '',
+  notes text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists app_products_user_idx on public.app_products(user_id, updated_at desc);
+create index if not exists app_products_user_ean_idx on public.app_products(user_id, ean);
 
-      - name: PIXVA final polieren
-        shell: bash
-        run: |
-          python /tmp/pixva-final.py
+create table if not exists public.app_knowledge_files (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  storage_path text not null,
+  original_name text not null,
+  mime_type text not null default '',
+  size_bytes bigint not null default 0,
+  extracted_text text not null default '',
+  status text not null default 'ready' check (status in ('uploading','processing','ready','failed')),
+  error text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, storage_path)
+);
+create index if not exists app_knowledge_files_user_idx on public.app_knowledge_files(user_id, created_at desc);
 
-      - name: Geldsystem unverändert prüfen
-        shell: bash
-        run: |
-          sha256sum api/billing.js > /tmp/billing.after
-          diff /tmp/billing.before /tmp/billing.after
-          if [ -f V9.2-PAYPAL-UPDATE.sql ]; then
-            sha256sum V9.2-PAYPAL-UPDATE.sql > /tmp/paypal.after
-            diff /tmp/paypal.before /tmp/paypal.after
-          fi
-          python /tmp/verify-subscriptions.py
+create table if not exists public.app_knowledge_chunks (
+  id uuid primary key default gen_random_uuid(),
+  file_id uuid not null references public.app_knowledge_files(id) on delete cascade,
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  chunk_index integer not null,
+  content text not null,
+  created_at timestamptz not null default now(),
+  unique(file_id, chunk_index)
+);
+create index if not exists app_knowledge_chunks_user_idx on public.app_knowledge_chunks(user_id, file_id, chunk_index);
 
-      - name: PIXVA final robust prüfen
-        shell: bash
-        run: |
-          python /tmp/verify-brand.py
-          echo "Sichtbare App und KI-Branding sind PIXVA."
+create table if not exists public.app_project_versions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.app_projects(id) on delete cascade,
+  owner_id uuid not null references public.app_users(id) on delete cascade,
+  version_no integer not null,
+  name text not null,
+  type text not null,
+  data jsonb not null default '{}'::jsonb,
+  reason text not null default 'autosave',
+  created_at timestamptz not null default now(),
+  unique(project_id, version_no)
+);
+create index if not exists app_project_versions_owner_idx on public.app_project_versions(owner_id, created_at desc);
 
-      - name: Produktions-Build testen
-        shell: bash
-        run: |
-          node --check api/billing.js
-          node --check api/ai/chat.js
-          node --check api/ai/image.js
-          node --check api/ai/video.js
-          npm install --prefix client
-          npm run build --prefix client
+create table if not exists public.app_notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  kind text not null default 'info',
+  title text not null,
+  message text not null default '',
+  related_id text not null default '',
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists app_notifications_user_idx on public.app_notifications(user_id, created_at desc);
 
-      - name: PIXVA Final veröffentlichen
-        shell: bash
-        run: |
-          git config user.name "PIXVA Update"
-          git config user.email "actions@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "PIXVA Final Polish ist bereits vorhanden."
-            exit 0
-          fi
-          git commit -m "PIXVA Phase 3 Final Polish"
-          git push origin HEAD:main
+create table if not exists public.app_agent_runs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  prompt text not null,
+  status text not null default 'planned' check (status in ('planned','running','completed','failed')),
+  plan jsonb not null default '{}'::jsonb,
+  results jsonb not null default '[]'::jsonb,
+  error text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists app_agent_runs_user_idx on public.app_agent_runs(user_id, created_at desc);
+
+create table if not exists public.app_error_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.app_users(id) on delete set null,
+  area text not null default 'app',
+  public_message text not null default '',
+  technical_message text not null default '',
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists app_error_logs_created_idx on public.app_error_logs(created_at desc);
+
+create table if not exists public.app_user_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  label text not null default 'PIXVA Sicherung',
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists app_user_snapshots_user_idx on public.app_user_snapshots(user_id, created_at desc);
+
+create table if not exists public.app_rate_windows (
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  scope text not null,
+  window_started_at timestamptz not null default now(),
+  request_count integer not null default 0,
+  primary key(user_id, scope)
+);
+
+create table if not exists public.app_recovery_codes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  code_hash text not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists app_recovery_codes_user_idx on public.app_recovery_codes(user_id, created_at desc);
+
+create table if not exists public.app_public_rate_windows (
+  subject_hash text not null,
+  scope text not null,
+  window_started_at timestamptz not null default now(),
+  request_count integer not null default 0,
+  primary key(subject_hash, scope)
+);
+
+alter table public.app_brand_kits enable row level security;
+alter table public.app_memory_items enable row level security;
+alter table public.app_products enable row level security;
+alter table public.app_knowledge_files enable row level security;
+alter table public.app_knowledge_chunks enable row level security;
+alter table public.app_project_versions enable row level security;
+alter table public.app_notifications enable row level security;
+alter table public.app_agent_runs enable row level security;
+alter table public.app_error_logs enable row level security;
+alter table public.app_user_snapshots enable row level security;
+alter table public.app_rate_windows enable row level security;
+alter table public.app_recovery_codes enable row level security;
+alter table public.app_public_rate_windows enable row level security;
+
+revoke all on public.app_brand_kits from anon, authenticated;
+revoke all on public.app_memory_items from anon, authenticated;
+revoke all on public.app_products from anon, authenticated;
+revoke all on public.app_knowledge_files from anon, authenticated;
+revoke all on public.app_knowledge_chunks from anon, authenticated;
+revoke all on public.app_project_versions from anon, authenticated;
+revoke all on public.app_notifications from anon, authenticated;
+revoke all on public.app_agent_runs from anon, authenticated;
+revoke all on public.app_error_logs from anon, authenticated;
+revoke all on public.app_user_snapshots from anon, authenticated;
+revoke all on public.app_rate_windows from anon, authenticated;
+revoke all on public.app_recovery_codes from anon, authenticated;
+revoke all on public.app_public_rate_windows from anon, authenticated;
+
+insert into storage.buckets(id, name, public, file_size_limit)
+values ('pixva-private','pixva-private',false,15728640)
+on conflict (id) do update set public=false, file_size_limit=15728640;
+
+create or replace function public.app_take_rate_limit(
+  p_token text, p_scope text, p_limit integer default 30, p_window_seconds integer default 60
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public,private
+as $$
+declare
+  v_id uuid;
+  v_now timestamptz := now();
+  v_row public.app_rate_windows%rowtype;
+  v_limit integer := greatest(1,least(coalesce(p_limit,30),1000));
+  v_seconds integer := greatest(10,least(coalesce(p_window_seconds,60),86400));
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object('allowed',false,'error','Nicht angemeldet.'); end if;
+  insert into public.app_rate_windows(user_id,scope,window_started_at,request_count)
+  values(v_id,lower(trim(coalesce(p_scope,'general'))),v_now,1)
+  on conflict(user_id,scope) do update set
+    window_started_at = case
+      when public.app_rate_windows.window_started_at + make_interval(secs=>v_seconds) <= v_now then v_now
+      else public.app_rate_windows.window_started_at end,
+    request_count = case
+      when public.app_rate_windows.window_started_at + make_interval(secs=>v_seconds) <= v_now then 1
+      else public.app_rate_windows.request_count + 1 end
+  returning * into v_row;
+  return jsonb_build_object(
+    'allowed',v_row.request_count<=v_limit,'count',v_row.request_count,'limit',v_limit,
+    'resetAt',v_row.window_started_at + make_interval(secs=>v_seconds)
+  );
+end;
+$$;
+revoke all on function public.app_take_rate_limit(text,text,integer,integer) from public,anon,authenticated;
+grant execute on function public.app_take_rate_limit(text,text,integer,integer) to service_role;
+
+create or replace function public.app_take_public_rate_limit(
+  p_subject_hash text, p_scope text, p_limit integer default 8, p_window_seconds integer default 900
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public,private
+as $$
+declare
+  v_now timestamptz := now();
+  v_row public.app_public_rate_windows%rowtype;
+  v_limit integer := greatest(1,least(coalesce(p_limit,8),100));
+  v_seconds integer := greatest(60,least(coalesce(p_window_seconds,900),86400));
+begin
+  if length(coalesce(p_subject_hash,'')) < 32 then
+    return jsonb_build_object('allowed',false);
+  end if;
+  insert into public.app_public_rate_windows(subject_hash,scope,window_started_at,request_count)
+  values(p_subject_hash,lower(trim(coalesce(p_scope,'public'))),v_now,1)
+  on conflict(subject_hash,scope) do update set
+    window_started_at = case
+      when public.app_public_rate_windows.window_started_at + make_interval(secs=>v_seconds) <= v_now then v_now
+      else public.app_public_rate_windows.window_started_at end,
+    request_count = case
+      when public.app_public_rate_windows.window_started_at + make_interval(secs=>v_seconds) <= v_now then 1
+      else public.app_public_rate_windows.request_count + 1 end
+  returning * into v_row;
+  return jsonb_build_object(
+    'allowed',v_row.request_count<=v_limit,'count',v_row.request_count,'limit',v_limit,
+    'resetAt',v_row.window_started_at + make_interval(secs=>v_seconds)
+  );
+end;
+$$;
+revoke all on function public.app_take_public_rate_limit(text,text,integer,integer) from public,anon,authenticated;
+grant execute on function public.app_take_public_rate_limit(text,text,integer,integer) to service_role;
+
+create or replace function public.app_end_other_sessions(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public,private
+as $$
+declare
+  v_id uuid;
+  v_hash text;
+  v_deleted integer;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object('error','Nicht angemeldet.'); end if;
+  v_hash := encode(extensions.digest(convert_to(p_token,'UTF8'),'sha256'),'hex');
+  delete from public.app_sessions where user_id=v_id and token_hash<>v_hash;
+  get diagnostics v_deleted = row_count;
+  return jsonb_build_object('ok',true,'ended',v_deleted);
+end;
+$$;
+revoke all on function public.app_end_other_sessions(text) from public,anon,authenticated;
+grant execute on function public.app_end_other_sessions(text) to service_role;
+
+create or replace function public.app_reset_password_with_recovery(
+  p_username text, p_code_hash text, p_new_password text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public,private
+as $$
+declare
+  v_user public.app_users%rowtype;
+  v_code public.app_recovery_codes%rowtype;
+begin
+  if length(coalesce(p_new_password,'')) < 10 then
+    return jsonb_build_object('error','Das neue Passwort braucht mindestens 10 Zeichen.');
+  end if;
+  select * into v_user from public.app_users
+  where username=trim(coalesce(p_username,''))::citext and active=true limit 1;
+  if v_user.id is null then
+    return jsonb_build_object('error','Konto oder Wiederherstellungscode ist ungültig.');
+  end if;
+  select * into v_code from public.app_recovery_codes
+  where user_id=v_user.id and code_hash=coalesce(p_code_hash,'') and used_at is null
+  order by created_at desc limit 1;
+  if v_code.id is null then
+    return jsonb_build_object('error','Konto oder Wiederherstellungscode ist ungültig.');
+  end if;
+  update public.app_recovery_codes set used_at=now() where id=v_code.id;
+  update public.app_users
+  set password_hash=extensions.crypt(p_new_password,extensions.gen_salt('bf',12)),
+      must_change_password=false
+  where id=v_user.id;
+  delete from public.app_sessions where user_id=v_user.id;
+  return jsonb_build_object('ok',true);
+end;
+$$;
+revoke all on function public.app_reset_password_with_recovery(text,text,text) from public,anon,authenticated;
+grant execute on function public.app_reset_password_with_recovery(text,text,text) to service_role;
+
+create or replace function public.app_delete_account_secure(
+  p_token text, p_password text, p_confirmation text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public,private
+as $$
+declare
+  v_id uuid;
+  v_user public.app_users%rowtype;
+  v_admins integer;
+begin
+  v_id := private.session_user_id(p_token);
+  if v_id is null then return jsonb_build_object('error','Nicht angemeldet.'); end if;
+  select * into v_user from public.app_users where id=v_id;
+  if trim(coalesce(p_confirmation,''))<>v_user.username::text then
+    return jsonb_build_object('error','Zur Bestätigung den Benutzernamen exakt eingeben.');
+  end if;
+  if extensions.crypt(coalesce(p_password,''),v_user.password_hash)<>v_user.password_hash then
+    return jsonb_build_object('error','Passwort ist falsch.');
+  end if;
+  if v_user.role='admin' then
+    select count(*) into v_admins from public.app_users where role='admin' and active=true;
+    if v_admins<=1 then return jsonb_build_object('error','Das letzte aktive Admin-Konto kann nicht gelöscht werden.'); end if;
+  end if;
+  delete from public.app_users where id=v_id;
+  return jsonb_build_object('ok',true);
+end;
+$$;
+revoke all on function public.app_delete_account_secure(text,text,text) from public,anon,authenticated;
+grant execute on function public.app_delete_account_secure(text,text,text) to service_role;
+
+create or replace function private.pixva_project_version()
+returns trigger
+language plpgsql
+security definer
+set search_path=public,private
+as $$
+declare
+  v_next integer;
+begin
+  if TG_OP='UPDATE' and NEW.name is not distinct from OLD.name and NEW.data is not distinct from OLD.data then return NEW; end if;
+  select coalesce(max(version_no),0)+1 into v_next from public.app_project_versions where project_id=NEW.id;
+  insert into public.app_project_versions(project_id,owner_id,version_no,name,type,data,reason)
+  values(NEW.id,NEW.owner_id,v_next,NEW.name,NEW.type,NEW.data,case when TG_OP='INSERT' then 'created' else 'autosave' end);
+  delete from public.app_project_versions where id in (
+    select id from public.app_project_versions where project_id=NEW.id order by version_no desc offset 30
+  );
+  return NEW;
+end;
+$$;
+
+drop trigger if exists pixva_project_version_trigger on public.app_projects;
+create trigger pixva_project_version_trigger
+after insert or update of name,data on public.app_projects
+for each row execute function private.pixva_project_version();
+
+create or replace function private.pixva_usage_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path=public,private
+as $$
+begin
+  if NEW.status is distinct from OLD.status and NEW.status in ('completed','failed','cancelled') then
+    insert into public.app_notifications(user_id,kind,title,message,related_id)
+    values(
+      NEW.user_id,
+      case when NEW.status='completed' then 'success' else 'warning' end,
+      case
+        when NEW.kind='image' and NEW.status='completed' then 'Bild ist fertig'
+        when NEW.kind='video' and NEW.status='completed' then 'Video ist fertig'
+        when NEW.status='failed' then 'KI-Auftrag fehlgeschlagen'
+        else 'KI-Auftrag aktualisiert'
+      end,
+      concat(upper(coalesce(NEW.kind,'KI')),' · ',NEW.status),
+      NEW.id::text
+    );
+  end if;
+  return NEW;
+end;
+$$;
+
+do $do$
+begin
+  if to_regclass('public.app_usage_events') is not null then
+    drop trigger if exists pixva_usage_notification_trigger on public.app_usage_events;
+    create trigger pixva_usage_notification_trigger
+    after update of status on public.app_usage_events
+    for each row execute function private.pixva_usage_notification();
+  end if;
+end
+$do$;
+
+commit;
+
+select 'PIXVA V10 Complete AI Suite erfolgreich installiert. Geld-/PayPal-System blieb unverändert.' as status;
