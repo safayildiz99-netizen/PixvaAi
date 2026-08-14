@@ -165,6 +165,27 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   async function changeTeamRole(target,teamRole){try{await call('team-update',{userId:target.id,teamRole,email:target.email||''});setMessage('Team-Rolle gespeichert.');await loadTeam()}catch{}}
   async function reviewApproval(id,status){try{await call('approval-update',{id,status});setMessage(status==='approved'?'Freigegeben.':'Abgelehnt.');await loadTeam()}catch{}}
   async function requestApproval(){if(!approvalForm.projectId)return setError('Projekt-ID fehlt.');try{await call('approval-create',approvalForm);setApprovalForm({projectId:'',title:'',note:''});setMessage('Freigabe angefordert.')}catch{}}
+  const accountGroups=()=>{
+    const list=team?.users||[];
+    return[
+      ['Admin-Konten',list.filter(u=>u.role==='admin')],
+      ['Vom Admin erstellte Konten',list.filter(u=>u.role!=='admin'&&u.created_source==='admin')],
+      ['Firmenkonten',list.filter(u=>u.role!=='admin'&&u.created_source!=='admin'&&u.account_type==='company')],
+      ['Privatkonten',list.filter(u=>u.role!=='admin'&&u.created_source!=='admin'&&u.account_type!=='company')]
+    ];
+  };
+  async function changeAccountMeta(target,key,value){
+    try{
+      await call('account-meta-update',{
+        userId:target.id,
+        accountType:key==='accountType'?value:(target.account_type||'private'),
+        createdSource:key==='createdSource'?value:(target.created_source||'legacy')
+      });
+      setMessage('Kontozuordnung gespeichert.');
+      await loadTeam();
+    }catch{}
+  }
+
   async function loadInstagram(){try{setInstagram(await api('/api/pixva?action=instagram-status'))}catch(e){setError(e.message)}}
   async function connectInstagram(){try{await call('instagram-save',instagramForm);setInstagramForm(v=>({...v,accessToken:''}));setMessage('Instagram-Verbindung gespeichert.');await loadInstagram()}catch{}}
   async function disconnectInstagram(){if(!confirm('Instagram-Verbindung trennen?'))return;try{await call('instagram-disconnect',{});setMessage('Instagram getrennt.');await loadInstagram()}catch{}}
@@ -287,80 +308,44 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
       </article>
     </div>}
 
-    {tab==='team'&&<div className="pixva-grid two">
+    {tab==='team'&&<div className="pixva-account-admin">
       <article className="pixva-card">
-        <h3>Neues Konto erstellen</h3>
-        {user.role!=='admin'?<p>Nur Admins können neue Konten erstellen.</p>:<>
-          <p>Nur Benutzername und Passwort sind Pflicht. Firma, Logo und Kontaktdaten können direkt mitangelegt werden.</p>
-          <div className="pixva-inline">
-            <label style={{display:'flex',gap:8,alignItems:'center'}}><input type="checkbox" checked={newAccount.isCompany!==false} onChange={e=>setNewAccount({...newAccount,isCompany:e.target.checked})}/>Als Firma anlegen</label>
-          </div>
-          <div className="pixva-form-grid">
-            <label>Benutzername *<input value={newAccount.username} onChange={e=>setNewAccount({...newAccount,username:e.target.value})} placeholder="z. B. max.mustermann"/></label>
-            <label>Passwort *<input type="password" value={newAccount.password} onChange={e=>setNewAccount({...newAccount,password:e.target.value})} placeholder="mindestens 8 Zeichen"/></label>
-            <label>Vorname<input value={newAccount.firstName} onChange={e=>setNewAccount({...newAccount,firstName:e.target.value})}/></label>
-            <label>Nachname<input value={newAccount.lastName} onChange={e=>setNewAccount({...newAccount,lastName:e.target.value})}/></label>
-            <label>Normale E-Mail <small>optional</small><input type="email" value={newAccount.email} onChange={e=>setNewAccount({...newAccount,email:e.target.value})} placeholder="optional"/></label>
-            <label>Private Tel. <small>optional</small><input type="tel" value={newAccount.phone} onChange={e=>setNewAccount({...newAccount,phone:e.target.value})} placeholder="optional"/></label>
-            <label>Geburtsdatum <small>optional</small><input type="date" value={newAccount.birthDate} onChange={e=>setNewAccount({...newAccount,birthDate:e.target.value})}/></label>
-            <label>Systemrolle<select value={newAccount.role} onChange={e=>setNewAccount({...newAccount,role:e.target.value})}><option value="user">Benutzer</option><option value="admin">Admin</option></select></label>
-            <label>Team-Rolle<select value={newAccount.teamRole} onChange={e=>setNewAccount({...newAccount,teamRole:e.target.value})}><option value="owner">Owner</option><option value="manager">Manager</option><option value="designer">Designer</option><option value="member">Mitarbeiter</option><option value="viewer">Nur ansehen</option></select></label>
-          </div>
-
-          {newAccount.isCompany!==false&&<>
-            <hr/>
-            <h3>Firmenprofil</h3>
-            <div className="pixva-form-grid">
-              <label>Firmenname<input value={newAccount.companyName} onChange={e=>setNewAccount({...newAccount,companyName:e.target.value})}/></label>
-              <label>Typ / Branche<select value={newAccount.companyType||'supermarkt'} onChange={e=>setNewAccount({...newAccount,companyType:e.target.value})}><option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="sonstiges">Sonstiges</option></select></label>
-              {(newAccount.companyType||'')==='sonstiges'&&<label>Sonstiges genauer<input value={newAccount.companyTypeOther||''} onChange={e=>setNewAccount({...newAccount,companyTypeOther:e.target.value})} placeholder="z. B. Friseur, Dachdecker, Restaurant"/></label>}
-              <label>Firmeninhaber / Ansprechpartner<input value={newAccount.companyOwner||''} onChange={e=>setNewAccount({...newAccount,companyOwner:e.target.value})}/></label>
-              <label>Firmen-E-Mail<input type="email" value={newAccount.companyEmail||''} onChange={e=>setNewAccount({...newAccount,companyEmail:e.target.value})}/></label>
-              <label>Firmen-Telefon<input type="tel" value={newAccount.companyPhone||''} onChange={e=>setNewAccount({...newAccount,companyPhone:e.target.value})}/></label>
-              <label>Zusätzliche private Tel.<input type="tel" value={newAccount.privatePhone||''} onChange={e=>setNewAccount({...newAccount,privatePhone:e.target.value})}/></label>
-              <label>Website<input value={newAccount.companyWebsite||''} onChange={e=>setNewAccount({...newAccount,companyWebsite:e.target.value})} placeholder="https://..."/></label>
-              <label>Instagram<input value={newAccount.companyInstagram||''} onChange={e=>setNewAccount({...newAccount,companyInstagram:e.target.value})} placeholder="@firma"/></label>
-              <label>Adresse<input value={newAccount.companyAddress||''} onChange={e=>setNewAccount({...newAccount,companyAddress:e.target.value})} placeholder="Straße, PLZ Ort"/></label>
+        <h3>Kontenübersicht</h3>
+        <p>Konten sind nach Admin, Admin-Erstellung, Firma und Privat getrennt. Alle vorhandenen Konto- und Firmendaten werden vollständig angezeigt.</p>
+        {user.role!=='admin'?<p>Nur Admins können diese Übersicht öffnen.</p>:accountGroups().map(([title,items])=><section className="pixva-account-group" key={title}>
+          <div className="pixva-account-group-head"><h3>{title}</h3><span>{items.length} Konto/Konten</span></div>
+          {items.length===0?<div className="pixva-empty-group">Keine Konten in dieser Gruppe.</div>:items.map(u=><article className="pixva-account-detail" key={u.id}>
+            <div className="pixva-account-logo">
+              {u.brand?.logo_data_url?<img src={u.brand.logo_data_url} alt={`${u.brand?.company_name||u.username} Logo`}/>:<div>{(u.brand?.company_name||u.username).slice(0,2).toUpperCase()}</div>}
             </div>
-            <label className="pixva-upload"><Upload size={15}/>Firmenlogo hochladen (wird für Bilder, Flyer und Website vorgemerkt)<input ref={newAccountLogoFile} type="file" accept="image/png,image/jpeg,image/webp"/></label>
-            {newAccount.companyLogoDataUrl&&<div className="pixva-answer"><img src={newAccount.companyLogoDataUrl} alt="Logo Vorschau" style={{maxWidth:220,maxHeight:120,objectFit:'contain',background:'rgba(255,255,255,.92)',padding:10,borderRadius:12}}/></div>}
-          </>}
-
-          <button className="pixva-primary" onClick={createAccount}>Konto erstellen</button>
-          <small>Bei Firmenkonten werden außerdem Branchenvorlagen, Flyer-Regeln und eine Demo-Website im passenden Theme angelegt.</small>
-        </>}
-        <hr/>
-        <h3>Freigabe anfordern</h3>
-        <input placeholder="Projekt-ID" value={approvalForm.projectId} onChange={e=>setApprovalForm({...approvalForm,projectId:e.target.value})}/>
-        <input placeholder="Titel" value={approvalForm.title} onChange={e=>setApprovalForm({...approvalForm,title:e.target.value})}/>
-        <textarea rows={3} placeholder="Notiz" value={approvalForm.note} onChange={e=>setApprovalForm({...approvalForm,note:e.target.value})}/>
-        <button onClick={requestApproval}>Freigabe anfordern</button>
+            <div className="pixva-account-main">
+              <div className="pixva-account-title">
+                <div><b>{u.brand?.company_name||[u.first_name,u.last_name].filter(Boolean).join(' ')||u.username}</b><span>@{u.username} · {u.active?'aktiv':'deaktiviert'}</span></div>
+                <div className="pixva-account-badges"><span>{u.role==='admin'?'ADMIN':u.account_type==='company'?'FIRMA':'PRIVAT'}</span><span>{u.created_source==='admin'?'ADMIN ERSTELLT':u.created_source==='self'?'SELBST REGISTRIERT':u.created_source==='system'?'SYSTEM':'BESTAND'}</span></div>
+              </div>
+              <div className="pixva-account-fields">
+                <div><small>Vorname</small><b>{u.first_name||'—'}</b></div><div><small>Nachname</small><b>{u.last_name||'—'}</b></div>
+                <div><small>Normale E-Mail</small><b>{u.email||'—'}</b></div><div><small>Private Tel.</small><b>{u.phone||'—'}</b></div>
+                <div><small>Geburtsdatum</small><b>{u.birth_date||'—'}</b></div><div><small>Team-Rolle</small><b>{u.team_role||'—'}</b></div>
+                <div><small>Firmeninhaber</small><b>{u.brand?.owner_name||'—'}</b></div><div><small>Branche</small><b>{u.brand?.company_type==='sonstiges'?(u.brand?.company_type_other||'Sonstiges'):(u.brand?.company_type||'—')}</b></div>
+                <div><small>Firmen-E-Mail</small><b>{u.brand?.company_email||'—'}</b></div><div><small>Firmen-Telefon</small><b>{u.brand?.company_phone||'—'}</b></div>
+                <div><small>Zusätzliche private Tel.</small><b>{u.brand?.private_phone||'—'}</b></div><div><small>Website</small><b>{u.brand?.website||'—'}</b></div>
+                <div><small>Instagram</small><b>{u.brand?.instagram||'—'}</b></div><div><small>Adresse</small><b>{u.brand?.address||'—'}</b></div>
+                <div><small>Konto erstellt</small><b>{fmtDate(u.created_at)}</b></div><div><small>Systemrolle</small><b>{u.role}</b></div>
+              </div>
+              <div className="pixva-account-controls">
+                <label>Kontotyp<select value={u.account_type||'private'} onChange={e=>changeAccountMeta(u,'accountType',e.target.value)}><option value="private">Privat</option><option value="company">Firma</option></select></label>
+                <label>Herkunft<select value={u.created_source||'legacy'} onChange={e=>changeAccountMeta(u,'createdSource',e.target.value)}><option value="self">Selbst registriert</option><option value="admin">Admin erstellt</option><option value="system">System/Admin</option><option value="legacy">Bestand</option></select></label>
+                <label>Team-Rolle<select value={u.team_role||'member'} onChange={e=>changeTeamRole(u,e.target.value)}><option value="owner">Owner</option><option value="manager">Manager</option><option value="designer">Designer</option><option value="member">Mitarbeiter</option><option value="viewer">Nur ansehen</option></select></label>
+              </div>
+            </div>
+          </article>)}
+        </section>)}
       </article>
-
-      <article className="pixva-card">
-        <h3>Konten & Team-Rollen</h3>
-        {user.role!=='admin'?<p>Nur Admins können Konten und Rollen verwalten.</p>:<div className="pixva-table">
-          {(team?.users||[]).map(u=><div className="pixva-row" key={u.id}>
-            <div>
-              <b>{[u.first_name,u.last_name].filter(Boolean).join(' ')||u.username}</b>
-              <span>@{u.username} · {u.email||'keine E-Mail'} · {u.phone||'kein Telefon'}</span>
-              <small>{u.birth_date?`Geb.: ${u.birth_date} · `:''}{u.role}</small>
-            </div>
-            <select value={u.team_role||'member'} onChange={e=>changeTeamRole(u,e.target.value)}>
-              <option value="owner">Owner</option>
-              <option value="manager">Manager</option>
-              <option value="designer">Designer</option>
-              <option value="member">Mitarbeiter</option>
-              <option value="viewer">Nur ansehen</option>
-            </select>
-          </div>)}
-        </div>}
-        <hr/>
-        <h3>Freigaben & Audit-Log</h3>
+      <article className="pixva-card"><h3>Freigaben & Audit-Log</h3>
         {user.role==='admin'&&<>
           <div className="pixva-table">{(team?.approvals||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.title||'Freigabe'}</b><span>{a.status} · {fmtDate(a.created_at)}</span></div>{a.status==='pending'&&<div className="pixva-inline"><button onClick={()=>reviewApproval(a.id,'approved')}>Freigeben</button><button onClick={()=>reviewApproval(a.id,'rejected')}>Ablehnen</button></div>}</div>)}</div>
-          <hr/>
-          <div className="pixva-table compact-table">{(team?.audit||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.action}</b><span>{fmtDate(a.created_at)}</span><small>{JSON.stringify(a.details||{})}</small></div></div>)}</div>
+          <hr/><div className="pixva-table compact-table">{(team?.audit||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.action}</b><span>{fmtDate(a.created_at)}</span><small>{JSON.stringify(a.details||{})}</small></div></div>)}</div>
         </>}
       </article>
     </div>}

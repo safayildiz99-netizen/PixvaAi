@@ -1221,3 +1221,18 @@ hr{border-color:#1D4658!important}
 .pixva-login-logo-preview img{width:120px;height:76px;object-fit:contain;background:white;border-radius:10px;padding:8px}
 .pixva-register-info{margin:14px 0;padding:12px 14px;border:1px solid rgba(80,203,210,.28);background:rgba(37,172,172,.08);border-radius:12px;color:#bde5ec;line-height:1.5}
 @media(max-width:720px){.pixva-register-card{width:min(96vw,560px)}.pixva-register-grid{grid-template-columns:1fr}}
+
+
+/* PIXVA V11.5 FIRMEN SYSTEM */
+.pixva-site-logo-preview{display:grid;gap:8px;padding:10px;border:1px solid var(--pixva-border,#244a5e);border-radius:12px;background:rgba(255,255,255,.03)}
+.pixva-site-logo-preview img{width:100%;max-width:190px;height:85px;object-fit:contain;background:#fff;border-radius:9px;padding:8px}
+.pixva-account-admin{display:grid;gap:16px}.pixva-account-group{margin-top:22px;border-top:1px solid rgba(109,185,211,.2);padding-top:16px}
+.pixva-account-group-head{display:flex;justify-content:space-between;align-items:center;gap:15px}.pixva-account-group-head span{color:#91adbd;font-size:13px}
+.pixva-empty-group{padding:15px;border:1px dashed rgba(88,162,188,.25);border-radius:12px;color:#7f9aaa}
+.pixva-account-detail{display:grid;grid-template-columns:90px minmax(0,1fr);gap:16px;margin:12px 0;padding:16px;border:1px solid rgba(69,149,177,.25);border-radius:15px;background:rgba(7,27,38,.55)}
+.pixva-account-logo{width:90px;height:90px;display:grid;place-items:center}.pixva-account-logo img{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:12px;padding:8px}.pixva-account-logo>div{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#6946a5,#168eaf,#46a89f);font-weight:900}
+.pixva-account-title{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}.pixva-account-title b{font-size:18px}.pixva-account-title span{display:block;color:#87a5b5;margin-top:3px}
+.pixva-account-badges{display:flex;flex-wrap:wrap;gap:6px}.pixva-account-badges span{padding:5px 8px;border:1px solid rgba(91,204,205,.3);border-radius:999px;font-size:10px;font-weight:900;color:#a9ece7}
+.pixva-account-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.pixva-account-fields>div{padding:10px;border-radius:10px;background:rgba(255,255,255,.025)}.pixva-account-fields small{display:block;color:#7594a5;margin-bottom:4px}.pixva-account-fields b{font-size:12px;word-break:break-word}
+.pixva-account-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.pixva-account-controls label{font-size:11px;color:#86a5b5}.pixva-account-controls select{margin-top:5px}
+@media(max-width:900px){.pixva-account-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.pixva-account-controls{grid-template-columns:1fr}.pixva-account-detail{grid-template-columns:1fr}.pixva-account-logo{width:auto;justify-content:start}}

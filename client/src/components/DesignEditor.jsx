@@ -369,6 +369,51 @@ function sourceElementToBlob(imageObject) {
   });
 }
 
+
+function pixvaTheme(brand={}){
+  const type=brand.company_type||'sonstiges';
+  if(type==='supermarkt')return{bg:'#f8f0df',dark:'#0a563c',accent:'#e72828',headline:'FRISCHE ANGEBOTE',title:'OBST & GEMÜSE',offer:'3,49 €',unit:'AKTIONSPREIS',prompt:'Professionelles Supermarkt-Werbemotiv mit frischem Obst oder Gemüse, appetitliche Produktfotografie, Angebotsästhetik'};
+  if(type==='werbetechnik')return{bg:'#f4f4f1',dark:'#111111',accent:'#f7c948',headline:'ANGEBOT',title:'BEDRUCKTE DIBOND PLATTE',offer:'44,99 €',unit:'STATT 59,99 €',prompt:'Professionelles Werbetechnik-Motiv mit hochwertiger bedruckter Dibond-Platte, moderne Werkstatt oder Montage, realistische Produktfotografie'};
+  if(type==='elektriker')return{bg:'#eef6fb',dark:'#082139',accent:'#ffd42a',headline:'ELEKTRO AKTION',title:'ELEKTRO-CHECK',offer:'-20%',unit:'JETZT RABATT SICHERN',prompt:'Professionelles Elektriker-Werbemotiv, moderne Elektroinstallation, Sicherungskasten und saubere technische Arbeit, vertrauenswürdig und hochwertig'};
+  return{bg:'#f3f5f7',dark:brand.primary_color||'#1b2735',accent:brand.secondary_color||'#39d6d0',headline:'ANGEBOT',title:(brand.company_type_other||'UNSERE LEISTUNG').toUpperCase(),offer:'AKTION',unit:'JETZT ANFRAGEN',prompt:`Professionelles Werbemotiv für ${brand.company_type_other||'ein Unternehmen'}, hochwertig, modern, realistische Fotografie`};
+}
+
+async function pixvaCompanyTemplate(canvas,width,height,mode,brand={}){
+  const t=pixvaTheme(brand);
+  canvas.clear();
+  canvas.backgroundColor=t.bg;
+
+  const header=new Rect({left:0,top:0,width,height:height*.14,fill:t.dark});
+  const accent=new Rect({left:0,top:height*.14,width:width*.48,height:height*.035,fill:t.accent});
+  const headline=new FabricText(t.headline,{left:width*.07,top:height*.045,fontFamily:'Arial',fontWeight:900,fontSize:Math.max(24,width/18),fill:'#ffffff'});
+  const title=new FabricText(mode==='image'?'MARKENMOTIV':t.title,{left:width*.07,top:height*.23,fontFamily:'Arial',fontWeight:900,fontSize:Math.max(30,width/14),fill:t.dark});
+  const imageArea=new Rect({left:width*.07,top:height*.34,width:width*.56,height:height*.34,fill:'#ffffff',stroke:'#d5d5d5',strokeWidth:2,rx:16,ry:16});
+  const imageText=new FabricText('PRODUKTBILD / MOTIV',{left:width*.35,top:height*.50,originX:'center',fontFamily:'Arial',fontWeight:800,fontSize:Math.max(15,width/32),fill:'#9b9b9b'});
+  const priceCircle=new Circle({left:width*.68,top:height*.36,radius:Math.max(58,width*.115),fill:t.accent});
+  const price=new FabricText(t.offer,{left:width*.68+Math.max(58,width*.115),top:height*.36+Math.max(58,width*.115)-10,originX:'center',originY:'center',fontFamily:'Arial',fontWeight:900,fontSize:Math.max(28,width/17),fill:t.dark==='#111111'?'#111111':'#ffffff'});
+  const unit=new FabricText(t.unit,{left:width*.68+Math.max(58,width*.115),top:height*.36+Math.max(58,width*.115)+28,originX:'center',originY:'center',fontFamily:'Arial',fontWeight:800,fontSize:Math.max(10,width/45),fill:t.dark==='#111111'?'#111111':'#ffffff'});
+  const company=new FabricText(brand.company_name||'DEINE FIRMA',{left:width*.07,top:height*.75,fontFamily:'Arial',fontWeight:900,fontSize:Math.max(22,width/22),fill:t.dark});
+  const contact=[brand.company_phone,brand.company_email,brand.website,brand.instagram].filter(Boolean).join('  ·  ');
+  const contactText=new FabricText(contact||'FIRMENKONTAKT',{left:width*.07,top:height*.82,fontFamily:'Arial',fontWeight:600,fontSize:Math.max(11,width/46),fill:t.dark});
+  const address=new FabricText(brand.address||'',{left:width*.07,top:height*.865,fontFamily:'Arial',fontWeight:500,fontSize:Math.max(10,width/50),fill:t.dark});
+
+  canvas.add(header,accent,headline,title,imageArea,imageText,priceCircle,price,unit,company,contactText,address);
+
+  const logoUrl=brand.logo_data_url||'';
+  if(logoUrl){
+    try{
+      const logo=await FabricImage.fromURL(logoUrl,{crossOrigin:'anonymous'});
+      const maxW=width*.22,maxH=height*.10;
+      logo.scale(Math.min(maxW/logo.width,maxH/logo.height,1));
+      logo.set({left:width*.92,top:height*.77,originX:'right',originY:'top'});
+      logo.set('pixvaCompanyLogo',true);
+      canvas.add(logo);
+    }catch{}
+  }
+  canvas.renderAll();
+  return t;
+}
+
 export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {}, costPromptMode = 'all', customPlans = [] }) {
   const elementRef = useRef(null);
   const fabricRef = useRef(null);
@@ -544,41 +589,30 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     });
 
     async function initialize() {
+      let brand=null;
+      try{
+        const overview=await api('/api/pixva?action=overview');
+        brand=overview?.brand||null;
+        setCompanyBrand(brand);
+        if(brand){
+          const theme=pixvaTheme(brand);
+          setAiPrompt(theme.prompt);
+        }
+      }catch{}
+
       if (project?.data?.canvas) {
         try {
           await canvas.loadFromJSON(project.data.canvas);
           canvas.renderAll();
-          setBackground(canvas.backgroundColor || '#f6f0e5');
+          setBackground(canvas.backgroundColor || '#f4f0e8');
         } catch {
-          mode === 'flyer' ? addOfferTemplate(canvas, canvas.width, canvas.height) : addCreativeTemplate(canvas, canvas.width, canvas.height);
-        }
-      } else if (mode === 'image' && project?.data?.initialImage) {
-        try {
-          canvas.clear();
-          canvas.backgroundColor = '#111111';
-          const image = await createFabricImage(project.data.initialImage);
-          const scale = Math.max(canvas.width / Math.max(1, image.width), canvas.height / Math.max(1, image.height));
-          image.set({
-            left: canvas.width / 2, top: canvas.height / 2, originX: 'center', originY: 'center',
-            scaleX: scale, scaleY: scale, dataRole: 'generated-image', displayName: 'KI-Bild'
-          });
-          canvas.add(image);
-          canvas.setActiveObject(image);
-          canvas.requestRenderAll();
-          setBackground('#111111');
-          setStatus('KI-Bild randlos über die gesamte Arbeitsfläche geladen. Nutze „Ausfüllen“ oder „Ganzes Bild“, verschiebe es frei und ergänze Text, Logo oder Formen.');
-        } catch {
-          addCreativeTemplate(canvas, canvas.width, canvas.height);
-          setStatus('Das KI-Bild konnte nicht direkt geladen werden.');
+          if(brand)await pixvaCompanyTemplate(canvas,format.canvas[0],format.canvas[1],mode,brand);
+          else addStarterTemplate(canvas,format.canvas[0],format.canvas[1],mode);
         }
       } else {
-        mode === 'flyer' ? addOfferTemplate(canvas, canvas.width, canvas.height) : addCreativeTemplate(canvas, canvas.width, canvas.height);
+        if(brand)await pixvaCompanyTemplate(canvas,format.canvas[0],format.canvas[1],mode,brand);
+        else addStarterTemplate(canvas,format.canvas[0],format.canvas[1],mode);
       }
-      baseTemplateRef.current = canvas.toJSON(customProps);
-      historyRef.current = [];
-      historyIndexRef.current = -1;
-      snapshot();
-      refreshLayers();
     }
     initialize();
 

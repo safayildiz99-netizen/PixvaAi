@@ -342,6 +342,13 @@ export default async function handler(req,res){
       });
       if(error)throw error;
       if(data?.error)return send(res,400,{error:data.error});
+      if(data?.user?.id){
+        await client.from('app_users').update({
+          account_type:body.isCompany===true?'company':'private',
+          created_source:'self',
+          created_by:null
+        }).eq('id',data.user.id);
+      }
       return send(res,200,data);
     }catch(error){
       return send(res,500,{error:error?.message||'Konto konnte nicht erstellt werden.'});
@@ -397,7 +404,17 @@ export default async function handler(req,res){
       const email=String(body.email||'').trim().toLowerCase();if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return send(res,400,{error:'E-Mail-Adresse ist ungültig.'});const {error}=await client.from('app_users').update({email:email||null}).eq('id',user.id);if(error)throw error;await audit(client,user,'email_changed',user.id,{hasEmail:Boolean(email)});return send(res,200,{ok:true,email});
     }
     if(action==='team-list'&&req.method==='GET'){
-      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const [{data:users,error},{data:logs},{data:approvals}]=await Promise.all([client.from('app_users').select('id,username,first_name,last_name,email,phone,birth_date,role,team_role,active,created_at').order('created_at',{ascending:true}),client.from('app_audit_log').select('*').order('created_at',{ascending:false}).limit(100),client.from('app_approvals').select('*').order('created_at',{ascending:false}).limit(100)]);if(error)throw error;return send(res,200,{users:users||[],audit:logs||[],approvals:approvals||[]});
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
+      const [{data:users,error:usersError},{data:brands},{data:logs},{data:approvals}]=await Promise.all([
+        client.from('app_users').select('id,username,first_name,last_name,email,phone,birth_date,role,team_role,account_type,created_source,created_by,active,created_at').order('created_at',{ascending:true}),
+        client.from('app_brand_kits').select('*'),
+        client.from('app_audit_log').select('id,actor_id,target_user_id,action,details,created_at').order('created_at',{ascending:false}).limit(150),
+        client.from('app_approvals').select('*').order('created_at',{ascending:false}).limit(150)
+      ]);
+      if(usersError)throw usersError;
+      const brandsByUser=Object.fromEntries((brands||[]).map(b=>[b.user_id,b]));
+      const enriched=(users||[]).map(u=>({...u,brand:brandsByUser[u.id]||null}));
+      return send(res,200,{users:enriched,audit:logs||[],approvals:approvals||[]});
     }
     if(action==='team-create'&&req.method==='POST'){
       if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
@@ -428,6 +445,13 @@ export default async function handler(req,res){
       const {data,error}=await client.rpc('app_create_company_profile',payload);
       if(error)throw error;
       if(data?.error)return send(res,400,{error:data.error});
+      if(data?.user?.id){
+        await client.from('app_users').update({
+          account_type:body.isCompany!==false?'company':'private',
+          created_source:'admin',
+          created_by:user.id
+        }).eq('id',data.user.id);
+      }
       await audit(client,user,'account_created',data?.user?.id||null,{
         username:payload.p_username,
         role:payload.p_role,
@@ -438,6 +462,19 @@ export default async function handler(req,res){
         hasLogo:Boolean(payload.p_logo_data_url)
       });
       return send(res,200,data);
+    }
+
+    if(action==='account-meta-update'&&req.method==='POST'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
+      const userId=String(body.userId||'');
+      const accountType=String(body.accountType||'private');
+      const createdSource=String(body.createdSource||'legacy');
+      if(!['private','company'].includes(accountType))return send(res,400,{error:'Ungültiger Kontotyp.'});
+      if(!['self','admin','system','legacy'].includes(createdSource))return send(res,400,{error:'Ungültige Herkunft.'});
+      const {error}=await client.from('app_users').update({account_type:accountType,created_source:createdSource}).eq('id',userId);
+      if(error)throw error;
+      await audit(client,user,'account_meta_changed',userId,{accountType,createdSource});
+      return send(res,200,{ok:true});
     }
 
     if(action==='team-update'&&req.method==='POST'){
