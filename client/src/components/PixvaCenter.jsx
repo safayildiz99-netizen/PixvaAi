@@ -254,8 +254,34 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
 
     {tab==='status'&&<div className="pixva-grid two">
       <article className="pixva-card"><div className="pixva-inline"><h3>Systemstatus</h3><button onClick={()=>loadStatus(user.role==='admin')}><RefreshCw size={15}/>Prüfen</button></div>
-        <div className="pixva-status-grid">{Object.entries(status||data?.system||{}).map(([k,v])=><div key={k}><span>{k}</span><b className={v===true?'ok':v===false?'bad':''}>{typeof v==='boolean'?(v?'OK':'FEHLT'):String(v??'—')}</b></div>)}</div>
-        {user.role==='admin'&&data?.admin&&<><hr/><h3>Admin-System</h3><p>{data.admin.users?.length||0} Konten · {data.admin.errors?.filter(e=>!e.resolved_at).length||0} offene Fehler</p><div className="pixva-table compact-table">{(data.admin.errors||[]).slice(0,10).map(e=><div className="pixva-row" key={e.id}><div><b>{e.area}</b><span>{e.public_message}</span><small>{fmtDate(e.created_at)}</small></div></div>)}</div></>}
+        {(()=>{
+          const current=status||data?.system||{};
+          const labels={
+            database:'Datenbank',
+            privateStorage:'Privater Speicher',
+            storagePrivacy:'Speicher-Schutz',
+            geminiConfigured:'Gemini',
+            openaiConfigured:'OpenAI',
+            soraConfigured:'Sora',
+            serviceRoleConfigured:'Supabase Service Role',
+            supabaseServiceConfigured:'Supabase Service Role',
+            geminiDeepTest:'Gemini Live-Test',
+            paypalUntouched:'PayPal geschützt',
+            semanticSearch:'Semantische Suche',
+            backgroundJobs:'Hintergrundaufträge',
+            emailConfigured:'E-Mail-Wiederherstellung',
+            twoFactor:'2FA',
+            instagramPublishing:'Instagram Publishing'
+          };
+          const hidden=new Set(['adminUserCount','adminOpenErrors','bucketPublic']);
+          return <div className="pixva-status-grid">{Object.entries(current).filter(([k])=>!hidden.has(k)).map(([k,v])=>{
+            const text=typeof v==='boolean'?(v?'OK':'FEHLT'):String(v??'—');
+            const positive=v===true||['OK','PIXVA_OK','PRIVAT','BEREIT'].includes(text);
+            const neutral=['OPTIONAL','—'].includes(text);
+            return <div key={k}><span>{labels[k]||k}</span><b className={positive?'ok':neutral?'':v===false?'bad':''}>{text}</b></div>
+          })}</div>
+        })()}
+        {user.role==='admin'&&<><hr/><h3>Admin-System</h3><p>{status?.adminUserCount??data?.admin?.users?.length??'—'} Konten · {status?.adminOpenErrors??data?.admin?.errors?.filter(e=>!e.resolved_at).length??'—'} offene Fehler</p><div className="pixva-table compact-table">{(data?.admin?.errors||[]).slice(0,10).map(e=><div className="pixva-row" key={e.id}><div><b>{e.area}</b><span>{e.public_message}</span><small>{fmtDate(e.created_at)}</small></div></div>)}</div></>}
       </article>
       <article className="pixva-card"><h3>KI-Auftragszentrum</h3><div className="pixva-table">{jobs.map(j=><div className="pixva-row" key={j.id}><div><b>{j.kind} · {j.model}</b><span>{j.status} · {fmtDate(j.created_at)}</span></div>{j.status==='completed'?<CheckCircle2 className="ok"/>:j.status==='failed'?<span className="bad">Fehler</span>:<LoaderCircle className="spin"/>}</div>)}</div></article>
     </div>}

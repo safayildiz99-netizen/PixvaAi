@@ -616,11 +616,38 @@ Antworte ausschließlich JSON:
     }
 
     if(action==='status'&&req.method==='GET'){
-      const {data:bucket,error:bucketError}=await client.storage.getBucket(BUCKET);let deep=null;
-      if(req.query?.deep==='1'&&user.role==='admin'){try{deep=(await gemini({prompt:'Antworte nur mit PIXVA_OK',temperature:0})).text}catch(e){deep=`Fehler: ${e.message}`}}
-      return send(res,200,{database:true,privateStorage:Boolean(bucket&&!bucketError),bucketPublic:bucket?.public??null,
-        geminiConfigured:Boolean(process.env.GEMINI_API_KEY),openaiConfigured:Boolean(process.env.OPENAI_API_KEY),
-        serviceRoleConfigured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),geminiDeepTest:deep,paypalUntouched:true,semanticSearch:Boolean(process.env.OPENAI_API_KEY),backgroundJobs:true,emailConfigured:emailConfigured(),twoFactor:true,instagramPublishing:true});
+      const {data:bucket,error:bucketError}=await client.storage.getBucket(BUCKET);
+      let deep=null,adminUserCount=null,adminOpenErrors=null;
+      if(req.query?.deep==='1'&&user.role==='admin'){
+        try{deep=(await gemini({prompt:'Antworte nur mit PIXVA_OK',temperature:0})).text}
+        catch(e){deep=`Fehler: ${e.message}`}
+      }
+      if(user.role==='admin'){
+        const [usersResult,errorsResult]=await Promise.all([
+          client.from('app_users').select('id',{count:'exact',head:true}),
+          client.from('app_error_logs').select('id',{count:'exact',head:true}).is('resolved_at',null)
+        ]);
+        adminUserCount=usersResult.error?null:(usersResult.count??0);
+        adminOpenErrors=errorsResult.error?null:(errorsResult.count??0);
+      }
+      return send(res,200,{
+        database:true,
+        privateStorage:Boolean(bucket&&!bucketError&&bucket.public===false),
+        storagePrivacy:bucket&&!bucketError&&bucket.public===false?'PRIVAT':'PRÜFEN',
+        geminiConfigured:Boolean(process.env.GEMINI_API_KEY),
+        openaiConfigured:Boolean(process.env.OPENAI_API_KEY),
+        soraConfigured:Boolean(process.env.OPENAI_API_KEY),
+        serviceRoleConfigured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+        geminiDeepTest:deep,
+        paypalUntouched:true,
+        semanticSearch:Boolean(process.env.OPENAI_API_KEY),
+        backgroundJobs:true,
+        emailConfigured:emailConfigured()?'BEREIT':'OPTIONAL',
+        twoFactor:true,
+        instagramPublishing:true,
+        adminUserCount,
+        adminOpenErrors
+      });
     }
 
     return send(res,404,{error:'Unbekannte PIXVA-Aktion.'});
