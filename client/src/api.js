@@ -42,7 +42,7 @@ export async function api(path, options = {}) {
   const body = parseBody(options);
   const token = getToken();
 
-  if (path === '/api/health' || path === '/api/video/merge' || path.startsWith('/api/ai/') || path.startsWith('/api/billing')) {
+  if (path === '/api/health' || path === '/api/video/merge' || path.startsWith('/api/ai/') || path.startsWith('/api/billing') || path.startsWith('/api/pixva')) {
     return callServer(path, options);
   }
 

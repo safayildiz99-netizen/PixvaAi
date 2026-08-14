@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  BadgeEuro, Bot, FileImage, Film, FolderOpen, Globe2, LayoutTemplate, LockKeyhole, LogIn, LogOut,
+  BadgeEuro, Bot, BrainCircuit, FileImage, Film, FolderOpen, Globe2, LayoutTemplate, LockKeyhole, LogIn, LogOut,
   KeyRound, Menu, PanelLeftClose, PanelLeftOpen, Settings, Sparkles
 } from 'lucide-react';
 import { api, getToken, setToken } from './api.js';
@@ -13,6 +13,7 @@ import Projects from './components/Projects.jsx';
 import Admin from './components/Admin.jsx';
 import AccountSettings from './components/AccountSettings.jsx';
 import Subscriptions from './components/Subscriptions.jsx';
+import PixvaCenter from './components/PixvaCenter.jsx';
 import { DEFAULT_SUBSCRIPTION, canUseFeature, getPlan, normalizeSubscription } from './plans.js';
 
 const NAV_DEFINITIONS = {
@@ -22,6 +23,7 @@ const NAV_DEFINITIONS = {
   video:{ id:'video', label:'Video-Studio', icon:Film },
   website:{ id:'website', label:'Website-Builder', icon:Globe2 },
   projects:{ id:'projects', label:'Projekte', icon:FolderOpen },
+  pixva:{ id:'pixva', label:'PIXVA Hub', icon:BrainCircuit },
   plans:{ id:'plans', label:'Abos & Preise', icon:BadgeEuro }
 };
 
@@ -29,7 +31,7 @@ const DEFAULT_NAV_ITEMS = Object.values(NAV_DEFINITIONS).map(({id,label})=>({id,
 
 const titles = {
   chat:'PIXVA Chat', flyer:'Angebote & Flyer', image:'Motive & Editor',
-  video:'Video-Studio', website:'Website-Builder', projects:'Projekte', plans:'Abos & Preise', account:'Mein Konto', admin:'Admin & Einstellungen'
+  video:'Video-Studio', website:'Website-Builder', projects:'Projekte', pixva:'PIXVA KI-Zentrale', plans:'Abos & Preise', account:'Mein Konto', admin:'Admin & Einstellungen'
 };
 
 const DEFAULT_UI_SETTINGS = {
@@ -154,7 +156,7 @@ export default function App(){
   },[uiSettings,view]);
 
   const activeUser=user || (guest ? guestUser : null);
-  const nav=useMemo(()=>configuredNav(uiSettings).filter((item)=>item.visible !== false && enabledBySettings(item.id,uiSettings)),[uiSettings]);
+  const nav=useMemo(()=>configuredNav(uiSettings).filter((item)=>item.visible !== false && enabledBySettings(item.id,uiSettings) && (!guest || item.id!=='pixva')),[uiSettings,guest]);
 
   const workTarget=useMemo(()=>{
     const preferred=uiSettings.workView;
@@ -178,6 +180,7 @@ export default function App(){
   }
   function changeView(id){
     setSelectedProject(null);
+    if(id==='pixva'&&guest){exit();return;}
     if(id!=='admin'&&id!=='account'&&!enabledBySettings(id,uiSettings)) return setView('chat');
     if(!featureAllowed(id)){
       setRequestedView(id);
@@ -251,6 +254,7 @@ export default function App(){
         {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='website'&&featureAllowed('website')&&<WebsiteBuilder key={selectedProject?.id||'new-site'} project={selectedProject?.type==='website'?selectedProject:null} onSaved={saved} canSave={!guest} uiText={uiText}/>} 
         {view==='projects'&&featureAllowed('projects')&&!guest&&<Projects onOpen={openProject} refreshKey={refreshKey} uiText={uiText}/>} 
+        {view==='pixva'&&!guest&&<PixvaCenter user={activeUser} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject}/>}
         {view==='plans'&&<Subscriptions user={activeUser} isGuest={guest} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onRequireLogin={exit} uiText={uiText} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices} customPlans={uiSettings.customPlans} billingSettings={uiSettings}/>} 
         {view==='account'&&!guest&&<AccountSettings user={activeUser} onUserChanged={setUser} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onOpenPlans={()=>changeView('plans')} customPlans={uiSettings.customPlans} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices}/>} 
         {view==='admin'&&activeUser.role==='admin'&&<Admin user={activeUser} uiSettings={uiSettings} onSettingsChanged={setUiSettings} onOpenView={changeView}/>} 

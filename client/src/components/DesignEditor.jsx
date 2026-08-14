@@ -1193,6 +1193,35 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     }
   }
 
+
+  /* PIXVA AUTOSAVE V10 */
+  const pixvaLastAutosaveRef = useRef('');
+  useEffect(() => {
+    if (!canSave || !projectId) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const canvas = fabricRef.current;
+        if (!canvas) return;
+        const canvasJson = canvas.toJSON();
+        const fingerprint = JSON.stringify({ projectName, formatKey, canvas:canvasJson });
+        if (fingerprint === pixvaLastAutosaveRef.current) return;
+        const payload = {
+          name:projectName,
+          type:mode === 'image' ? 'image' : 'flyer',
+          data:{ format:formatKey, canvas:canvasJson }
+        };
+        const result = await api(`/api/projects/${projectId}`, {
+          method:'PUT',
+          body:JSON.stringify(payload)
+        });
+        pixvaLastAutosaveRef.current = fingerprint;
+        onSaved?.(result.project);
+      } catch {
+      }
+    }, 20000);
+    return () => window.clearInterval(timer);
+  }, [canSave, projectId, projectName, formatKey, mode, onSaved]);
+
   async function generateAiImage() {
     if (!canUseFeature(subscription, 'paidImages', userRole, customPlans)) {
       setStatus('OpenAI-Bilder sind ab Creator enthalten. Während der Beta kannst du Creator für 0,00 € aktivieren.');

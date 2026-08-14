@@ -1,14 +1,19 @@
 {
-  "name": "yildiz-ai-studio",
+  "name": "pixva-ai-suite",
   "version": "13.0.0",
   "private": true,
   "type": "module",
-  "description": "Yildiz AI V9: Vollbild-Bildeditor, Instagram-Teilen, flexible Beta-Abos, Tages-/Monatskosten und Kostenabfrage je Konto",
+  "description": "PIXVA Complete AI Suite",
   "scripts": {
     "build": "npm install --prefix client && npm run build --prefix client",
     "vercel-build": "npm run build"
   },
   "engines": {
     "node": ">=20.19"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "mammoth": "^1.12.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }
