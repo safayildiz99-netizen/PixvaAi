@@ -311,6 +311,43 @@ export default async function handler(req,res){
     }catch(error){return send(res,500,{error:error.message||'Anmeldung fehlgeschlagen.'})}
   }
 
+  if(action==='register-public'){
+    if(req.method!=='POST')return send(res,405,{error:'Nur POST erlaubt.'});
+    try{
+      const body=await readJson(req);
+      const username=String(body.username||'').trim();
+      const subject=`${username}:${String(body.email||'').trim().toLowerCase()}`;
+      await enforcePublicRate(client,req,'register-public',subject,4,3600);
+
+      const {data,error}=await client.rpc('app_register_public_profile',{
+        p_username:username,
+        p_password:String(body.password||''),
+        p_first_name:String(body.firstName||'').trim()||null,
+        p_last_name:String(body.lastName||'').trim()||null,
+        p_email:String(body.email||'').trim()||null,
+        p_phone:String(body.phone||'').trim()||null,
+        p_birth_date:String(body.birthDate||'').trim()||null,
+        p_is_company:body.isCompany===true,
+        p_company_name:String(body.companyName||'').trim()||null,
+        p_company_type:String(body.companyType||'').trim()||null,
+        p_company_type_other:String(body.companyTypeOther||'').trim()||null,
+        p_owner_name:String(body.ownerName||'').trim()||null,
+        p_company_email:String(body.companyEmail||'').trim()||null,
+        p_company_phone:String(body.companyPhone||'').trim()||null,
+        p_private_phone:String(body.privatePhone||'').trim()||null,
+        p_website:String(body.website||'').trim()||null,
+        p_instagram:String(body.instagram||'').trim()||null,
+        p_address:String(body.address||'').trim()||null,
+        p_logo_data_url:String(body.logoDataUrl||'').trim()||null
+      });
+      if(error)throw error;
+      if(data?.error)return send(res,400,{error:data.error});
+      return send(res,200,data);
+    }catch(error){
+      return send(res,500,{error:error?.message||'Konto konnte nicht erstellt werden.'});
+    }
+  }
+
   if(action==='recovery-email-request'){
     if(req.method!=='POST')return send(res,405,{error:'Nur POST erlaubt.'});
     const generic={ok:true,message:'Wenn für dieses Konto eine E-Mail hinterlegt und der Mailversand eingerichtet ist, wurde ein Wiederherstellungslink versendet.'};

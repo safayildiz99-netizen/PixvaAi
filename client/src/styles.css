@@ -1199,3 +1199,25 @@ input:focus,textarea:focus,select:focus{
 /* Feine Trennlinien */
 hr{border-color:#1D4658!important}
 ::selection{background:rgba(22,155,184,.34)!important;color:#fff!important}
+
+
+/* PIXVA V11.4 SELF REGISTRATION */
+.pixva-create-account-btn{width:100%;margin-top:12px;min-height:52px;border:1px solid rgba(74,205,214,.42);background:rgba(12,40,54,.72);color:#e9fbff;border-radius:12px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:9px}
+.pixva-create-account-btn:hover{border-color:#4bd0cd;background:rgba(18,57,72,.9)}
+.pixva-register-card{width:min(920px,calc(100vw - 32px));max-width:920px}
+.pixva-register-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.pixva-register-head h1{margin-bottom:6px}
+.pixva-close-register{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto}
+.pixva-register-switch{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}
+.pixva-register-switch button{min-height:48px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(82,174,201,.38)}
+.pixva-register-switch button.active{background:linear-gradient(100deg,#7045b8,#2a83c9,#20b5b2);color:white;border-color:transparent}
+.pixva-register-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.pixva-register-grid label{margin:0}
+.pixva-register-grid small{font-weight:500;color:#7895a7}
+.pixva-login-logo-upload{margin-top:16px;padding:14px;border:1px dashed rgba(80,203,210,.5);border-radius:12px;background:rgba(8,32,43,.65)}
+.pixva-login-logo-upload span{display:block;margin-bottom:10px;font-weight:800}
+.pixva-login-logo-upload b{color:#67f1d1}
+.pixva-login-logo-preview{display:flex;align-items:center;gap:14px;margin:12px 0;padding:12px;background:rgba(255,255,255,.04);border-radius:12px}
+.pixva-login-logo-preview img{width:120px;height:76px;object-fit:contain;background:white;border-radius:10px;padding:8px}
+.pixva-register-info{margin:14px 0;padding:12px 14px;border:1px solid rgba(80,203,210,.28);background:rgba(37,172,172,.08);border-radius:12px;color:#bde5ec;line-height:1.5}
+@media(max-width:720px){.pixva-register-card{width:min(96vw,560px)}.pixva-register-grid{grid-template-columns:1fr}}
