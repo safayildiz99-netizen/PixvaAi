@@ -30,6 +30,8 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   const [flyerCheck,setFlyerCheck]=useState(null),[recoveryCodes,setRecoveryCodes]=useState([]),[deleteForm,setDeleteForm]=useState({password:'',confirmation:''}),[status,setStatus]=useState(null);
   const [securityState,setSecurityState]=useState(null),[twofaSetup,setTwofaSetup]=useState(null),[twofaCode,setTwofaCode]=useState('');
   const [email,setEmail]=useState(''),[team,setTeam]=useState(null),[instagram,setInstagram]=useState(null);
+  const emptyAccount={username:'',password:'',firstName:'',lastName:'',email:'',phone:'',birthDate:'',role:'user',teamRole:'member'};
+  const [newAccount,setNewAccount]=useState(emptyAccount);
   const [instagramForm,setInstagramForm]=useState({accountId:'',displayName:'',accessToken:'',caption:''}),[approvalForm,setApprovalForm]=useState({projectId:'',title:'',note:''});
   const productPhoto=useRef(null),instagramFile=useRef(null);
   const prevUnread=useRef(new Set()),productFile=useRef(null),knowledgeFile=useRef(null),flyerFile=useRef(null),brandLogoFile=useRef(null);
@@ -134,6 +136,16 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   async function disable2fa(){if(!twofaCode)return setError('Aktuellen 2FA-Code eingeben.');try{await call('2fa-disable',{code:twofaCode});setTwofaCode('');setMessage('2FA deaktiviert.');await loadSecurity()}catch{}}
   async function saveEmail(){try{await call('profile-email-save',{email});setMessage('E-Mail gespeichert.');await loadSecurity()}catch{}}
   async function loadTeam(){if(user.role!=='admin')return;try{setTeam(await api('/api/pixva?action=team-list'))}catch(e){setError(e.message)}}
+  async function createAccount(){
+    if(!newAccount.username.trim())return setError('Benutzername fehlt.');
+    if(newAccount.password.length<8)return setError('Passwort braucht mindestens 8 Zeichen.');
+    try{
+      await call('team-create',newAccount);
+      setNewAccount(emptyAccount);
+      setMessage('Konto erfolgreich erstellt.');
+      await loadTeam();
+    }catch{}
+  }
   async function changeTeamRole(target,teamRole){try{await call('team-update',{userId:target.id,teamRole,email:target.email||''});setMessage('Team-Rolle gespeichert.');await loadTeam()}catch{}}
   async function reviewApproval(id,status){try{await call('approval-update',{id,status});setMessage(status==='approved'?'Freigegeben.':'Abgelehnt.');await loadTeam()}catch{}}
   async function requestApproval(){if(!approvalForm.projectId)return setError('Projekt-ID fehlt.');try{await call('approval-create',approvalForm);setApprovalForm({projectId:'',title:'',note:''});setMessage('Freigabe angefordert.')}catch{}}
@@ -243,8 +255,57 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     </div>}
 
     {tab==='team'&&<div className="pixva-grid two">
-      <article className="pixva-card"><h3>Team-Rollen</h3>{user.role!=='admin'?<p>Nur Admins können Rollen verwalten.</p>:<div className="pixva-table">{(team?.users||[]).map(u=><div className="pixva-row" key={u.id}><div><b>{u.username}</b><span>{u.email||'keine E-Mail'} · {u.role}</span></div><select value={u.team_role||'member'} onChange={e=>changeTeamRole(u,e.target.value)}><option value="owner">Owner</option><option value="manager">Manager</option><option value="designer">Designer</option><option value="member">Mitarbeiter</option><option value="viewer">Nur ansehen</option></select></div>)}</div>}<hr/><h3>Freigabe anfordern</h3><input placeholder="Projekt-ID" value={approvalForm.projectId} onChange={e=>setApprovalForm({...approvalForm,projectId:e.target.value})}/><input placeholder="Titel" value={approvalForm.title} onChange={e=>setApprovalForm({...approvalForm,title:e.target.value})}/><textarea rows={3} placeholder="Notiz" value={approvalForm.note} onChange={e=>setApprovalForm({...approvalForm,note:e.target.value})}/><button onClick={requestApproval}>Freigabe anfordern</button></article>
-      <article className="pixva-card"><h3>Freigaben & Audit-Log</h3>{user.role==='admin'&&<><div className="pixva-table">{(team?.approvals||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.title||'Freigabe'}</b><span>{a.status} · {fmtDate(a.created_at)}</span></div>{a.status==='pending'&&<div className="pixva-inline"><button onClick={()=>reviewApproval(a.id,'approved')}>Freigeben</button><button onClick={()=>reviewApproval(a.id,'rejected')}>Ablehnen</button></div>}</div>)}</div><hr/><div className="pixva-table compact-table">{(team?.audit||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.action}</b><span>{fmtDate(a.created_at)}</span><small>{JSON.stringify(a.details||{})}</small></div></div>)}</div></>}</article>
+      <article className="pixva-card">
+        <h3>Neues Konto erstellen</h3>
+        {user.role!=='admin'?<p>Nur Admins können neue Konten erstellen.</p>:<>
+          <p>Nur Benutzername und Passwort sind Pflicht. E-Mail, Telefon und Geburtsdatum sind optional.</p>
+          <div className="pixva-form-grid">
+            <label>Benutzername *<input value={newAccount.username} onChange={e=>setNewAccount({...newAccount,username:e.target.value})} placeholder="z. B. max.mustermann"/></label>
+            <label>Passwort *<input type="password" value={newAccount.password} onChange={e=>setNewAccount({...newAccount,password:e.target.value})} placeholder="mindestens 8 Zeichen"/></label>
+            <label>Vorname<input value={newAccount.firstName} onChange={e=>setNewAccount({...newAccount,firstName:e.target.value})}/></label>
+            <label>Nachname<input value={newAccount.lastName} onChange={e=>setNewAccount({...newAccount,lastName:e.target.value})}/></label>
+            <label>E-Mail <small>optional</small><input type="email" value={newAccount.email} onChange={e=>setNewAccount({...newAccount,email:e.target.value})} placeholder="optional"/></label>
+            <label>Telefon <small>optional</small><input type="tel" value={newAccount.phone} onChange={e=>setNewAccount({...newAccount,phone:e.target.value})} placeholder="optional"/></label>
+            <label>Geburtsdatum <small>optional</small><input type="date" value={newAccount.birthDate} onChange={e=>setNewAccount({...newAccount,birthDate:e.target.value})}/></label>
+            <label>Systemrolle<select value={newAccount.role} onChange={e=>setNewAccount({...newAccount,role:e.target.value})}><option value="user">Benutzer</option><option value="admin">Admin</option></select></label>
+            <label>Team-Rolle<select value={newAccount.teamRole} onChange={e=>setNewAccount({...newAccount,teamRole:e.target.value})}><option value="owner">Owner</option><option value="manager">Manager</option><option value="designer">Designer</option><option value="member">Mitarbeiter</option><option value="viewer">Nur ansehen</option></select></label>
+          </div>
+          <button className="pixva-primary" onClick={createAccount}>Konto erstellen</button>
+        </>}
+        <hr/>
+        <h3>Freigabe anfordern</h3>
+        <input placeholder="Projekt-ID" value={approvalForm.projectId} onChange={e=>setApprovalForm({...approvalForm,projectId:e.target.value})}/>
+        <input placeholder="Titel" value={approvalForm.title} onChange={e=>setApprovalForm({...approvalForm,title:e.target.value})}/>
+        <textarea rows={3} placeholder="Notiz" value={approvalForm.note} onChange={e=>setApprovalForm({...approvalForm,note:e.target.value})}/>
+        <button onClick={requestApproval}>Freigabe anfordern</button>
+      </article>
+
+      <article className="pixva-card">
+        <h3>Konten & Team-Rollen</h3>
+        {user.role!=='admin'?<p>Nur Admins können Konten und Rollen verwalten.</p>:<div className="pixva-table">
+          {(team?.users||[]).map(u=><div className="pixva-row" key={u.id}>
+            <div>
+              <b>{[u.first_name,u.last_name].filter(Boolean).join(' ')||u.username}</b>
+              <span>@{u.username} · {u.email||'keine E-Mail'} · {u.phone||'kein Telefon'}</span>
+              <small>{u.birth_date?`Geb.: ${u.birth_date} · `:''}{u.role}</small>
+            </div>
+            <select value={u.team_role||'member'} onChange={e=>changeTeamRole(u,e.target.value)}>
+              <option value="owner">Owner</option>
+              <option value="manager">Manager</option>
+              <option value="designer">Designer</option>
+              <option value="member">Mitarbeiter</option>
+              <option value="viewer">Nur ansehen</option>
+            </select>
+          </div>)}
+        </div>}
+        <hr/>
+        <h3>Freigaben & Audit-Log</h3>
+        {user.role==='admin'&&<>
+          <div className="pixva-table">{(team?.approvals||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.title||'Freigabe'}</b><span>{a.status} · {fmtDate(a.created_at)}</span></div>{a.status==='pending'&&<div className="pixva-inline"><button onClick={()=>reviewApproval(a.id,'approved')}>Freigeben</button><button onClick={()=>reviewApproval(a.id,'rejected')}>Ablehnen</button></div>}</div>)}</div>
+          <hr/>
+          <div className="pixva-table compact-table">{(team?.audit||[]).map(a=><div className="pixva-row" key={a.id}><div><b>{a.action}</b><span>{fmtDate(a.created_at)}</span><small>{JSON.stringify(a.details||{})}</small></div></div>)}</div>
+        </>}
+      </article>
     </div>}
 
     {tab==='integrations'&&<div className="pixva-grid two">

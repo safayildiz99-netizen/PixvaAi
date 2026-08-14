@@ -360,8 +360,45 @@ export default async function handler(req,res){
       const email=String(body.email||'').trim().toLowerCase();if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return send(res,400,{error:'E-Mail-Adresse ist ungültig.'});const {error}=await client.from('app_users').update({email:email||null}).eq('id',user.id);if(error)throw error;await audit(client,user,'email_changed',user.id,{hasEmail:Boolean(email)});return send(res,200,{ok:true,email});
     }
     if(action==='team-list'&&req.method==='GET'){
-      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const [{data:users,error},{data:logs},{data:approvals}]=await Promise.all([client.from('app_users').select('id,username,email,role,team_role,active,created_at').order('created_at',{ascending:true}),client.from('app_audit_log').select('*').order('created_at',{ascending:false}).limit(100),client.from('app_approvals').select('*').order('created_at',{ascending:false}).limit(100)]);if(error)throw error;return send(res,200,{users:users||[],audit:logs||[],approvals:approvals||[]});
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const [{data:users,error},{data:logs},{data:approvals}]=await Promise.all([client.from('app_users').select('id,username,first_name,last_name,email,phone,birth_date,role,team_role,active,created_at').order('created_at',{ascending:true}),client.from('app_audit_log').select('*').order('created_at',{ascending:false}).limit(100),client.from('app_approvals').select('*').order('created_at',{ascending:false}).limit(100)]);if(error)throw error;return send(res,200,{users:users||[],audit:logs||[],approvals:approvals||[]});
     }
+    if(action==='team-create'&&req.method==='POST'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
+      const username=String(body.username||'').trim();
+      const password=String(body.password||'');
+      const role=String(body.role||'user');
+      const teamRole=String(body.teamRole||'member');
+      const firstName=String(body.firstName||'').trim();
+      const lastName=String(body.lastName||'').trim();
+      const email=String(body.email||'').trim();
+      const phone=String(body.phone||'').trim();
+      const birthDate=String(body.birthDate||'').trim();
+
+      const {data,error}=await client.rpc('app_create_user_profile',{
+        p_token:token,
+        p_username:username,
+        p_password:password,
+        p_role:role,
+        p_team_role:teamRole,
+        p_first_name:firstName||null,
+        p_last_name:lastName||null,
+        p_email:email||null,
+        p_phone:phone||null,
+        p_birth_date:birthDate||null
+      });
+      if(error)throw error;
+      if(data?.error)return send(res,400,{error:data.error});
+      await audit(client,user,'account_created',data?.user?.id||null,{
+        username,
+        role,
+        teamRole,
+        hasEmail:Boolean(email),
+        hasPhone:Boolean(phone),
+        hasBirthDate:Boolean(birthDate)
+      });
+      return send(res,200,data);
+    }
+
     if(action==='team-update'&&req.method==='POST'){
       if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const target=String(body.userId||''),teamRole=String(body.teamRole||'member');if(!['owner','manager','designer','member','viewer'].includes(teamRole))return send(res,400,{error:'Unbekannte Team-Rolle.'});const patch={team_role:teamRole};if(typeof body.email==='string')patch.email=body.email.trim().toLowerCase()||null;const {error}=await client.from('app_users').update(patch).eq('id',target);if(error)throw error;await audit(client,user,'team_role_changed',target,{teamRole});return send(res,200,{ok:true});
     }
