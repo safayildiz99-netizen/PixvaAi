@@ -167,11 +167,15 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   async function requestApproval(){if(!approvalForm.projectId)return setError('Projekt-ID fehlt.');try{await call('approval-create',approvalForm);setApprovalForm({projectId:'',title:'',note:''});setMessage('Freigabe angefordert.')}catch{}}
   const accountGroups=()=>{
     const list=team?.users||[];
+    const nonAdmin=list.filter(u=>u.role!=='admin');
     return[
-      ['Admin-Konten',list.filter(u=>u.role==='admin')],
-      ['Vom Admin erstellte Konten',list.filter(u=>u.role!=='admin'&&u.created_source==='admin')],
-      ['Firmenkonten',list.filter(u=>u.role!=='admin'&&u.created_source!=='admin'&&u.account_type==='company')],
-      ['Privatkonten',list.filter(u=>u.role!=='admin'&&u.created_source!=='admin'&&u.account_type!=='company')]
+      ['1 · Admin-Konten',list.filter(u=>u.role==='admin')],
+      ['2 · Admin erstellt · Firmenkonten',nonAdmin.filter(u=>u.created_source==='admin'&&u.account_type==='company')],
+      ['3 · Admin erstellt · Privatkonten',nonAdmin.filter(u=>u.created_source==='admin'&&u.account_type!=='company')],
+      ['4 · Selbst registriert · Firmenkonten',nonAdmin.filter(u=>u.created_source==='self'&&u.account_type==='company')],
+      ['5 · Selbst registriert · Privatkonten',nonAdmin.filter(u=>u.created_source==='self'&&u.account_type!=='company')],
+      ['6 · Bestehende Firmenkonten',nonAdmin.filter(u=>!['admin','self'].includes(u.created_source)&&u.account_type==='company')],
+      ['7 · Bestehende Privatkonten',nonAdmin.filter(u=>!['admin','self'].includes(u.created_source)&&u.account_type!=='company')]
     ];
   };
   async function changeAccountMeta(target,key,value){
@@ -327,7 +331,7 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
                 <div><small>Vorname</small><b>{u.first_name||'—'}</b></div><div><small>Nachname</small><b>{u.last_name||'—'}</b></div>
                 <div><small>Normale E-Mail</small><b>{u.email||'—'}</b></div><div><small>Private Tel.</small><b>{u.phone||'—'}</b></div>
                 <div><small>Geburtsdatum</small><b>{u.birth_date||'—'}</b></div><div><small>Team-Rolle</small><b>{u.team_role||'—'}</b></div>
-                <div><small>Firmeninhaber</small><b>{u.brand?.owner_name||'—'}</b></div><div><small>Branche</small><b>{u.brand?.company_type==='sonstiges'?(u.brand?.company_type_other||'Sonstiges'):(u.brand?.company_type||'—')}</b></div>
+                <div><small>Firmenname</small><b>{u.brand?.company_name||'—'}</b></div><div><small>Logo</small><b>{u.brand?.logo_data_url||u.brand?.logo_path?'vorhanden':'—'}</b></div><div><small>Firmeninhaber</small><b>{u.brand?.owner_name||'—'}</b></div><div><small>Branche</small><b>{u.brand?.company_type==='sonstiges'?(u.brand?.company_type_other||'Sonstiges'):(u.brand?.company_type||'—')}</b></div>
                 <div><small>Firmen-E-Mail</small><b>{u.brand?.company_email||'—'}</b></div><div><small>Firmen-Telefon</small><b>{u.brand?.company_phone||'—'}</b></div>
                 <div><small>Zusätzliche private Tel.</small><b>{u.brand?.private_phone||'—'}</b></div><div><small>Website</small><b>{u.brand?.website||'—'}</b></div>
                 <div><small>Instagram</small><b>{u.brand?.instagram||'—'}</b></div><div><small>Adresse</small><b>{u.brand?.address||'—'}</b></div>

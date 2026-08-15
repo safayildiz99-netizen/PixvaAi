@@ -417,21 +417,27 @@ async function pixvaCompanyTemplate(canvas,width,height,mode,brand={}){
 
 function pixvaBrainBrand(brain){
   const c=brain?.company||{};
+  const type=c.companyType||'sonstiges';
+  const example=type==='supermarkt'?{name:'BEISPIEL MARKT',email:'info@beispiel-markt.de',phone:'+49 711 1234567',website:'www.beispiel-markt.de',instagram:'@beispielmarkt',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
+    type==='werbetechnik'?{name:'BEISPIEL WERBETECHNIK',email:'info@beispiel-werbetechnik.de',phone:'+49 711 1234567',website:'www.beispiel-werbetechnik.de',instagram:'@beispielwerbetechnik',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
+    type==='elektriker'?{name:'BEISPIEL ELEKTRO',email:'info@beispiel-elektro.de',phone:'+49 711 1234567',website:'www.beispiel-elektro.de',instagram:'@beispielelektro',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
+    {name:'BEISPIEL FIRMA',email:'info@beispiel-firma.de',phone:'+49 711 1234567',website:'www.beispiel-firma.de',instagram:'@beispielfirma',address:'Musterstraße 12 · 70173 Stuttgart',other:c.companyTypeOther||'Unternehmen'};
   return{
-    company_name:c.companyName||'',
-    company_type:c.companyType||'sonstiges',
-    company_type_other:c.companyTypeOther||'',
-    owner_name:c.ownerName||'',
-    company_email:c.companyEmail||'',
-    company_phone:c.companyPhone||'',
+    company_name:c.companyName||example.name,
+    company_type:type,
+    company_type_other:c.companyTypeOther||example.other,
+    owner_name:c.ownerName||'Max Mustermann',
+    company_email:c.companyEmail||example.email,
+    company_phone:c.companyPhone||example.phone,
     private_phone:c.privatePhone||c.personalPhone||'',
-    website:c.website||'',
-    instagram:c.instagram||'',
-    address:c.address||'',
-    logo_data_url:c.logoDataUrl||c.logoUrl||'',
+    website:c.website||example.website,
+    instagram:c.instagram||example.instagram,
+    address:c.address||example.address,
+    logo_data_url:c.logoDataUrl||c.logoUrl||example_logo,
     logo_path:c.logoPath||'',
     primary_color:c.primaryColor||'#7258ff',
-    secondary_color:c.secondaryColor||'#39d6d0'
+    secondary_color:c.secondaryColor||'#39d6d0',
+    pixva_example_mode:!(c.companyName||c.companyPhone||c.companyEmail||c.website||c.logoDataUrl||c.logoUrl)
   };
 }
 
@@ -685,11 +691,11 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         const brand=pixvaBrainBrand(brain);
         setCompanyBrand(brand);
         const canvas=fabricRef.current;
-        if(!canvas||!brain?.isCompany)return;
+        if(!canvas)return;
         if(typeof pixvaCompanyTemplate==='function'){
           await pixvaCompanyTemplate(canvas,canvas.width,canvas.height,mode,brand);
           setBackground(canvas.backgroundColor||brand.primary_color||'#f4f0e8');
-          setStatus(`PIXVA Brain: ${brain.company?.companyName||'Firma'} · ${brain.company?.industryLabel||''} · Firmenlogo & Kontaktdaten aktiv`);
+          setStatus(brand.pixva_example_mode?'PIXVA Brain: BEISPIELVORLAGE aktiv · wird durch echte Firmendaten ersetzt':`PIXVA Brain: ${brain.company?.companyName||'Firma'} · ${brain.company?.industryLabel||''} · Firmenlogo & Kontaktdaten aktiv`);
         }
       }catch(error){
         if(!cancelled)setStatus(`PIXVA Brain konnte Firmenprofil nicht laden: ${error.message}`);
