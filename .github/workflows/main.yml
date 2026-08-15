@@ -1,4 +1,4 @@
-name: PIXVA V11.7 Examples Account Groups
+name: PIXVA V11.7.1 Validation Fix
 
 on:
   workflow_dispatch:
@@ -49,15 +49,28 @@ jobs:
           diff /tmp/subscriptions.before /tmp/subscriptions.after
           diff /tmp/logo.before /tmp/logo.after
 
-      - name: V11.7 prüfen
+      - name: V11.7.1 korrekt prüfen
         shell: bash
         run: |
+          set -e
+          # Website: Beispielmodus + eingebettetes Beispiel-Logo prüfen.
           grep -Fq "BEISPIELVORSCHAU" client/src/components/WebsiteBuilder.jsx
-          grep -Fq "BEISPIEL LOGO" client/src/components/WebsiteBuilder.jsx
+          grep -Fq "const EXAMPLE_LOGO=" client/src/components/WebsiteBuilder.jsx
+          grep -Fq "data:image/svg+xml;base64" client/src/components/WebsiteBuilder.jsx
+
+          # Konten: eindeutige Gruppen prüfen.
           grep -Fq "Admin erstellt · Firmenkonten" client/src/components/PixvaCenter.jsx
+          grep -Fq "Admin erstellt · Privatkonten" client/src/components/PixvaCenter.jsx
+          grep -Fq "Selbst registriert · Firmenkonten" client/src/components/PixvaCenter.jsx
           grep -Fq "Selbst registriert · Privatkonten" client/src/components/PixvaCenter.jsx
           grep -Fq "Bestehende Firmenkonten" client/src/components/PixvaCenter.jsx
-          grep -Fq "BEISPIELVORLAGE aktiv" client/src/components/DesignEditor.jsx
+          grep -Fq "Bestehende Privatkonten" client/src/components/PixvaCenter.jsx
+
+          # Editor: Beispiel-/Firmenkontext muss vorhanden sein.
+          grep -Fq "pixva_example_mode" client/src/components/DesignEditor.jsx
+          grep -Fq "BEISPIEL FIRMA" client/src/components/DesignEditor.jsx
+
+          echo "PIXVA V11.7.1 Prüfungen erfolgreich."
 
       - name: Produktions Build
         shell: bash
@@ -74,12 +87,12 @@ jobs:
       - name: Nur erfolgreichen Stand veröffentlichen
         shell: bash
         run: |
-          git config user.name "PIXVA V11.7 Update"
+          git config user.name "PIXVA V11.7.1 Fix"
           git config user.email "actions@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
-            echo "PIXVA V11.7 ist bereits installiert."
+            echo "PIXVA V11.7.1 ist bereits installiert."
             exit 0
           fi
-          git commit -m "PIXVA V11.7 Examples Account Groups"
+          git commit -m "PIXVA V11.7.1 Examples Account Groups Fix"
           git push origin HEAD:main
