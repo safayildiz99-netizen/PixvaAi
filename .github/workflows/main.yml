@@ -1,4 +1,4 @@
-name: PIXVA V11.8.2.1 SYNTAX FIX
+name: PIXVA V11.8.2.2 PREFLIGHT FIX
 
 on:
   workflow_dispatch:
@@ -59,7 +59,13 @@ jobs:
           cp /tmp/pixva-v11-8-2/admin-accounts.js /tmp/admin-accounts-check.mjs
           node --check /tmp/admin-accounts-check.mjs
 
-          node /tmp/check-jsx.cjs             /tmp/pixva-v11-8-2/AdminAccounts.jsx             /tmp/pixva-v11-8-2/DesignEditor.jsx             /tmp/pixva-v11-8-2/WebsiteBuilder.jsx
+          # TypeScript nur für die schnelle JSX-Prüfung temporär installieren.
+          # Dadurch werden package.json und package-lock des Projekts NICHT verändert.
+          rm -rf /tmp/pixva-jsx-check
+          mkdir -p /tmp/pixva-jsx-check
+          npm install --prefix /tmp/pixva-jsx-check typescript@5.9.2 --no-save --no-audit --no-fund --ignore-scripts
+
+          NODE_PATH=/tmp/pixva-jsx-check/node_modules node /tmp/check-jsx.cjs             /tmp/pixva-v11-8-2/AdminAccounts.jsx             /tmp/pixva-v11-8-2/DesignEditor.jsx             /tmp/pixva-v11-8-2/WebsiteBuilder.jsx
 
           grep -Fq "Kunden-/Privatkonto" /tmp/pixva-v11-8-2/AdminAccounts.jsx
           grep -Fq "Geschäftskonto" /tmp/pixva-v11-8-2/AdminAccounts.jsx
@@ -70,7 +76,7 @@ jobs:
           grep -Fq "/pixva-logo.png" /tmp/pixva-v11-8-2/DesignEditor.jsx
           echo "VORPRÜFUNG KOMPLETT GRÜN."
 
-      - name: V11.8.2.1 einsetzen
+      - name: V11.8.2.2 einsetzen
         shell: bash
         run: |
           set -e
@@ -89,7 +95,7 @@ jobs:
           cp api/ai/admin-accounts.js /tmp/admin-accounts-installed.mjs
           node --check /tmp/admin-accounts-installed.mjs
 
-          node /tmp/check-jsx.cjs             client/src/components/AdminAccounts.jsx             client/src/components/DesignEditor.jsx             client/src/components/WebsiteBuilder.jsx
+          NODE_PATH=/tmp/pixva-jsx-check/node_modules node /tmp/check-jsx.cjs             client/src/components/AdminAccounts.jsx             client/src/components/DesignEditor.jsx             client/src/components/WebsiteBuilder.jsx
           echo "INSTALLIERTER STAND KOMPLETT GRÜN."
 
       - name: Geld und Hauptlogo unverändert prüfen
@@ -121,12 +127,12 @@ jobs:
         shell: bash
         run: |
           set -e
-          git config user.name "PIXVA V11.8.2.1 Syntax Fix"
+          git config user.name "PIXVA V11.8.2.2 Preflight Fix"
           git config user.email "actions@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
-            echo "V11.8.2.1 bereits vorhanden."
+            echo "V11.8.2.2 bereits vorhanden."
             exit 0
           fi
-          git commit -m "PIXVA V11.8.2.1 Syntax Fix"
+          git commit -m "PIXVA V11.8.2.2 Preflight Fix"
           git push origin HEAD:main
