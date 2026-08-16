@@ -1,0 +1,166 @@
+{
+  "version": "1.0",
+  "name": "PIXVA Website Builder Firmenprofil Auto-Template",
+  "description": "Website wird beim Öffnen automatisch aus dem Firmenprofil vorbereitet. Kein extra Erstellen-Knopf nötig.",
+  "autoFillOnOpen": true,
+  "emailOptional": true,
+
+  "profileBindings": {
+    "logo": "company.logoPath",
+    "companyName": "company.companyName",
+    "ownerName": "company.ownerName",
+    "industry": "company.industry",
+    "industryOther": "company.industryOther",
+    "companyPhone": "company.companyPhone",
+    "companyEmail": "company.companyEmail",
+    "website": "company.website",
+    "instagram": "company.instagram",
+    "address": "company.address",
+    "openingHours": "company.openingHours",
+    "primaryColor": "company.primaryColor",
+    "secondaryColor": "company.secondaryColor"
+  },
+
+  "fallback": {
+    "companyName": "BEISPIEL FIRMA",
+    "ownerName": "Max Mustermann",
+    "companyPhone": "+49 711 1234567",
+    "companyEmail": "info@beispiel-firma.de",
+    "website": "www.beispiel-firma.de",
+    "instagram": "@beispielfirma",
+    "address": "Musterstraße 12 · 70173 Stuttgart",
+    "logo": "/pixva-logo.png"
+  },
+
+  "industryTemplates": {
+    "supermarkt": {
+      "label": "Supermarkt",
+      "headline": "Frische Angebote für jeden Tag.",
+      "subline": "Frische Produkte, starke Wochenangebote und persönliche Beratung.",
+      "services": [
+        "Frische Lebensmittel",
+        "Obst & Gemüse",
+        "Fleisch & Geflügel",
+        "Wochenangebote"
+      ],
+      "primaryColor": "#145A46",
+      "secondaryColor": "#D73D32"
+    },
+
+    "werbetechnik": {
+      "label": "Werbetechnik",
+      "headline": "Wir machen Marken sichtbar.",
+      "subline": "Werbetechnik, Druck, Beschriftung und Montage aus einer Hand.",
+      "services": [
+        "Leuchtwerbung",
+        "Fahrzeugfolierung",
+        "Schilder & Beschriftung",
+        "Druck & Montage"
+      ],
+      "primaryColor": "#101010",
+      "secondaryColor": "#F0C83C"
+    },
+
+    "elektriker": {
+      "label": "Elektriker",
+      "headline": "Sichere Elektrik. Saubere Arbeit.",
+      "subline": "Elektroinstallation, Wartung und moderne Lösungen für Privat und Gewerbe.",
+      "services": [
+        "Elektroinstallation",
+        "Modernisierung",
+        "Wartung & Prüfung",
+        "Beleuchtung"
+      ],
+      "primaryColor": "#163A63",
+      "secondaryColor": "#FFB400"
+    },
+
+    "programmierer": {
+      "label": "Programmierer · Software & KI",
+      "headline": "Digitale Lösungen, die für dich arbeiten.",
+      "subline": "Websites, Software, Automationen und KI-Lösungen für Unternehmen.",
+      "services": [
+        "Webentwicklung",
+        "Softwareentwicklung",
+        "KI & Automationen",
+        "Digitale Systeme"
+      ],
+      "primaryColor": "#101A2D",
+      "secondaryColor": "#6E58FF"
+    },
+
+    "sonstiges": {
+      "label": "Unternehmen",
+      "headline": "Professionell. Persönlich. Passend.",
+      "subline": "Leistungen, Beratung und Kontakt – modern präsentiert im Stil deiner Firma.",
+      "services": [
+        "Unsere Leistungen",
+        "Persönliche Beratung",
+        "Individuelle Lösungen",
+        "Kontakt & Service"
+      ],
+      "primaryColor": "#101A2D",
+      "secondaryColor": "#35D1D1"
+    }
+  },
+
+  "layout": {
+    "header": {
+      "showLogo": true,
+      "showCompanyName": true,
+      "showPhone": true,
+      "showEmail": true,
+      "showWebsite": true,
+      "showInstagram": true
+    },
+
+    "hero": {
+      "showIndustry": true,
+      "showHeadline": true,
+      "showSubline": true,
+      "showOwner": true,
+      "showAddress": true,
+      "ctaText": "Jetzt anfragen"
+    },
+
+    "sections": [
+      {
+        "id": "services",
+        "title": "Unsere Leistungen",
+        "type": "serviceCards",
+        "cards": 4
+      },
+      {
+        "id": "about",
+        "title": "Über uns",
+        "type": "companyInfo",
+        "showOwner": true
+      },
+      {
+        "id": "contact",
+        "title": "Kontakt",
+        "type": "contact",
+        "showPhone": true,
+        "showEmail": true,
+        "showWebsite": true,
+        "showInstagram": true,
+        "showAddress": true
+      }
+    ],
+
+    "footer": {
+      "showCompanyName": true,
+      "showPhone": true,
+      "showEmail": true,
+      "showWebsite": true
+    }
+  },
+
+  "rules": {
+    "useRealCompanyDataWhenAvailable": true,
+    "useFallbackOnlyWhenMissing": true,
+    "useCompanyLogoAutomatically": true,
+    "useIndustryThemeAutomatically": true,
+    "updatePreviewImmediately": true
+  }
+}
