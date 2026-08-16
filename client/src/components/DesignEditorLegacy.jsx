@@ -422,6 +422,7 @@ function pixvaBrainBrand(brain){
   const example=type==='supermarkt'?{name:'BEISPIEL MARKT',email:'info@beispiel-markt.de',phone:'+49 711 1234567',website:'www.beispiel-markt.de',instagram:'@beispielmarkt',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
     type==='werbetechnik'?{name:'BEISPIEL WERBETECHNIK',email:'info@beispiel-werbetechnik.de',phone:'+49 711 1234567',website:'www.beispiel-werbetechnik.de',instagram:'@beispielwerbetechnik',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
     type==='elektriker'?{name:'BEISPIEL ELEKTRO',email:'info@beispiel-elektro.de',phone:'+49 711 1234567',website:'www.beispiel-elektro.de',instagram:'@beispielelektro',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
+    type==='programmierer'?{name:'PIXVA',email:'info@pixva-beispiel.de',phone:'+49 711 1234567',website:'www.pixva-beispiel.de',instagram:'@pixvaai',address:'Stuttgart, Deutschland',other:''}:
     {name:'BEISPIEL FIRMA',email:'info@beispiel-firma.de',phone:'+49 711 1234567',website:'www.beispiel-firma.de',instagram:'@beispielfirma',address:'Musterstraße 12 · 70173 Stuttgart',other:c.companyTypeOther||'Unternehmen'};
   return{
     company_name:c.companyName||example.name,
