@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 750">
+<rect width="600" height="750" fill="#071923"/>
+<rect width="600" height="116" fill="#7258ff"/>
+<rect y="116" width="315" height="14" fill="#39d6d0"/>
+<text x="36" y="42" font-family="Arial" font-size="15" font-weight="800" fill="#fff">PIXVA · SOFTWARE &amp; KI</text>
+<text x="36" y="83" font-family="Arial" font-size="27" font-weight="900" fill="#fff">WEBSEITE &amp; KI-PAKET</text>
+<rect x="36" y="175" width="320" height="325" rx="18" fill="#0d2634" stroke="#39d6d0" stroke-width="3"/>
+<text x="196" y="340" text-anchor="middle" font-family="Arial" font-size="19" font-weight="800" fill="#ffffff">BILD / PRODUKT</text>
+<rect x="385" y="200" width="179" height="245" rx="20" fill="#7258ff"/>
+<text x="474" y="268" text-anchor="middle" font-family="Arial" font-size="15" fill="#fff">STATT 39,99 €</text>
+<text x="474" y="326" text-anchor="middle" font-family="Arial" font-size="34" font-weight="900" fill="#fff">29,99 €</text>
+<rect x="405" y="350" width="138" height="42" rx="21" fill="#39d6d0"/>
+<text x="474" y="377" text-anchor="middle" font-family="Arial" font-size="14" font-weight="900" fill="#7258ff">25% RABATT</text>
+<text x="36" y="575" font-family="Arial" font-size="27" font-weight="900" fill="#ffffff">PIXVA</text>
+<text x="36" y="615" font-family="Arial" font-size="13" fill="#ffffff">+49 711 1234567</text>
+<text x="36" y="642" font-family="Arial" font-size="13" fill="#ffffff">www.pixva-beispiel.de</text>
+<rect x="442" y="565" width="122" height="68" rx="11" fill="#fff" stroke="#39d6d0"/>
+<text x="503" y="605" text-anchor="middle" font-family="Arial" font-size="17" font-weight="900" fill="#7258ff">LOGO</text>
+</svg>

@@ -11,6 +11,7 @@ import {
   Type, Undo2, Unlock, Upload, WandSparkles, ZoomIn
 } from 'lucide-react';
 import { api } from '../api.js';
+import { applyPixvaFileTemplate, pixvaTemplateIdForBrand, pixvaTemplateList } from '../data/pixva/flyerTemplateEngine.js';
 import { canUseFeature } from '../plans.js';
 
 const formats = {
@@ -636,12 +637,10 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           canvas.renderAll();
           setBackground(canvas.backgroundColor || '#f4f0e8');
         } catch {
-          if(brand)await pixvaCompanyTemplate(canvas,format.canvas[0],format.canvas[1],mode,brand);
-          else addStarterTemplate(canvas,format.canvas[0],format.canvas[1],mode);
+          await applyPixvaFileTemplate(canvas,pixvaTemplateIdForBrand(brand||{},mode),format.canvas[0],format.canvas[1],brand||{});
         }
       } else {
-        if(brand)await pixvaCompanyTemplate(canvas,format.canvas[0],format.canvas[1],mode,brand);
-        else addStarterTemplate(canvas,format.canvas[0],format.canvas[1],mode);
+        await applyPixvaFileTemplate(canvas,pixvaTemplateIdForBrand(brand||{},mode),format.canvas[0],format.canvas[1],brand||{});
       }
     }
     initialize();
@@ -692,11 +691,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         setCompanyBrand(brand);
         const canvas=fabricRef.current;
         if(!canvas)return;
-        if(typeof pixvaCompanyTemplate==='function'){
-          await pixvaCompanyTemplate(canvas,canvas.width,canvas.height,mode,brand);
-          setBackground(canvas.backgroundColor||brand.primary_color||'#f4f0e8');
-          setStatus(brand.pixva_example_mode?'PIXVA Brain: BEISPIELVORLAGE aktiv · wird durch echte Firmendaten ersetzt':`PIXVA Brain: ${brain.company?.companyName||'Firma'} · ${brain.company?.industryLabel||''} · Firmenlogo & Kontaktdaten aktiv`);
-        }
+        await applyPixvaFileTemplate(canvas,pixvaTemplateIdForBrand(brand,mode),canvas.width,canvas.height,brand);
+        setBackground(canvas.backgroundColor||brand.primary_color||'#f4f0e8');
+        setStatus(brand.pixva_example_mode?'PIXVA Datei-Vorlage: BEISPIEL aktiv · echte Firmendaten ersetzen die Beispiele automatisch':`PIXVA Datei-Vorlage: ${brain.company?.companyName||'Firma'} · Firmenlogo & Kontaktdaten aktiv`);
       }catch(error){
         if(!cancelled)setStatus(`PIXVA Brain konnte Firmenprofil nicht laden: ${error.message}`);
       }
@@ -1141,17 +1138,15 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     const canvas = fabricRef.current;
     if (canvas.getObjects().length && !confirm('Aktuelles Design durch die gewählte Vorlage ersetzen?')) return;
     try {
-      let usedReference = false;
-      if (templateVariant === 'reference' && referenceTemplates[type]) {
-        usedReference = await addReferenceTemplate(canvas, type, canvas.width, canvas.height);
-      }
-      if (!usedReference) {
-        if (type === 'offer') addOfferTemplate(canvas, canvas.width, canvas.height);
-        else if (type === 'atlas-grid') addAtlasGridTemplate(canvas, canvas.width, canvas.height);
-        else if (type === 'fresh-grid') addFreshGridTemplate(canvas, canvas.width, canvas.height);
-        else if (type === 'tea-single') addSingleTeaTemplate(canvas, canvas.width, canvas.height);
-        else if (type === 'creative') addCreativeTemplate(canvas, canvas.width, canvas.height);
-        else { canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.renderAll(); }
+      if (type === 'blank') {
+        canvas.clear();
+        canvas.backgroundColor = '#ffffff';
+        canvas.renderAll();
+      } else if (type === 'creative') {
+        addCreativeTemplate(canvas, canvas.width, canvas.height);
+      } else {
+        const brand = companyBrand || pixvaBrainBrand(pixvaBrain);
+        await applyPixvaFileTemplate(canvas, type, canvas.width, canvas.height, brand || {});
       }
       currentTemplateRef.current = type;
       baseTemplateRef.current = canvas.toJSON(customProps);
@@ -1160,14 +1155,11 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       syncSelected(null);
       snapshot();
       refreshLayers();
-      setStatus(usedReference
-        ? 'Original-Vorlage geladen. Produktbilder können ersetzt werden. Für vollständig getrennte Ebenen wähle „Voll bearbeitbar“.'
-        : 'Voll bearbeitbare Vorlage geladen.');
+      setStatus(type === 'blank' ? 'Leere Arbeitsfläche geladen.' : 'PIXVA Datei-Vorlage geladen · vollständig bearbeitbar.');
     } catch (error) {
-      setStatus(error.message || 'Vorlage konnte nicht geladen werden.');
+      setStatus(error.message || 'PIXVA Datei-Vorlage konnte nicht geladen werden.');
     }
   }
-
   async function renderJsonData(json) {
     if (!json) return currentPngData();
     const temporaryElement = document.createElement('canvas');
@@ -1380,17 +1372,18 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         <div className="panel-section">
           <div className="pixva-brain-chip">PIXVA Brain arbeitet hier mit{pixvaBrain?.isCompany?` · ${pixvaBrain.company?.industryLabel||''}`:''}</div><label>Projektname<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
           <label>Format<select value={formatKey} onChange={(event) => setFormatKey(event.target.value)}>{Object.entries(formats).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-          <label>Vorlagenmodus<select value={templateVariant} onChange={(event) => setTemplateVariant(event.target.value)}><option value="editable">Voll bearbeitbar (empfohlen)</option><option value="reference">Nur Originalbild – nicht alle Ebenen editierbar</option></select></label>
+          <div className="pixva-file-template-mode">PIXVA Datei-Vorlagen · gerade · vollständig bearbeitbar</div>
           <div className="template-gallery">
-            <button onClick={() => applyTemplate('tea-single')}><img src="/templates/atlas-tee-single.jpg" alt="Einzelangebot"/><span>Einzelangebot</span></button>
-            <button onClick={() => applyTemplate('atlas-grid')}><img src="/templates/atlas-grid.jpg" alt="Atlas Raster"/><span>Atlas 3×3</span></button>
-            <button onClick={() => applyTemplate('fresh-grid')}><img src="/templates/fresh-grid.jpg" alt="Fresh Raster"/><span>Fresh 3×3</span></button>
-            <button onClick={() => applyTemplate('offer')}><img src="/templates/fresh-market-single.jpg" alt="Produktangebot"/><span>Produkt & Preis</span></button>
+            {pixvaTemplateList.map((template) => (
+              <button key={template.id} onClick={() => applyTemplate(template.id)}>
+                <img src={template.preview} alt={template.name}/>
+                <span>{template.name}</span>
+              </button>
+            ))}
             <button onClick={() => applyTemplate('creative')}><span className="template-abstract">AI</span><span>Kreativ</span></button>
             <button onClick={() => applyTemplate('blank')}><span className="template-blank">+</span><span>Leer</span></button>
           </div>
         </div>
-
         <div className="tool-grid">
           <button onClick={addText}><Type size={18}/>Text</button>
           <button onClick={addShape}><Square size={18}/>Form</button>

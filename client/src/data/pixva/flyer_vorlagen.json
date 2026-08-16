@@ -1,0 +1,215 @@
+{
+  "version": "11.9",
+  "canvas": {
+    "width": 600,
+    "height": 750
+  },
+  "rules": {
+    "angle": 0,
+    "straightOnly": true,
+    "companyAutofill": true,
+    "logoAutofill": true
+  },
+  "templates": [
+    {
+      "id": "pixva-programmierer",
+      "name": "Software & KI",
+      "industry": "programmierer",
+      "layout": "single",
+      "preview": "/templates/pixva/software-ki.svg",
+      "style": {
+        "background": "#071923",
+        "primary": "#7258ff",
+        "secondary": "#39d6d0",
+        "text": "#ffffff",
+        "surface": "#0d2634"
+      },
+      "content": {
+        "eyebrow": "PIXVA · SOFTWARE & KI",
+        "headline": "WEBSEITE & KI-PAKET",
+        "subtitle": "Websites · Software · Automatisierung · KI",
+        "productLabel": "DEIN PROJEKT / MOCKUP",
+        "oldPrice": "39,99 €",
+        "newPrice": "29,99 €",
+        "badge": "25% RABATT",
+        "note": "pro Monat · nur für Neukunden · 1 Jahr"
+      },
+      "example": {
+        "companyName": "PIXVA",
+        "ownerName": "Dein Ansprechpartner",
+        "companyPhone": "+49 711 1234567",
+        "companyEmail": "info@pixva-beispiel.de",
+        "website": "www.pixva-beispiel.de",
+        "instagram": "@pixvaai",
+        "address": "Stuttgart, Deutschland",
+        "logo": "/pixva-logo.png"
+      }
+    },
+    {
+      "id": "pixva-supermarkt",
+      "name": "Supermarkt Angebot",
+      "industry": "supermarkt",
+      "layout": "single",
+      "preview": "/templates/pixva/supermarkt.svg",
+      "style": {
+        "background": "#f6f0e7",
+        "primary": "#145a46",
+        "secondary": "#d7332f",
+        "text": "#173228",
+        "surface": "#ffffff"
+      },
+      "content": {
+        "eyebrow": "WOCHENANGEBOT",
+        "headline": "FRISCHE TOMATEN",
+        "subtitle": "Frisch · täglich · solange der Vorrat reicht",
+        "productLabel": "PRODUKTBILD",
+        "oldPrice": "3,99 €",
+        "newPrice": "2,99 €",
+        "badge": "25% RABATT",
+        "note": "1 kg · Beispiel-Angebot"
+      },
+      "example": {
+        "companyName": "BEISPIEL MARKT",
+        "ownerName": "Max Mustermann",
+        "companyPhone": "+49 711 1234567",
+        "companyEmail": "info@beispiel-markt.de",
+        "website": "www.beispiel-markt.de",
+        "instagram": "@beispielmarkt",
+        "address": "Musterstraße 12 · Stuttgart",
+        "logo": "/pixva-logo.png"
+      }
+    },
+    {
+      "id": "pixva-werbetechnik",
+      "name": "Werbetechnik Dibond",
+      "industry": "werbetechnik",
+      "layout": "single",
+      "preview": "/templates/pixva/werbetechnik.svg",
+      "style": {
+        "background": "#101010",
+        "primary": "#f7c948",
+        "secondary": "#ffffff",
+        "text": "#ffffff",
+        "surface": "#1b1b1b"
+      },
+      "content": {
+        "eyebrow": "WERBETECHNIK · DRUCK · MONTAGE",
+        "headline": "BEDRUCKTE DIBOND PLATTE",
+        "subtitle": "E1 · 3 mm · hochwertiger Direktdruck",
+        "productLabel": "PRODUKTFOTO / DIBOND",
+        "oldPrice": "59,99 €",
+        "newPrice": "44,99 €",
+        "badge": "25% RABATT",
+        "note": "Beispielpreis · pro m²"
+      },
+      "example": {
+        "companyName": "BEISPIEL WERBETECHNIK",
+        "ownerName": "Max Mustermann",
+        "companyPhone": "+49 711 1234567",
+        "companyEmail": "info@beispiel-werbetechnik.de",
+        "website": "www.beispiel-werbetechnik.de",
+        "instagram": "@beispielwerbetechnik",
+        "address": "Stuttgart, Deutschland",
+        "logo": "/pixva-logo.png"
+      }
+    },
+    {
+      "id": "pixva-elektriker",
+      "name": "Elektriker Aktion",
+      "industry": "elektriker",
+      "layout": "single",
+      "preview": "/templates/pixva/elektriker.svg",
+      "style": {
+        "background": "#eef5f9",
+        "primary": "#123a60",
+        "secondary": "#ffbf22",
+        "text": "#10283c",
+        "surface": "#ffffff"
+      },
+      "content": {
+        "eyebrow": "ELEKTRO · SERVICE · SICHERHEIT",
+        "headline": "ELEKTRO-CHECK",
+        "subtitle": "Prüfung · Beratung · fachgerechte Ausführung",
+        "productLabel": "PROJEKTFOTO",
+        "oldPrice": "199,00 €",
+        "newPrice": "149,00 €",
+        "badge": "AKTION",
+        "note": "Beispiel-Rabattaktion"
+      },
+      "example": {
+        "companyName": "BEISPIEL ELEKTRO",
+        "ownerName": "Max Mustermann",
+        "companyPhone": "+49 711 1234567",
+        "companyEmail": "info@beispiel-elektro.de",
+        "website": "www.beispiel-elektro.de",
+        "instagram": "@beispielelektro",
+        "address": "Stuttgart, Deutschland",
+        "logo": "/pixva-logo.png"
+      }
+    },
+    {
+      "id": "pixva-supermarkt-6er",
+      "name": "Supermarkt 6er Raster",
+      "industry": "supermarkt",
+      "layout": "grid6",
+      "preview": "/templates/pixva/supermarkt-6er.svg",
+      "style": {
+        "background": "#f6f0e7",
+        "primary": "#145a46",
+        "secondary": "#d7332f",
+        "text": "#173228",
+        "surface": "#ffffff"
+      },
+      "content": {
+        "eyebrow": "DEINE WOCHENANGEBOTE",
+        "headline": "6 ANGEBOTE",
+        "subtitle": "Produkte und Preise direkt bearbeiten",
+        "badge": "ANGEBOT"
+      },
+      "example": {
+        "companyName": "BEISPIEL MARKT",
+        "ownerName": "Max Mustermann",
+        "companyPhone": "+49 711 1234567",
+        "companyEmail": "info@beispiel-markt.de",
+        "website": "www.beispiel-markt.de",
+        "instagram": "@beispielmarkt",
+        "address": "Musterstraße 12 · Stuttgart",
+        "logo": "/pixva-logo.png"
+      }
+    },
+    {
+      "id": "pixva-firma",
+      "name": "Firma Universal",
+      "industry": "sonstiges",
+      "layout": "single",
+      "preview": "/templates/pixva/firma.svg",
+      "style": {
+        "background": "#f3f6f8",
+        "primary": "#172839",
+        "secondary": "#39d6d0",
+        "text": "#172839",
+        "surface": "#ffffff"
+      },
+      "content": {
+        "eyebrow": "DEINE FIRMA",
+        "headline": "PROFESSIONELLES ANGEBOT",
+        "subtitle": "Leistung · Beratung · Service",
+        "productLabel": "BILD / LEISTUNG",
+        "oldPrice": "",
+        "newPrice": "ANGEBOT",
+        "badge": "JETZT",
+        "note": "Beispiel-Vorlage"
+      },
+      "example": {
+        "companyName": "BEISPIEL FIRMA",
+        "ownerName": "Max Mustermann",
+        "companyPhone": "+49 711 1234567",
+        "companyEmail": "info@beispiel-firma.de",
+        "website": "www.beispiel-firma.de",
+        "instagram": "@beispielfirma",
+        "address": "Stuttgart, Deutschland",
+        "logo": "/pixva-logo.png"
+      }
+    }
+  ]
+}

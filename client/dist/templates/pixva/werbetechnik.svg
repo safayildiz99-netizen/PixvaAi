@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 750">
+<rect width="600" height="750" fill="#101010"/>
+<rect width="600" height="116" fill="#f7c948"/>
+<rect y="116" width="315" height="14" fill="#ffffff"/>
+<text x="36" y="42" font-family="Arial" font-size="15" font-weight="800" fill="#fff">WERBETECHNIK · DRUCK · MONTAGE</text>
+<text x="36" y="83" font-family="Arial" font-size="27" font-weight="900" fill="#fff">BEDRUCKTE DIBOND PLATTE</text>
+<rect x="36" y="175" width="320" height="325" rx="18" fill="#1b1b1b" stroke="#ffffff" stroke-width="3"/>
+<text x="196" y="340" text-anchor="middle" font-family="Arial" font-size="19" font-weight="800" fill="#ffffff">BILD / PRODUKT</text>
+<rect x="385" y="200" width="179" height="245" rx="20" fill="#f7c948"/>
+<text x="474" y="268" text-anchor="middle" font-family="Arial" font-size="15" fill="#fff">STATT 59,99 €</text>
+<text x="474" y="326" text-anchor="middle" font-family="Arial" font-size="34" font-weight="900" fill="#fff">44,99 €</text>
+<rect x="405" y="350" width="138" height="42" rx="21" fill="#ffffff"/>
+<text x="474" y="377" text-anchor="middle" font-family="Arial" font-size="14" font-weight="900" fill="#f7c948">25% RABATT</text>
+<text x="36" y="575" font-family="Arial" font-size="27" font-weight="900" fill="#ffffff">BEISPIEL WERBETECHNIK</text>
+<text x="36" y="615" font-family="Arial" font-size="13" fill="#ffffff">+49 711 1234567</text>
+<text x="36" y="642" font-family="Arial" font-size="13" fill="#ffffff">www.beispiel-werbetechnik.de</text>
+<rect x="442" y="565" width="122" height="68" rx="11" fill="#fff" stroke="#ffffff"/>
+<text x="503" y="605" text-anchor="middle" font-family="Arial" font-size="17" font-weight="900" fill="#f7c948">LOGO</text>
+</svg>
