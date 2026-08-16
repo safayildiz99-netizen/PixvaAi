@@ -1154,6 +1154,37 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     return brand;
   }
 
+  /* PIXVA V11.9.8 ROBUST TEMPLATE SWITCH */
+  async function resolvePixvaTemplateBrand() {
+    if (companyBrand) return companyBrand;
+
+    try {
+      const overview = await api('/api/pixva?action=overview');
+      const brand = overview?.brand || null;
+      if (brand) {
+        setCompanyBrand(brand);
+        return brand;
+      }
+    } catch {
+    }
+
+    if (pixvaBrain) {
+      const brand = pixvaBrainBrand(pixvaBrain);
+      setCompanyBrand(brand);
+      return brand;
+    }
+
+    try {
+      const brain = await api('/api/pixva?action=brain-context');
+      setPixvaBrain(brain);
+      const brand = pixvaBrainBrand(brain);
+      setCompanyBrand(brand);
+      return brand;
+    } catch {
+      return {};
+    }
+  }
+
   async function applyTemplate(type) {
     const canvas = fabricRef.current;
     if (!canvas) {
