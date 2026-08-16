@@ -1,111 +1,65 @@
+/* PIXVA V11.8.2 ADMIN – ROBUSTE BASISLISTE + KUNDEN/FIRMEN ERSTELLEN */
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, ChevronDown, ChevronRight, KeyRound, RefreshCw, Shield, UserRound } from 'lucide-react';
+import { Building2, ChevronDown, ChevronRight, KeyRound, PlusCircle, RefreshCw, Save, Shield, UserRound } from 'lucide-react';
 import { api } from '../api.js';
 
 const fmt=v=>v?new Date(v).toLocaleString('de-DE'):'—';
 const show=v=>v===null||v===undefined||String(v)===''?'—':String(v);
 const Field=({label,value})=><div className="pixva-registry-field"><small>{label}</small><b>{show(value)}</b></div>;
-
-function groups(accounts){
-  const normal=accounts.filter(a=>a.role!=='admin');
-  return [
-    ['1 · Admin-Konten',accounts.filter(a=>a.role==='admin')],
-    ['2 · Firmenkonten · vom Admin erstellt',normal.filter(a=>a.account_type==='company'&&a.created_source==='admin')],
-    ['3 · Firmenkonten · selbst registriert',normal.filter(a=>a.account_type==='company'&&a.created_source==='self')],
-    ['4 · Firmenkonten · Bestand/System',normal.filter(a=>a.account_type==='company'&&!['admin','self'].includes(a.created_source))],
-    ['5 · Privatkonten · vom Admin erstellt',normal.filter(a=>a.account_type!=='company'&&a.created_source==='admin')],
-    ['6 · Privatkonten · selbst registriert',normal.filter(a=>a.account_type!=='company'&&a.created_source==='self')],
-    ['7 · Privatkonten · Bestand/System',normal.filter(a=>a.account_type!=='company'&&!['admin','self'].includes(a.created_source))]
-  ];
-}
-function List({title,items,render}){
-  return <div className="pixva-registry-list"><h5>{title} · {items.length}</h5>{items.length?items.map(render):<span className="pixva-muted">Nichts vorhanden.</span>}</div>;
-}
+const emptyForm=()=>({accountType:'private',username:'',password:'',role:'user',firstName:'',lastName:'',email:'',phone:'',birthDate:'',companyName:'',companyType:'programmierer',companyTypeOther:'',ownerName:'',companyEmail:'',companyPhone:'',privatePhone:'',website:'',instagram:'',address:'',openingHours:'',logoDataUrl:'',primaryColor:'#7258ff',secondaryColor:'#39d6d0',designStyle:'modern-premium'});
+function baseAccount(u){return{id:u.id,username:u.username||'',role:u.role||'user',active:u.active!==false,must_change_password:Boolean(u.mustChangePassword??u.must_change_password),created_at:u.createdAt||u.created_at||null,first_name:u.first_name||'',last_name:u.last_name||'',email:u.email||'',phone:u.phone||'',birth_date:u.birth_date||'',team_role:u.team_role||'member',account_type:u.account_type||'private',stored_account_type:u.stored_account_type||u.account_type||'private',created_source:u.created_source||'legacy',company:u.company||{},contents:u.contents||{}}}
+function mergeAccount(base,extra){const e=extra||{},company={...(base.company||{}),...(e.company||{})};return{...base,...e,company,contents:{...(base.contents||{}),...(e.contents||{})},account_type:(e.account_type==='company'||company.company_name)?'company':(e.account_type||base.account_type||'private')}}
+function groups(accounts){const normal=accounts.filter(a=>a.role!=='admin');return[['1 · Admin-Konten',accounts.filter(a=>a.role==='admin')],['2 · Firmenkonten · vom Admin erstellt',normal.filter(a=>a.account_type==='company'&&a.created_source==='admin')],['3 · Firmenkonten · selbst registriert',normal.filter(a=>a.account_type==='company'&&a.created_source==='self')],['4 · Firmenkonten · Bestand/System',normal.filter(a=>a.account_type==='company'&&!['admin','self'].includes(a.created_source))],['5 · Kunden-/Privatkonten · vom Admin erstellt',normal.filter(a=>a.account_type!=='company'&&a.created_source==='admin')],['6 · Kunden-/Privatkonten · selbst registriert',normal.filter(a=>a.account_type!=='company'&&a.created_source==='self')],['7 · Kunden-/Privatkonten · Bestand/System',normal.filter(a=>a.account_type!=='company'&&!['admin','self'].includes(a.created_source))]]}
+function List({title,items,render}){return <div className="pixva-registry-list"><h5>{title} · {items.length}</h5>{items.length?items.map(render):<span className="pixva-muted">Nichts vorhanden.</span>}</div>}
+function logoFile(file,setter){if(!file)return;if(!/^image\/(png|jpeg|webp)$/i.test(file.type))return setter({error:'Logo muss PNG, JPG oder WebP sein.'});if(file.size>1300000)return setter({error:'Logo ist zu groß. Maximal ca. 1,3 MB.'});const reader=new FileReader();reader.onload=()=>setter({logoDataUrl:String(reader.result||''),error:''});reader.readAsDataURL(file)}
 
 export default function AdminAccounts(){
-  const [accounts,setAccounts]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
-  const [message,setMessage]=useState(''),[open,setOpen]=useState({}),[passwords,setPasswords]=useState({});
-
+  const [accounts,setAccounts]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[message,setMessage]=useState(''),[open,setOpen]=useState({}),[passwords,setPasswords]=useState({}),[form,setForm]=useState(emptyForm()),[creating,setCreating]=useState(false),[edits,setEdits]=useState({}),[currentUserId,setCurrentUserId]=useState('');
   async function load(){
     setLoading(true);setError('');
-    try{const r=await api('/api/ai/admin-accounts?action=overview');setAccounts(r.accounts||[])}
-    catch(e){setError(e.message)}
-    finally{setLoading(false)}
-  }
-  useEffect(()=>{load()},[]);
-  const grouped=useMemo(()=>groups(accounts),[accounts]);
-
-  async function resetPassword(a){
-    const value=String(passwords[a.id]||'');
-    if(value.length<10)return setMessage('Neues Passwort braucht mindestens 10 Zeichen.');
     try{
-      await api('/api/ai/admin-accounts?action=reset-password',{method:'POST',body:JSON.stringify({userId:a.id,newPassword:value})});
-      setPasswords(o=>({...o,[a.id]:''}));setMessage(`Neues Passwort für @${a.username} wurde gesetzt.`);await load();
-    }catch(e){setMessage(e.message)}
+      const results=await Promise.allSettled([api('/api/users'),api('/api/ai/admin-accounts?action=overview'),api('/api/pixva?action=brain-context')]);
+      const baseResult=results[0].status==='fulfilled'?results[0].value:null;if(!baseResult?.users)throw new Error(results[0].reason?.message||'Die bestehende Benutzerliste konnte nicht geladen werden.');
+      const detail=results[1].status==='fulfilled'?results[1].value:{accounts:[]};const brain=results[2].status==='fulfilled'?results[2].value:null;const detailMap=new Map((detail.accounts||[]).map(a=>[a.id,a]));
+      let merged=(baseResult.users||[]).map(u=>mergeAccount(baseAccount(u),detailMap.get(u.id)));
+      const meId=detail.currentUserId||brain?.user?.id||'';setCurrentUserId(meId);
+      if(meId&&brain?.company){merged=merged.map(a=>a.id!==meId?a:mergeAccount(a,{first_name:brain.user?.first_name||a.first_name,last_name:brain.user?.last_name||a.last_name,email:brain.user?.email||a.email,phone:brain.user?.phone||a.phone,birth_date:brain.user?.birth_date||a.birth_date,account_type:brain.isCompany?'company':a.account_type,company:{company_name:brain.company.companyName||a.company?.company_name||'',company_type:brain.company.companyType||a.company?.company_type||'',company_type_other:brain.company.companyTypeOther||a.company?.company_type_other||'',owner_name:brain.company.ownerName||a.company?.owner_name||'',company_email:brain.company.companyEmail||a.company?.company_email||'',company_phone:brain.company.companyPhone||a.company?.company_phone||'',private_phone:brain.company.privatePhone||a.company?.private_phone||'',website:brain.company.website||a.company?.website||'',instagram:brain.company.instagram||a.company?.instagram||'',address:brain.company.address||a.company?.address||'',opening_hours:brain.company.openingHours||a.company?.opening_hours||'',design_style:brain.company.designStyle||a.company?.design_style||'',primary_color:brain.company.primaryColor||a.company?.primary_color||'#7258ff',secondary_color:brain.company.secondaryColor||a.company?.secondary_color||'#39d6d0',logo:brain.company.logoDataUrl||brain.company.logoUrl||a.company?.logo||''}}))}
+      setAccounts(merged);
+    }catch(e){setError(e.message)}finally{setLoading(false)}
   }
-  async function updateMeta(a,key,value){
-    const accountType=key==='account_type'?value:(a.stored_account_type||a.account_type||'private');
-    const createdSource=key==='created_source'?value:(a.created_source||'legacy');
+  useEffect(()=>{load()},[]);const grouped=useMemo(()=>groups(accounts),[accounts]);const current=accounts.find(a=>a.id===currentUserId);
+  const setF=(key,value)=>setForm(f=>({...f,[key]:value}));
+  async function createAccount(){
+    if(!form.username.trim())return setMessage('Benutzername fehlt.');if(form.password.length<8)return setMessage('Startpasswort braucht mindestens 8 Zeichen.');if(form.accountType==='company'&&!form.companyName.trim())return setMessage('Für ein Geschäftskonto fehlt der Firmenname.');
+    setCreating(true);setMessage('Konto wird erstellt …');
     try{
-      await api('/api/ai/admin-accounts?action=update-meta',{method:'POST',body:JSON.stringify({userId:a.id,accountType,createdSource})});
-      setMessage('Kontenzuordnung gespeichert.');await load();
-    }catch(e){setMessage(e.message)}
+      const created=await api('/api/users',{method:'POST',body:JSON.stringify({username:form.username.trim(),password:form.password,role:form.role})});
+      try{await api('/api/ai/admin-accounts?action=setup-account',{method:'POST',body:JSON.stringify({...form,userId:created.user.id})});setMessage(`${form.accountType==='company'?'Geschäftskonto':'Kunden-/Privatkonto'} @${created.user.username} wurde erstellt.`)}catch(profileError){setMessage(`Login @${created.user.username} wurde erstellt. Zusatzdaten: ${profileError.message}`)}
+      setForm(emptyForm());await load();
+    }catch(e){setMessage(e.message)}finally{setCreating(false)}
   }
+  function editOf(a){return edits[a.id]||{userId:a.id,accountType:a.stored_account_type||a.account_type||'private',createdSource:a.created_source||'legacy',firstName:a.first_name||'',lastName:a.last_name||'',email:a.email||'',phone:a.phone||'',birthDate:a.birth_date||'',companyName:a.company?.company_name||'',companyType:a.company?.company_type||(/programm/i.test(a.company?.company_type_other||'')?'programmierer':'sonstiges'),companyTypeOther:a.company?.company_type_other||'',ownerName:a.company?.owner_name||'',companyEmail:a.company?.company_email||'',companyPhone:a.company?.company_phone||'',privatePhone:a.company?.private_phone||'',website:a.company?.website||'',instagram:a.company?.instagram||'',address:a.company?.address||'',openingHours:a.company?.opening_hours||'',logoDataUrl:a.company?.logo?.startsWith('data:')?a.company.logo:'',logoPreview:a.company?.logo||'',primaryColor:a.company?.primary_color||'#7258ff',secondaryColor:a.company?.secondary_color||'#39d6d0',designStyle:a.company?.design_style||'modern-premium'} }
+  function patchEdit(a,key,value){setEdits(old=>({...old,[a.id]:{...editOf(a),...(old[a.id]||{}),[key]:value}}))}
+  async function saveEdit(a){const e={...editOf(a),...(edits[a.id]||{})};try{await api('/api/ai/admin-accounts?action=update-account',{method:'POST',body:JSON.stringify(e)});setMessage(`Daten für @${a.username} gespeichert.`);setEdits(old=>{const n={...old};delete n[a.id];return n});await load()}catch(err){setMessage(err.message)}}
+  async function resetPassword(a){const value=String(passwords[a.id]||'');if(value.length<10)return setMessage('Neues Passwort braucht mindestens 10 Zeichen.');try{await api('/api/ai/admin-accounts?action=reset-password',{method:'POST',body:JSON.stringify({userId:a.id,newPassword:value})});setPasswords(o=>({...o,[a.id]:''}));setMessage(`Neues Passwort für @${a.username} wurde gesetzt.`)}catch(e){setMessage(e.message)}}
 
   return <section className="pixva-admin-registry">
-    <div className="pixva-registry-head"><div><h2><Shield size={22}/> Konten & Firmen</h2><p>Admin-, Firmen- und Privatkonten sauber getrennt. Firmenprofil, Login-Daten und erstellte Inhalte sind direkt zugeordnet.</p></div><button onClick={load} disabled={loading}><RefreshCw size={16}/>{loading?'Lädt …':'Aktualisieren'}</button></div>
-    <div className="info-box"><b>Passwort:</b> Das aktuelle Passwort kann nicht angezeigt werden, weil nur der verschlüsselte Hash gespeichert wird. Du kannst bei jedem Konto direkt ein neues Passwort setzen.</div>
-    {message&&<div className="status-line">{message}</div>}{error&&<div className="error-box">{error}</div>}
+    <div className="pixva-registry-head"><div><h2><Shield size={22}/> Konten & Firmen</h2><p>Die echte bestehende Benutzerliste ist die Basis. Firmen-/Kundendaten werden zusätzlich zugeordnet.</p></div><button onClick={load} disabled={loading}><RefreshCw size={16}/>{loading?'Lädt …':'Aktualisieren'}</button></div>
+    <div className="pixva-current-profile"><div className="pixva-current-logo"><img src={current?.company?.logo||'/pixva-logo.png'} alt="Aktives Logo"/></div><div><small>DEIN AKTIVES PROFIL</small><b>{current?.company?.company_name||'PIXVA · Programmierer / Software & KI'}</b><span>{[current?.company?.company_phone,current?.company?.company_email,current?.company?.website].filter(Boolean).join(' · ')||'Wenn deine gespeicherten Daten fehlen: Admin-Konto unten aufklappen und Profil speichern.'}</span></div></div>
+    <div className="pixva-account-create"><div className="pixva-create-title"><PlusCircle size={20}/><div><b>Neues Konto erstellen</b><span>Kunden-/Privatkonto oder Geschäftskonto mit vollständigen Firmendaten.</span></div></div><div className="pixva-account-type-tabs"><button className={form.accountType==='private'?'active':''} onClick={()=>setF('accountType','private')}><UserRound size={17}/>Kunden-/Privatkonto</button><button className={form.accountType==='company'?'active':''} onClick={()=>setF('accountType','company')}><Building2 size={17}/>Geschäftskonto</button></div>
+      <div className="pixva-create-grid"><label>Benutzername *<input value={form.username} onChange={e=>setF('username',e.target.value)}/></label><label>Startpasswort *<input type="password" value={form.password} onChange={e=>setF('password',e.target.value)}/></label><label>Systemrolle<select value={form.role} onChange={e=>setF('role',e.target.value)}><option value="user">Kunde / Nutzer</option><option value="admin">Admin</option></select></label><label>Vorname<input value={form.firstName} onChange={e=>setF('firstName',e.target.value)}/></label><label>Nachname<input value={form.lastName} onChange={e=>setF('lastName',e.target.value)}/></label><label>Normale E-Mail optional<input value={form.email} onChange={e=>setF('email',e.target.value)}/></label><label>Private Telefonnummer optional<input value={form.phone} onChange={e=>setF('phone',e.target.value)}/></label><label>Geburtsdatum optional<input type="date" value={form.birthDate} onChange={e=>setF('birthDate',e.target.value)}/></label></div>
+      {form.accountType==='company'&&<><h4>Geschäftsdaten</h4><div className="pixva-create-grid"><label>Firmenname *<input value={form.companyName} onChange={e=>setF('companyName',e.target.value)}/></label><label>Branche<select value={form.companyType} onChange={e=>setF('companyType',e.target.value)}><option value="programmierer">Programmierer / Software & KI</option><option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="sonstiges">Sonstiges</option></select></label>{form.companyType==='sonstiges'&&<label>Andere Branche<input value={form.companyTypeOther} onChange={e=>setF('companyTypeOther',e.target.value)}/></label>}<label>Inhaber / Ansprechpartner<input value={form.ownerName} onChange={e=>setF('ownerName',e.target.value)}/></label><label>Firmen-E-Mail<input value={form.companyEmail} onChange={e=>setF('companyEmail',e.target.value)}/></label><label>Firmen-Telefon<input value={form.companyPhone} onChange={e=>setF('companyPhone',e.target.value)}/></label><label>Website<input value={form.website} onChange={e=>setF('website',e.target.value)}/></label><label>Instagram<input value={form.instagram} onChange={e=>setF('instagram',e.target.value)}/></label><label>Adresse<input value={form.address} onChange={e=>setF('address',e.target.value)}/></label><label>Öffnungszeiten<input value={form.openingHours} onChange={e=>setF('openingHours',e.target.value)}/></label><label>Firmenlogo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>logoFile(e.target.files?.[0],v=>setForm(f=>({...f,...v})))}/></label></div>{form.logoDataUrl&&<img className="pixva-create-logo-preview" src={form.logoDataUrl} alt="Logo Vorschau"/>}</>}
+      <button className="pixva-create-submit" onClick={createAccount} disabled={creating}>{creating?'Wird erstellt …':'Konto jetzt erstellen'}</button>
+    </div>
+    <div className="info-box"><b>Passwort:</b> Bestehende Passwörter bleiben geschützt und sind nicht auslesbar. Du kannst direkt ein neues setzen.</div>{message&&<div className="status-line">{message}</div>}{error&&<div className="error-box">{error}</div>}
 
-    {grouped.map(([title,items])=><section className="pixva-registry-group" key={title}>
-      <div className="pixva-registry-group-title"><h3>{title}</h3><span>{items.length}</span></div>
-      {!items.length&&<div className="pixva-registry-empty">Keine Konten in dieser Gruppe.</div>}
-      {items.map(a=>{const expanded=Boolean(open[a.id]),b=a.company||{},c=a.contents||{};return <article className="pixva-registry-account" key={a.id}>
-        <button className="pixva-registry-account-head" onClick={()=>setOpen(o=>({...o,[a.id]:!expanded}))}>
-          <div className="pixva-registry-logo">{b.logo?<img src={b.logo} alt="Firmenlogo"/>:a.account_type==='company'?<Building2/>:<UserRound/>}</div>
-          <div className="pixva-registry-account-name"><b>{b.company_name||[a.first_name,a.last_name].filter(Boolean).join(' ')||a.username}</b><span>@{a.username} · {a.role==='admin'?'Admin':a.account_type==='company'?'Firma':'Privat'} · {a.active?'aktiv':'deaktiviert'}</span></div>
-          <div className="pixva-registry-counts"><span>{c.projects?.length||0} Projekte</span><span>{c.products?.length||0} Produkte</span><span>{c.knowledge?.length||0} Wissen</span><span>{c.agents?.length||0} KI</span></div>
-          {expanded?<ChevronDown/>:<ChevronRight/>}
-        </button>
-        {expanded&&<div className="pixva-registry-body">
-          <h4>Login & Konto</h4><div className="pixva-registry-fields">
-            <Field label="Benutzername" value={a.username}/><Field label="Passwort" value="geschützt · nicht auslesbar"/>
-            <Field label="Normale E-Mail" value={a.email}/><Field label="Private Telefonnummer" value={a.phone}/>
-            <Field label="Vorname" value={a.first_name}/><Field label="Nachname" value={a.last_name}/><Field label="Geburtsdatum" value={a.birth_date}/>
-            <Field label="Systemrolle" value={a.role}/><Field label="Team-Rolle" value={a.team_role}/><Field label="Kontotyp" value={a.account_type}/>
-            <Field label="Erstellt durch" value={a.created_source}/><Field label="2FA" value={a.twoFactor?'aktiv':'nicht aktiv'}/>
-            <Field label="Aktive Sitzungen" value={a.sessionCount}/><Field label="Letzte Sitzung" value={fmt(a.lastSessionAt)}/>
-            <Field label="Passwortwechsel nötig" value={a.must_change_password?'ja':'nein'}/><Field label="Konto erstellt" value={fmt(a.created_at)}/>
-          </div>
-
-          <div className="pixva-registry-controls">
-            <label>Kontotyp<select value={a.stored_account_type||a.account_type} onChange={e=>updateMeta(a,'account_type',e.target.value)}><option value="company">Firma</option><option value="private">Privat</option></select></label>
-            <label>Herkunft<select value={a.created_source||'legacy'} onChange={e=>updateMeta(a,'created_source',e.target.value)}><option value="admin">Vom Admin erstellt</option><option value="self">Selbst registriert</option><option value="system">System</option><option value="legacy">Bestand</option></select></label>
-          </div>
-
-          <h4>Firma</h4><div className="pixva-registry-firm">
-            <div className="pixva-registry-large-logo">{b.logo?<img src={b.logo} alt="Logo"/>:<div>Kein Firmenlogo gespeichert</div>}</div>
-            <div className="pixva-registry-fields">
-              <Field label="Firmenname" value={b.company_name}/><Field label="Branche" value={b.company_type==='sonstiges'?(b.company_type_other||'Sonstiges'):b.company_type}/>
-              <Field label="Inhaber / Ansprechpartner" value={b.owner_name}/><Field label="Firmen-E-Mail" value={b.company_email}/>
-              <Field label="Firmen-Telefon" value={b.company_phone}/><Field label="Zusätzliche private Tel." value={b.private_phone}/>
-              <Field label="Website" value={b.website}/><Field label="Instagram" value={b.instagram}/><Field label="Adresse" value={b.address}/>
-              <Field label="Öffnungszeiten" value={b.opening_hours}/><Field label="Design-Stil" value={b.design_style}/>
-            </div>
-          </div>
-
-          <h4>Alles, was dieses Konto erstellt hat</h4>
-          <List title="Projekte" items={c.projects||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.name||'Projekt'}</b><span>{p.type||'—'} · {fmt(p.updated_at||p.created_at)}</span></div>}/>
-          <List title="Produkte" items={c.products||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.name||'Produkt'}</b><span>{[p.brand,p.ean,p.category,p.offer_price!=null?`${p.offer_price} €`:null].filter(Boolean).join(' · ')||'—'}</span></div>}/>
-          <List title="Wissensdateien" items={c.knowledge||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.name||'Datei'}</b><span>{p.status||'—'} · {fmt(p.updated_at||p.created_at)}</span></div>}/>
-          <List title="KI-Agent-Aufträge" items={c.agents||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.task||'KI-Auftrag'}</b><span>{p.status||'—'} · {fmt(p.updated_at||p.created_at)}</span></div>}/>
-          <List title="Letzte KI-Nutzungen" items={c.usage||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.kind||'KI'} · {p.model||'—'}</b><span>{p.status||'—'} · {fmt(p.created_at)}</span></div>}/>
-
-          <div className="pixva-registry-chat"><h5>Gespeicherte Chat-Daten</h5><span>Zuletzt geändert: {fmt(c.chatUpdatedAt)}</span>{c.chatData?<details><summary>Chat-Daten anzeigen</summary><pre>{JSON.stringify(c.chatData,null,2).slice(0,12000)}</pre></details>:<div className="pixva-muted">Keine gespeicherten Chat-Daten.</div>}</div>
-
-          <h4>Login verwalten</h4><div className="pixva-registry-password"><KeyRound size={18}/><input type="password" value={passwords[a.id]||''} onChange={e=>setPasswords(o=>({...o,[a.id]:e.target.value}))} placeholder="Neues Passwort (mind. 10 Zeichen)"/><button onClick={()=>resetPassword(a)}>Neues Passwort setzen</button></div>
-        </div>}
-      </article>})}
-    </section>)}
+    {grouped.map(([title,items])=><section className="pixva-registry-group" key={title}><div className="pixva-registry-group-title"><h3>{title}</h3><span>{items.length}</span></div>{!items.length&&<div className="pixva-registry-empty">Keine Konten in dieser Gruppe.</div>}{items.map(a=>{const expanded=Boolean(open[a.id]),b=a.company||{},c=a.contents||{},e={...editOf(a),...(edits[a.id]||{})};return <article className="pixva-registry-account" key={a.id}><button className="pixva-registry-account-head" onClick={()=>setOpen(o=>({...o,[a.id]:!expanded}))}><div className="pixva-registry-logo">{b.logo?<img src={b.logo} alt="Firmenlogo"/>:a.role==='admin'?<img src="/pixva-logo.png" alt="PIXVA"/>:a.account_type==='company'?<Building2/>:<UserRound/>}</div><div className="pixva-registry-account-name"><b>{b.company_name||[a.first_name,a.last_name].filter(Boolean).join(' ')||a.username}</b><span>@{a.username} · {a.role==='admin'?'Admin':a.account_type==='company'?'Geschäftskonto':'Kunden-/Privatkonto'} · {a.active?'aktiv':'deaktiviert'}</span></div><div className="pixva-registry-counts"><span>{c.projects?.length||0} Projekte</span><span>{c.products?.length||0} Produkte</span><span>{c.knowledge?.length||0} Wissen</span><span>{c.agents?.length||0} KI</span></div>{expanded?<ChevronDown/>:<ChevronRight/>}</button>{expanded&&<div className="pixva-registry-body">
+      <h4>Gespeicherte Daten</h4><div className="pixva-registry-fields"><Field label="Benutzername" value={a.username}/><Field label="Passwort" value="geschützt · nicht auslesbar"/><Field label="E-Mail" value={a.email}/><Field label="Private Tel." value={a.phone}/><Field label="Vorname" value={a.first_name}/><Field label="Nachname" value={a.last_name}/><Field label="Geburtsdatum" value={a.birth_date}/><Field label="Rolle" value={a.role}/><Field label="Kontotyp" value={a.account_type}/><Field label="Erstellt durch" value={a.created_source}/><Field label="2FA" value={a.twoFactor?'aktiv':'nicht aktiv'}/><Field label="Sitzungen" value={a.sessionCount}/></div>
+      <h4>Konto / Firmenprofil bearbeiten</h4><div className="pixva-edit-grid"><label>Kontotyp<select value={e.accountType} onChange={x=>patchEdit(a,'accountType',x.target.value)}><option value="private">Kunden-/Privatkonto</option><option value="company">Geschäftskonto</option></select></label><label>Vorname<input value={e.firstName} onChange={x=>patchEdit(a,'firstName',x.target.value)}/></label><label>Nachname<input value={e.lastName} onChange={x=>patchEdit(a,'lastName',x.target.value)}/></label><label>E-Mail<input value={e.email} onChange={x=>patchEdit(a,'email',x.target.value)}/></label><label>Telefon<input value={e.phone} onChange={x=>patchEdit(a,'phone',x.target.value)}/></label><label>Geburtsdatum<input type="date" value={e.birthDate||''} onChange={x=>patchEdit(a,'birthDate',x.target.value)}/></label></div>
+      {(e.accountType==='company'||a.role==='admin')&&<><div className="pixva-registry-firm"><div className="pixva-registry-large-logo">{e.logoPreview||b.logo?<img src={e.logoPreview||b.logo} alt="Logo"/>:<img src="/pixva-logo.png" alt="PIXVA Beispiel"/>}</div><div className="pixva-edit-grid"><label>Firmenname<input value={e.companyName} onChange={x=>patchEdit(a,'companyName',x.target.value)}/></label><label>Branche<select value={e.companyType||'sonstiges'} onChange={x=>patchEdit(a,'companyType',x.target.value)}><option value="programmierer">Programmierer / Software & KI</option><option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="sonstiges">Sonstiges</option></select></label><label>Andere Branche<input value={e.companyTypeOther} onChange={x=>patchEdit(a,'companyTypeOther',x.target.value)}/></label><label>Inhaber / Ansprechpartner<input value={e.ownerName} onChange={x=>patchEdit(a,'ownerName',x.target.value)}/></label><label>Firmen-E-Mail<input value={e.companyEmail} onChange={x=>patchEdit(a,'companyEmail',x.target.value)}/></label><label>Firmen-Telefon<input value={e.companyPhone} onChange={x=>patchEdit(a,'companyPhone',x.target.value)}/></label><label>Website<input value={e.website} onChange={x=>patchEdit(a,'website',x.target.value)}/></label><label>Instagram<input value={e.instagram} onChange={x=>patchEdit(a,'instagram',x.target.value)}/></label><label>Adresse<input value={e.address} onChange={x=>patchEdit(a,'address',x.target.value)}/></label><label>Öffnungszeiten<input value={e.openingHours} onChange={x=>patchEdit(a,'openingHours',x.target.value)}/></label><label>Logo ersetzen<input type="file" accept="image/png,image/jpeg,image/webp" onChange={x=>logoFile(x.target.files?.[0],v=>{if(v.error)setMessage(v.error);else{patchEdit(a,'logoDataUrl',v.logoDataUrl);patchEdit(a,'logoPreview',v.logoDataUrl)}})}/></label></div></div></>}
+      <button className="pixva-save-profile" onClick={()=>saveEdit(a)}><Save size={16}/>Profil speichern</button>
+      <h4>Alles, was dieses Konto erstellt hat</h4><List title="Projekte" items={c.projects||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.name||'Projekt'}</b><span>{p.type||'—'} · {fmt(p.updated_at||p.created_at)}</span></div>}/><List title="Produkte" items={c.products||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.name||'Produkt'}</b><span>{[p.brand,p.ean,p.category,p.offer_price!=null?`${p.offer_price} €`:null].filter(Boolean).join(' · ')||'—'}</span></div>}/><List title="Wissensdateien" items={c.knowledge||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.name||'Datei'}</b><span>{p.status||'—'} · {fmt(p.updated_at||p.created_at)}</span></div>}/><List title="KI-Agent-Aufträge" items={c.agents||[]} render={p=><div className="pixva-registry-item" key={p.id}><b>{p.task||'KI-Auftrag'}</b><span>{p.status||'—'} · {fmt(p.updated_at||p.created_at)}</span></div>}/>{c.chatData&&<div className="pixva-registry-chat"><h5>Gespeicherte Chat-Daten</h5><details><summary>anzeigen</summary><pre>{JSON.stringify(c.chatData,null,2).slice(0,12000)}</pre></details></div>}
+      <h4>Login verwalten</h4><div className="pixva-registry-password"><KeyRound size={18}/><input type="password" value={passwords[a.id]||''} onChange={x=>setPasswords(o=>({...o,[a.id]:x.target.value}))} placeholder="Neues Passwort (mind. 10 Zeichen)"/><button onClick={()=>resetPassword(a)}>Neues Passwort setzen</button></div>
+    </div>}</article>})}</section>)}
   </section>;
 }
