@@ -1,4 +1,4 @@
-name: PIXVA V11.9 KONTEN UND DATEI VORLAGEN
+name: PIXVA V11.9.1 VERIFIED KONTEN UND DATEI VORLAGEN
 
 on:
   workflow_dispatch:
@@ -75,19 +75,8 @@ jobs:
           fi
           rm -rf /tmp/pixva-jsx-check
           npm install --prefix /tmp/pixva-jsx-check typescript@5.9.2 --no-save --no-audit --no-fund --ignore-scripts
-          cat > /tmp/check-jsx.cjs <<'NODE'
-const ts=require('typescript'),fs=require('fs');
-for(const file of process.argv.slice(2)){
-  const source=fs.readFileSync(file,'utf8');
-  const result=ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext},reportDiagnostics:true,fileName:file});
-  const errors=(result.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
-  if(errors.length){
-    for(const d of errors)console.error(file,ts.flattenDiagnosticMessageText(d.messageText,' '));
-    process.exit(1);
-  }
-}
-console.log('JSX Syntax OK');
-NODE
+          echo 'Y29uc3QgdHM9cmVxdWlyZSgndHlwZXNjcmlwdCcpLGZzPXJlcXVpcmUoJ2ZzJyk7CmZvcihjb25zdCBmaWxlIG9mIHByb2Nlc3MuYXJndi5zbGljZSgyKSl7CiAgY29uc3Qgc291cmNlPWZzLnJlYWRGaWxlU3luYyhmaWxlLCd1dGY4Jyk7CiAgY29uc3QgcmVzdWx0PXRzLnRyYW5zcGlsZU1vZHVsZShzb3VyY2UsewogICAgY29tcGlsZXJPcHRpb25zOnsKICAgICAganN4OnRzLkpzeEVtaXQuUmVhY3RKU1gsCiAgICAgIHRhcmdldDp0cy5TY3JpcHRUYXJnZXQuRVMyMDIyLAogICAgICBtb2R1bGU6dHMuTW9kdWxlS2luZC5FU05leHQKICAgIH0sCiAgICByZXBvcnREaWFnbm9zdGljczp0cnVlLAogICAgZmlsZU5hbWU6ZmlsZQogIH0pOwogIGNvbnN0IGVycm9ycz0ocmVzdWx0LmRpYWdub3N0aWNzfHxbXSkuZmlsdGVyKGQ9PmQuY2F0ZWdvcnk9PT10cy5EaWFnbm9zdGljQ2F0ZWdvcnkuRXJyb3IpOwogIGlmKGVycm9ycy5sZW5ndGgpewogICAgZm9yKGNvbnN0IGQgb2YgZXJyb3JzKWNvbnNvbGUuZXJyb3IoZmlsZSx0cy5mbGF0dGVuRGlhZ25vc3RpY01lc3NhZ2VUZXh0KGQubWVzc2FnZVRleHQsJyAnKSk7CiAgICBwcm9jZXNzLmV4aXQoMSk7CiAgfQp9CmNvbnNvbGUubG9nKCdKU1ggU3ludGF4IE9LJyk7Cg==' | base64 --decode > /tmp/check-jsx.cjs
+          node --check /tmp/check-jsx.cjs
           NODE_PATH=/tmp/pixva-jsx-check/node_modules node /tmp/check-jsx.cjs client/src/components/DesignEditorLegacy.jsx client/src/components/AdminAccounts.jsx
           node --check client/src/data/pixva/flyerTemplateEngine.js
           python -m json.tool client/src/data/pixva/flyer_vorlagen.json >/dev/null
@@ -122,12 +111,12 @@ NODE
         shell: bash
         run: |
           set -e
-          git config user.name "PIXVA V11.9"
+          git config user.name "PIXVA V11.9.1 Verified"
           git config user.email "actions@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
-            echo "PIXVA V11.9 bereits installiert."
+            echo "PIXVA V11.9.1 bereits installiert."
             exit 0
           fi
-          git commit -m "PIXVA V11.9 Konten und Datei Vorlagen"
+          git commit -m "PIXVA V11.9.1 Verified Konten und Datei Vorlagen"
           git push origin HEAD:main
