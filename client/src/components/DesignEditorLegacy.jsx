@@ -1135,32 +1135,90 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     setStatus('Alle Elemente wurden vollständig in die Arbeitsfläche eingepasst.');
   }
 
+  /* PIXVA V11.9.5 TEMPLATE CLICK SYNTAX FIX */
+  async function resolvePixvaTemplateBrand() {
+    if (companyBrand) return companyBrand;
+
+    let brain = pixvaBrain;
+    if (!brain) {
+      try {
+        brain = await api('/api/pixva?action=brain-context');
+        setPixvaBrain(brain);
+      } catch {
+        brain = null;
+      }
+    }
+
+    const brand = pixvaBrainBrand(brain);
+    setCompanyBrand(brand);
+    return brand;
+  }
+
   async function applyTemplate(type) {
     const canvas = fabricRef.current;
-    if (canvas.getObjects().length && !confirm('Aktuelles Design durch die gewählte Vorlage ersetzen?')) return;
+    if (!canvas) {
+      setStatus('Arbeitsfläche ist noch nicht bereit.');
+      return;
+    }
+
     try {
-      if (type === 'blank') {
+      const template = pixvaTemplateList.find((item) => item.id === type);
+
+      if (template) {
+        setStatus(`${template.name} wird geladen …`);
+        const brand = await resolvePixvaTemplateBrand();
+
+        await applyPixvaFileTemplate(
+          canvas,
+          template.id,
+          canvas.width,
+          canvas.height,
+          brand || {}
+        );
+
+        currentTemplateRef.current = template.id;
+        baseTemplateRef.current = canvas.toJSON(customProps);
+        setBackground(canvas.backgroundColor || '#ffffff');
+        canvas.discardActiveObject();
+        syncSelected(null);
+        refreshLayers();
+        snapshot();
+        canvas.requestRenderAll();
+
+        setStatus(`${template.name} geladen · vollständig bearbeitbar.`);
+        return;
+      }
+
+      if (type === 'creative') {
+        addCreativeTemplate(canvas, canvas.width, canvas.height);
+      } else if (type === 'blank') {
         canvas.clear();
         canvas.backgroundColor = '#ffffff';
-        canvas.renderAll();
-      } else if (type === 'creative') {
-        addCreativeTemplate(canvas, canvas.width, canvas.height);
+        canvas.requestRenderAll();
       } else {
-        const brand = companyBrand || pixvaBrainBrand(pixvaBrain);
-        await applyPixvaFileTemplate(canvas, type, canvas.width, canvas.height, brand || {});
+        throw new Error(`Vorlage "${type}" ist nicht registriert.`);
       }
+
       currentTemplateRef.current = type;
       baseTemplateRef.current = canvas.toJSON(customProps);
       setBackground(canvas.backgroundColor || '#ffffff');
       canvas.discardActiveObject();
       syncSelected(null);
-      snapshot();
       refreshLayers();
-      setStatus(type === 'blank' ? 'Leere Arbeitsfläche geladen.' : 'PIXVA Datei-Vorlage geladen · vollständig bearbeitbar.');
+      snapshot();
+      canvas.requestRenderAll();
+
+      setStatus(
+        type === 'blank'
+          ? 'Leere Arbeitsfläche geladen.'
+          : 'Kreativ-Vorlage geladen.'
+      );
     } catch (error) {
-      setStatus(error.message || 'PIXVA Datei-Vorlage konnte nicht geladen werden.');
+      console.error('PIXVA Template Click Error:', error);
+      setStatus(error.message || 'Vorlage konnte nicht geladen werden.');
     }
   }
+
   async function renderJsonData(json) {
     if (!json) return currentPngData();
     const temporaryElement = document.createElement('canvas');
@@ -1376,7 +1434,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           <div className="pixva-file-template-mode">PIXVA Datei-Vorlagen · gerade · vollständig bearbeitbar</div>
           <div className="template-gallery">
             {pixvaTemplateList.map((template) => (
-              <button key={template.id} onClick={() => applyTemplate(template.id)}>
+              <button type="button" key={template.id} onClick={() => applyTemplate(template.id)}>
                 <img src={template.preview} alt={template.name}/>
                 <span>{template.name}</span>
               </button>
