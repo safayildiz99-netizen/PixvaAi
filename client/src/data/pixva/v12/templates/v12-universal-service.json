@@ -1,0 +1,23 @@
+{
+  "id": "v12-universal-service",
+  "name": "Firma Service Angebot",
+  "industry": "sonstiges",
+  "layout": "business_clean",
+  "preview": "/templates/pixva-v12/v12-universal-service.svg",
+  "style": {
+    "background": "#f3f6f8",
+    "primary": "#172839",
+    "secondary": "#39d6d0",
+    "text": "#172839",
+    "surface": "#ffffff"
+  },
+  "content": {
+    "eyebrow": "DEINE FIRMA",
+    "headline": "PROFESSIONELLES ANGEBOT",
+    "subtitle": "Leistung · Beratung · Service",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "",
+    "newPrice": "ANGEBOT",
+    "badge": "JETZT"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "v12-supermarkt-6er",
+  "name": "Supermarkt 6 Angebote",
+  "industry": "supermarkt",
+  "layout": "market_grid6",
+  "preview": "/templates/pixva-v12/v12-supermarkt-6er.svg",
+  "style": {
+    "background": "#f7f1e7",
+    "primary": "#145a46",
+    "secondary": "#d7332f",
+    "text": "#173228",
+    "surface": "#ffffff"
+  },
+  "content": {
+    "eyebrow": "DEINE WOCHENANGEBOTE",
+    "headline": "6 STARKE ANGEBOTE",
+    "subtitle": "Produkte & Preise direkt bearbeiten",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "",
+    "newPrice": "4,99 €",
+    "badge": "ANGEBOT"
+  }
+}

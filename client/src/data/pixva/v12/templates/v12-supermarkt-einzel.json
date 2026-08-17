@@ -1,0 +1,23 @@
+{
+  "id": "v12-supermarkt-einzel",
+  "name": "Supermarkt Einzelangebot",
+  "industry": "supermarkt",
+  "layout": "market_single",
+  "preview": "/templates/pixva-v12/v12-supermarkt-einzel.svg",
+  "style": {
+    "background": "#f8f1e5",
+    "primary": "#126044",
+    "secondary": "#e4322f",
+    "text": "#173228",
+    "surface": "#ffffff"
+  },
+  "content": {
+    "eyebrow": "WOCHENANGEBOT",
+    "headline": "FRISCHE TOMATEN",
+    "subtitle": "Frisch · täglich · solange der Vorrat reicht",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "3,99 €",
+    "newPrice": "2,99 €",
+    "badge": "25% RABATT"
+  }
+}

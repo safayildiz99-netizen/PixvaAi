@@ -1,4 +1,4 @@
-/* PIXVA V11.8.2 ADMIN – ROBUSTE BASISLISTE + KUNDEN/FIRMEN ERSTELLEN */
+/* PIXVA V12 ACCOUNT CLASSIFICATION · ADMIN/FIRMA/PRIVAT */
 import { useEffect, useMemo, useState } from 'react';
 import { Building2, ChevronDown, ChevronRight, KeyRound, PlusCircle, RefreshCw, Save, Shield, UserRound } from 'lucide-react';
 import { api } from '../api.js';
@@ -7,9 +7,35 @@ const fmt=v=>v?new Date(v).toLocaleString('de-DE'):'—';
 const show=v=>v===null||v===undefined||String(v)===''?'—':String(v);
 const Field=({label,value})=><div className="pixva-registry-field"><small>{label}</small><b>{show(value)}</b></div>;
 const emptyForm=()=>({accountType:'private',username:'',password:'',role:'user',firstName:'',lastName:'',email:'',phone:'',birthDate:'',companyName:'',companyType:'programmierer',companyTypeOther:'',ownerName:'',companyEmail:'',companyPhone:'',privatePhone:'',website:'',instagram:'',address:'',openingHours:'',logoDataUrl:'',primaryColor:'#7258ff',secondaryColor:'#39d6d0',designStyle:'modern-premium'});
-function baseAccount(u){return{id:u.id,username:u.username||'',role:u.role||'user',active:u.active!==false,must_change_password:Boolean(u.mustChangePassword??u.must_change_password),created_at:u.createdAt||u.created_at||null,first_name:u.first_name||'',last_name:u.last_name||'',email:u.email||'',phone:u.phone||'',birth_date:u.birth_date||'',team_role:u.team_role||'member',account_type:u.account_type||'private',stored_account_type:u.stored_account_type||u.account_type||'private',created_source:u.created_source||'legacy',company:u.company||{},contents:u.contents||{}}}
-function mergeAccount(base,extra){const e=extra||{},company={...(base.company||{}),...(e.company||{})};const hasCompany=Boolean(e.account_type==='company'||base.account_type==='company'||company.company_name||company.company_type||company.company_email||company.company_phone||company.website||company.logo);return{...base,...e,company,contents:{...(base.contents||{}),...(e.contents||{})},account_type:hasCompany?'company':'private',stored_account_type:e.stored_account_type||e.account_type||base.stored_account_type||base.account_type||'private',created_source:e.created_source||base.created_source||'legacy'}}
-function groups(accounts){const normal=accounts.filter(a=>a.role!=='admin');return[['1 · Admin-Konten',accounts.filter(a=>a.role==='admin')],['2 · Firmenkonten · vom Admin erstellt',normal.filter(a=>a.account_type==='company'&&a.created_source==='admin')],['3 · Firmenkonten · selbst registriert',normal.filter(a=>a.account_type==='company'&&a.created_source==='self')],['4 · Firmenkonten · Bestand/System',normal.filter(a=>a.account_type==='company'&&!['admin','self'].includes(a.created_source))],['5 · Kunden-/Privatkonten · vom Admin erstellt',normal.filter(a=>a.account_type!=='company'&&a.created_source==='admin')],['6 · Kunden-/Privatkonten · selbst registriert',normal.filter(a=>a.account_type!=='company'&&a.created_source==='self')],['7 · Kunden-/Privatkonten · Bestand/System',normal.filter(a=>a.account_type!=='company'&&!['admin','self'].includes(a.created_source))]]}
+function baseAccount(u){return{id:u.id,username:u.username||'',role:u.role||'user',active:u.active!==false,must_change_password:Boolean(u.mustChangePassword??u.must_change_password),created_at:u.createdAt||u.created_at||null,first_name:u.first_name||'',last_name:u.last_name||'',email:u.email||'',phone:u.phone||'',birth_date:u.birth_date||'',team_role:u.team_role||'member',account_type:u.account_type||'',stored_account_type:u.stored_account_type||u.account_type||'',created_source:u.created_source||'legacy',company:u.company||{},contents:u.contents||{}}}
+function resolveType(base,extra){
+  const e=extra||{},company={...(base.company||{}),...(e.company||{})};
+  const detailType=String(e.account_type||'').toLowerCase();
+  if(detailType==='company'||detailType==='private')return detailType;
+  const stored=String(e.stored_account_type||base.stored_account_type||base.account_type||'').toLowerCase();
+  if(stored==='company'||stored==='private')return stored;
+  const hasCompany=Boolean(company.company_name||company.company_type||company.company_type_other||company.company_email||company.company_phone||company.website||company.instagram||company.logo);
+  return hasCompany?'company':'private';
+}
+function mergeAccount(base,extra){
+  const e=extra||{},company={...(base.company||{}),...(e.company||{})};
+  const merged={...base,...e,company,contents:{...(base.contents||{}),...(e.contents||{})}};
+  return{...merged,account_type:resolveType(base,{...e,company})};
+}
+function groups(accounts){
+  const normal=accounts.filter(a=>a.role!=='admin');
+  const source=a=>String(a.created_source||'legacy').toLowerCase();
+  const isCompany=a=>a.account_type==='company';
+  return[
+    ['1 · Admin-Konten',accounts.filter(a=>a.role==='admin')],
+    ['2 · Firmenkonten · vom Admin erstellt',normal.filter(a=>isCompany(a)&&source(a)==='admin')],
+    ['3 · Firmenkonten · selbst registriert',normal.filter(a=>isCompany(a)&&source(a)==='self')],
+    ['4 · Firmenkonten · Bestand/System',normal.filter(a=>isCompany(a)&&!['admin','self'].includes(source(a)))],
+    ['5 · Kunden-/Privatkonten · vom Admin erstellt',normal.filter(a=>!isCompany(a)&&source(a)==='admin')],
+    ['6 · Kunden-/Privatkonten · selbst registriert',normal.filter(a=>!isCompany(a)&&source(a)==='self')],
+    ['7 · Kunden-/Privatkonten · Bestand/System',normal.filter(a=>!isCompany(a)&&!['admin','self'].includes(source(a)))]
+  ];
+}
 function List({title,items,render}){return <div className="pixva-registry-list"><h5>{title} · {items.length}</h5>{items.length?items.map(render):<span className="pixva-muted">Nichts vorhanden.</span>}</div>}
 function logoFile(file,setter){if(!file)return;if(!/^image\/(png|jpeg|webp)$/i.test(file.type))return setter({error:'Logo muss PNG, JPG oder WebP sein.'});if(file.size>1300000)return setter({error:'Logo ist zu groß. Maximal ca. 1,3 MB.'});const reader=new FileReader();reader.onload=()=>setter({logoDataUrl:String(reader.result||''),error:''});reader.readAsDataURL(file)}
 

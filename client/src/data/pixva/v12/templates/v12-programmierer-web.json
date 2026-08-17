@@ -1,0 +1,23 @@
+{
+  "id": "v12-programmierer-web",
+  "name": "Website Launch",
+  "industry": "programmierer",
+  "layout": "tech_browser",
+  "preview": "/templates/pixva-v12/v12-programmierer-web.svg",
+  "style": {
+    "background": "#08131d",
+    "primary": "#2d91d2",
+    "secondary": "#35cdbf",
+    "text": "#ffffff",
+    "surface": "#102634"
+  },
+  "content": {
+    "eyebrow": "WEBENTWICKLUNG",
+    "headline": "DEINE NEUE WEBSITE",
+    "subtitle": "Modern · schnell · responsive · professionell",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "899 €",
+    "newPrice": "699 €",
+    "badge": "LAUNCH"
+  }
+}

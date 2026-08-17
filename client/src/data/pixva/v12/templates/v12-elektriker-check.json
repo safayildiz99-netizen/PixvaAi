@@ -1,0 +1,23 @@
+{
+  "id": "v12-elektriker-check",
+  "name": "Elektriker Elektro-Check",
+  "industry": "elektriker",
+  "layout": "electric_check",
+  "preview": "/templates/pixva-v12/v12-elektriker-check.svg",
+  "style": {
+    "background": "#eef5f9",
+    "primary": "#123a60",
+    "secondary": "#ffbf22",
+    "text": "#10283c",
+    "surface": "#102634"
+  },
+  "content": {
+    "eyebrow": "ELEKTRO · SERVICE · SICHERHEIT",
+    "headline": "ELEKTRO-CHECK",
+    "subtitle": "Prüfung · Beratung · fachgerechte Ausführung",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "199 €",
+    "newPrice": "149 €",
+    "badge": "AKTION"
+  }
+}

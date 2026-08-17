@@ -1,0 +1,23 @@
+{
+  "id": "v12-programmierer-software",
+  "name": "Software & KI Paket",
+  "industry": "programmierer",
+  "layout": "tech_split",
+  "preview": "/templates/pixva-v12/v12-programmierer-software.svg",
+  "style": {
+    "background": "#071923",
+    "primary": "#7258ff",
+    "secondary": "#39d6d0",
+    "text": "#ffffff",
+    "surface": "#102634"
+  },
+  "content": {
+    "eyebrow": "SOFTWARE · WEB · KI",
+    "headline": "WEBSEITE & KI-PAKET",
+    "subtitle": "Webentwicklung · Automatisierung · KI-Lösungen",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "39,99 €",
+    "newPrice": "29,99 €",
+    "badge": "25% RABATT"
+  }
+}

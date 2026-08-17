@@ -1,0 +1,23 @@
+{
+  "id": "v12-elektriker-smart",
+  "name": "Elektriker Smart Home",
+  "industry": "elektriker",
+  "layout": "electric_smart",
+  "preview": "/templates/pixva-v12/v12-elektriker-smart.svg",
+  "style": {
+    "background": "#071827",
+    "primary": "#1d6da8",
+    "secondary": "#ffd42a",
+    "text": "#ffffff",
+    "surface": "#102634"
+  },
+  "content": {
+    "eyebrow": "SMART HOME · ELEKTRO",
+    "headline": "DEIN ZUHAUSE. SMART VERNETZT.",
+    "subtitle": "Beleuchtung · Steuerung · Sicherheit",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "",
+    "newPrice": "BERATUNG",
+    "badge": "START"
+  }
+}

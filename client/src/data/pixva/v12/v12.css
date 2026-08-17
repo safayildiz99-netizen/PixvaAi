@@ -1,0 +1,14 @@
+/* PIXVA V12 ALL IN ONE */
+.pixva-v12-template-panel{display:grid;gap:10px}
+.pixva-v12-filter{display:flex;gap:6px;overflow:auto;padding:2px 0 4px}
+.pixva-v12-filter button{white-space:nowrap;padding:7px 9px;font-size:11px;border-radius:9px}
+.pixva-v12-filter button.active{background:linear-gradient(90deg,#7258ff,#2d91d2,#35cdbf);color:#fff;border-color:transparent}
+.pixva-v12-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:400px;overflow:auto;padding-right:3px}
+.pixva-v12-gallery button{display:flex;flex-direction:column;gap:5px;align-items:stretch;padding:6px;border-radius:12px;min-width:0}
+.pixva-v12-gallery button.active{outline:2px solid #39d6d0;background:rgba(57,214,208,.12)}
+.pixva-v12-gallery img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:8px;background:#fff}
+.pixva-v12-gallery span{font-size:11px;font-weight:800;line-height:1.15;text-align:left}
+.pixva-v12-gallery small{font-size:9px;opacity:.68;text-align:left}
+.pixva-v12-audit{display:grid;gap:7px;padding:9px;border:1px solid #275469;border-radius:10px;background:rgba(12,42,56,.7)}
+.pixva-v12-audit.good{border-color:#2fbf98}.pixva-v12-audit.warn{border-color:#e59b45}
+.pixva-v12-video-brain{font-size:12px;font-weight:800;color:#7debd6;border:1px solid #245a6a;border-radius:10px;padding:8px 10px;background:#0b2632}

@@ -1,0 +1,23 @@
+{
+  "id": "v12-werbetechnik-folierung",
+  "name": "Fahrzeugfolierung",
+  "industry": "werbetechnik",
+  "layout": "signage_vehicle",
+  "preview": "/templates/pixva-v12/v12-werbetechnik-folierung.svg",
+  "style": {
+    "background": "#f2f2ef",
+    "primary": "#171717",
+    "secondary": "#f7c948",
+    "text": "#151515",
+    "surface": "#ffffff"
+  },
+  "content": {
+    "eyebrow": "FAHRZEUGBESCHRIFTUNG",
+    "headline": "DEINE MARKE AUF DER STRASSE",
+    "subtitle": "Design · Druck · Folierung · Montage",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "",
+    "newPrice": "ANGEBOT",
+    "badge": "ANFRAGEN"
+  }
+}

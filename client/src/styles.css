@@ -1281,3 +1281,19 @@ hr{border-color:#1D4658!important}
 .pixva-current-profile{display:grid;grid-template-columns:90px 1fr;gap:16px;align-items:center;margin:14px 0;padding:14px;border:1px solid rgba(57,214,208,.28);border-radius:14px;background:linear-gradient(120deg,rgba(114,88,255,.10),rgba(57,214,208,.08))}.pixva-current-logo{width:90px;height:70px;display:grid;place-items:center}.pixva-current-logo img{max-width:88px;max-height:68px;object-fit:contain}.pixva-current-profile small,.pixva-current-profile span{display:block;color:#8fb1bf}.pixva-current-profile b{display:block;font-size:18px;margin:3px 0}
 .pixva-account-create{margin:16px 0;padding:16px;border:1px solid rgba(92,196,216,.28);border-radius:15px;background:#081d29}.pixva-create-title{display:flex;gap:10px;align-items:center}.pixva-create-title span{display:block;color:#87a7b7;font-size:12px}.pixva-account-type-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.pixva-account-type-tabs button{display:flex;gap:8px;align-items:center;justify-content:center}.pixva-account-type-tabs button.active{background:linear-gradient(100deg,#6d4ac0,#219bc2,#42b6a4);color:#fff}.pixva-create-grid,.pixva-edit-grid,.pixva-price-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.pixva-create-grid label,.pixva-edit-grid label{font-size:12px;color:#9bb6c3}.pixva-create-submit,.pixva-save-profile{margin-top:12px;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;background:linear-gradient(90deg,#6d4ac0,#219bc2,#42b6a4);color:#fff;font-weight:900}.pixva-create-logo-preview{display:block;max-width:180px;max-height:90px;object-fit:contain;margin:10px 0;background:#fff;padding:6px;border-radius:9px}.pixva-registry-firm .pixva-edit-grid{align-content:start}
 @media(max-width:850px){.pixva-create-grid,.pixva-edit-grid,.pixva-price-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.pixva-create-grid,.pixva-edit-grid,.pixva-price-fields,.pixva-account-type-tabs{grid-template-columns:1fr}.pixva-current-profile{grid-template-columns:1fr}.pixva-current-logo{justify-self:start}}
+
+/* PIXVA V12 ALL IN ONE */
+.pixva-v12-template-panel{display:grid;gap:10px}
+.pixva-v12-filter{display:flex;gap:6px;overflow:auto;padding:2px 0 4px}
+.pixva-v12-filter button{white-space:nowrap;padding:7px 9px;font-size:11px;border-radius:9px}
+.pixva-v12-filter button.active{background:linear-gradient(90deg,#7258ff,#2d91d2,#35cdbf);color:#fff;border-color:transparent}
+.pixva-v12-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:400px;overflow:auto;padding-right:3px}
+.pixva-v12-gallery button{display:flex;flex-direction:column;gap:5px;align-items:stretch;padding:6px;border-radius:12px;min-width:0}
+.pixva-v12-gallery button.active{outline:2px solid #39d6d0;background:rgba(57,214,208,.12)}
+.pixva-v12-gallery img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:8px;background:#fff}
+.pixva-v12-gallery span{font-size:11px;font-weight:800;line-height:1.15;text-align:left}
+.pixva-v12-gallery small{font-size:9px;opacity:.68;text-align:left}
+.pixva-v12-audit{display:grid;gap:7px;padding:9px;border:1px solid #275469;border-radius:10px;background:rgba(12,42,56,.7)}
+.pixva-v12-audit.good{border-color:#2fbf98}.pixva-v12-audit.warn{border-color:#e59b45}
+.pixva-v12-video-brain{font-size:12px;font-weight:800;color:#7debd6;border:1px solid #245a6a;border-radius:10px;padding:8px 10px;background:#0b2632}
+

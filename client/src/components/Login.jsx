@@ -1,3 +1,4 @@
+/* PIXVA V12 LOGIN ACCOUNT TYPES */
 import { useRef, useState } from 'react';
 import { Building2, KeyRound, LogIn, ShieldCheck, UserPlus, UserRound, X } from 'lucide-react';
 import { api, setToken } from '../api.js';
@@ -89,7 +90,7 @@ export default function Login({onLogin,onGuest,allowGuest=true}){
           <div className="pixva-register-grid">
             <label>Firmenname *<input value={register.companyName} onChange={e=>setRegister({...register,companyName:e.target.value})}/></label>
             <label>Branche *<select value={register.companyType} onChange={e=>setRegister({...register,companyType:e.target.value})}>
-              <option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="sonstiges">Sonstiges</option>
+              <option value="programmierer">Programmierer / Software & KI</option><option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="sonstiges">Sonstiges</option>
             </select></label>
             {register.companyType==='sonstiges'&&<label>Welche Branche? *<input value={register.companyTypeOther} onChange={e=>setRegister({...register,companyTypeOther:e.target.value})} placeholder="z. B. Friseur, Restaurant, Dachdecker"/></label>}
             <label>Firmeninhaber / Ansprechpartner<input value={register.ownerName} onChange={e=>setRegister({...register,ownerName:e.target.value})}/></label>

@@ -11,6 +11,7 @@ import {
   Type, Undo2, Unlock, Upload, WandSparkles, ZoomIn
 } from 'lucide-react';
 import { api } from '../api.js';
+import { applyPixvaV12Template, pixvaV12Templates, recommendPixvaV12Template, auditPixvaV12Canvas } from '../data/pixva/v12/templateEngineV12.js';
 import { applyPixvaFileTemplate, pixvaTemplateIdForBrand, pixvaTemplateList } from '../data/pixva/flyerTemplateEngine.js';
 import { canUseFeature } from '../plans.js';
 
@@ -476,6 +477,10 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const [dragActive, setDragActive] = useState(false);
   const [adjustments, setAdjustments] = useState({ brightness: 0, contrast: 0, saturation: 0 });
   const [templateVariant, setTemplateVariant] = useState('editable');
+  /* PIXVA V12 ALL IN ONE EDITOR */
+  const [v12TemplateId,setV12TemplateId]=useState('');
+  const [v12TemplateFilter,setV12TemplateFilter]=useState('recommended');
+  const [v12Audit,setV12Audit]=useState(null);
   const [externalExportMode, setExternalExportMode] = useState('edited');
   const [rasterText, setRasterText] = useState({
     text:'Neuer Text',
@@ -702,7 +707,39 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     return()=>{cancelled=true;window.clearTimeout(timer)};
   },[project?.id,mode]);
 
-  function addText() {
+    /* PIXVA V12 AUTO INDUSTRY TEMPLATE */
+  useEffect(() => {
+    if (project?.id || project?.data?.pixvaV12Prepared) return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const brain = await api('/api/pixva?action=brain-context');
+        if (cancelled) return;
+        setPixvaBrain(brain);
+        const brand = pixvaBrainBrand(brain);
+        setCompanyBrand(brand);
+        const canvas = fabricRef.current;
+        if (!canvas) return;
+        const templateId = recommendPixvaV12Template(brain, mode);
+        await applyPixvaV12Template(canvas, templateId, canvas.width, canvas.height, brain);
+        currentTemplateRef.current = templateId;
+        setV12TemplateId(templateId);
+        baseTemplateRef.current = canvas.toJSON(customProps);
+        setBackground(canvas.backgroundColor || '#ffffff');
+        canvas.discardActiveObject();
+        syncSelected(null);
+        refreshLayers();
+        snapshot();
+        setV12Audit(auditPixvaV12Canvas(canvas));
+        setStatus(`PIXVA V12 · ${brain?.company?.industryLabel || 'Firma'} · Firmenprofil automatisch eingesetzt.`);
+      } catch (error) {
+        if (!cancelled) setStatus(`PIXVA V12 Firmenprofil: ${error.message}`);
+      }
+    }, 520);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [project?.id, mode]);
+
+function addText() {
     const canvas = fabricRef.current;
     const text = makeText('Neuer Text', { left: 70, top: 110, fontSize: 44, fill: '#111111', displayName: 'Neuer Text' });
     canvas.add(text);
@@ -1185,69 +1222,66 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
     }
   }
 
+  async function resolvePixvaV12Brand() {
+    if (pixvaBrain) return pixvaBrainBrand(pixvaBrain);
+    if (companyBrand) return companyBrand;
+    try {
+      const brain = await api('/api/pixva?action=brain-context');
+      setPixvaBrain(brain);
+      const brand = pixvaBrainBrand(brain);
+      setCompanyBrand(brand);
+      return brand;
+    } catch {
+      return {};
+    }
+  }
+
   async function applyTemplate(type) {
     const canvas = fabricRef.current;
-    if (!canvas) {
-      setStatus('Arbeitsfläche ist noch nicht bereit.');
-      return;
-    }
-
+    if (!canvas) { setStatus('Arbeitsfläche ist noch nicht bereit.'); return; }
     try {
-      const template = pixvaTemplateList.find((item) => item.id === type);
-
+      const template = pixvaV12Templates.find((item) => item.id === type);
       if (template) {
+        const brand = await resolvePixvaV12Brand();
         setStatus(`${template.name} wird geladen …`);
-        const brand = await resolvePixvaTemplateBrand();
-
-        await applyPixvaFileTemplate(
-          canvas,
-          template.id,
-          canvas.width,
-          canvas.height,
-          brand || {}
-        );
-
+        await applyPixvaV12Template(canvas, template.id, canvas.width, canvas.height, brand || {});
         currentTemplateRef.current = template.id;
+        setV12TemplateId(template.id);
         baseTemplateRef.current = canvas.toJSON(customProps);
         setBackground(canvas.backgroundColor || '#ffffff');
         canvas.discardActiveObject();
         syncSelected(null);
         refreshLayers();
         snapshot();
-        canvas.requestRenderAll();
-
+        setV12Audit(auditPixvaV12Canvas(canvas));
         setStatus(`${template.name} geladen · vollständig bearbeitbar.`);
         return;
       }
-
-      if (type === 'creative') {
-        addCreativeTemplate(canvas, canvas.width, canvas.height);
-      } else if (type === 'blank') {
+      if (type === 'creative') addCreativeTemplate(canvas, canvas.width, canvas.height);
+      else if (type === 'blank') {
         canvas.clear();
         canvas.backgroundColor = '#ffffff';
         canvas.requestRenderAll();
-      } else {
-        throw new Error(`Vorlage "${type}" ist nicht registriert.`);
-      }
-
+      } else throw new Error(`Vorlage nicht gefunden: ${type}`);
       currentTemplateRef.current = type;
+      setV12TemplateId(type);
       baseTemplateRef.current = canvas.toJSON(customProps);
       setBackground(canvas.backgroundColor || '#ffffff');
       canvas.discardActiveObject();
       syncSelected(null);
       refreshLayers();
       snapshot();
-      canvas.requestRenderAll();
-
-      setStatus(
-        type === 'blank'
-          ? 'Leere Arbeitsfläche geladen.'
-          : 'Kreativ-Vorlage geladen.'
-      );
     } catch (error) {
-      console.error('PIXVA Template Click Error:', error);
       setStatus(error.message || 'Vorlage konnte nicht geladen werden.');
     }
+  }
+
+  function runPixvaV12Audit() {
+    const result = auditPixvaV12Canvas(fabricRef.current);
+    setV12Audit(result);
+    setStatus(result.passed
+      ? `PIXVA Design-Check: ${result.score}/100 · bereit.`
+      : `PIXVA Design-Check: ${result.score}/100 · ${result.issues.join(' ')}`);
   }
 
   async function renderJsonData(json) {
@@ -1462,16 +1496,36 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         <div className="panel-section">
           <div className="pixva-brain-chip">PIXVA Brain arbeitet hier mit{pixvaBrain?.isCompany?` · ${pixvaBrain.company?.industryLabel||''}`:''}</div><label>Projektname<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
           <label>Format<select value={formatKey} onChange={(event) => setFormatKey(event.target.value)}>{Object.entries(formats).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
-          <div className="pixva-file-template-mode">PIXVA Datei-Vorlagen · gerade · vollständig bearbeitbar</div>
-          <div className="template-gallery">
-            {pixvaTemplateList.map((template) => (
-              <button type="button" key={template.id} onClick={() => applyTemplate(template.id)}>
-                <img src={template.preview} alt={template.name}/>
-                <span>{template.name}</span>
-              </button>
-            ))}
-            <button onClick={() => applyTemplate('creative')}><span className="template-abstract">AI</span><span>Kreativ</span></button>
-            <button onClick={() => applyTemplate('blank')}><span className="template-blank">+</span><span>Leer</span></button>
+          {/* PIXVA V12 TEMPLATE GALLERY */}
+          <div className="pixva-v12-template-panel">
+            <div className="pixva-v12-filter">
+              {[
+                ['recommended','Empfohlen'],['all','Alle'],['programmierer','Software & KI'],
+                ['supermarkt','Supermarkt'],['werbetechnik','Werbetechnik'],
+                ['elektriker','Elektriker'],['sonstiges','Sonstiges']
+              ].map(([key,label]) => (
+                <button type="button" key={key} className={v12TemplateFilter===key?'active':''} onClick={() => setV12TemplateFilter(key)}>{label}</button>
+              ))}
+            </div>
+            <div className="template-gallery pixva-v12-gallery">
+              {pixvaV12Templates.filter((template) => {
+                const companyKind = pixvaBrain?.company?.companyType || companyBrand?.company_type || companyBrand?.companyType || 'sonstiges';
+                if (v12TemplateFilter === 'all') return true;
+                if (v12TemplateFilter === 'recommended') return template.industry === companyKind || template.industry === 'sonstiges';
+                return template.industry === v12TemplateFilter;
+              }).map((template) => (
+                <button type="button" key={template.id} className={v12TemplateId===template.id?'active':''} onClick={() => applyTemplate(template.id)}>
+                  <img src={template.preview} alt={template.name}/>
+                  <span>{template.name}</span><small>{template.industry}</small>
+                </button>
+              ))}
+              <button type="button" className={v12TemplateId==='creative'?'active':''} onClick={() => applyTemplate('creative')}><span className="template-abstract">AI</span><span>Kreativ</span></button>
+              <button type="button" className={v12TemplateId==='blank'?'active':''} onClick={() => applyTemplate('blank')}><span className="template-blank">+</span><span>Leer</span></button>
+            </div>
+            <div className={`pixva-v12-audit ${v12Audit?.passed?'good':v12Audit?'warn':''}`}>
+              <button type="button" onClick={runPixvaV12Audit}>PIXVA Design-Check</button>
+              {v12Audit && <small>{v12Audit.score}/100 · {v12Audit.passed?'Keine Layoutfehler gefunden.':v12Audit.issues.join(' · ')}</small>}
+            </div>
           </div>
         </div>
         <div className="tool-grid">

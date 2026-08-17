@@ -1,0 +1,23 @@
+{
+  "id": "v12-universal-social",
+  "name": "Firma Social Media",
+  "industry": "sonstiges",
+  "layout": "business_social",
+  "preview": "/templates/pixva-v12/v12-universal-social.svg",
+  "style": {
+    "background": "#081922",
+    "primary": "#7158e9",
+    "secondary": "#3bd4c7",
+    "text": "#ffffff",
+    "surface": "#102634"
+  },
+  "content": {
+    "eyebrow": "SOCIAL MEDIA",
+    "headline": "DEIN ANGEBOT. DEINE MARKE.",
+    "subtitle": "Professionell für Instagram & Social Media",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "",
+    "newPrice": "NEU",
+    "badge": "JETZT"
+  }
+}

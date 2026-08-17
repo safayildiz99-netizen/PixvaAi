@@ -254,6 +254,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
   const [musicVolume, setMusicVolume] = useState(project?.data?.musicVolume ?? .55);
   const [selectedSceneId, setSelectedSceneId] = useState(project?.data?.scenes?.[0]?.id || scenes[0]?.id || '');
   const [status, setStatus] = useState('Aus Prompts oder eigenen Bildern entsteht ein echtes Video mit Bewegung, Übergängen und Hintergrundmusik.');
+  const [pixvaVideoBrain,setPixvaVideoBrain]=useState(null);
   const [rendering, setRendering] = useState(false);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -279,7 +280,30 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
     setSelectedSceneId((project.data?.scenes?.[0] || scenes[0])?.id || '');
   }, [project?.id]);
 
-  function applyVideoTemplate(type) {
+    /* PIXVA V12 VIDEO BRAIN */
+  useEffect(() => {
+    if (project?.id) return;
+    let alive = true;
+    api('/api/pixva?action=brain-context').then((brain) => {
+      if (!alive) return;
+      setPixvaVideoBrain(brain);
+      const company = brain?.company || {};
+      const defaults = brain?.defaults || {};
+      const companyName = company.companyName || 'DEINE FIRMA';
+      const contact = [company.companyPhone,company.companyEmail,company.website,company.instagram].filter(Boolean).join(' · ');
+      const source = [
+        {title: companyName.toUpperCase().slice(0,38),prompt: `${defaults.imageIdea || 'Professionelle Unternehmensszene'}, passend zu ${company.industryLabel || 'Unternehmen'}, Firmenlogo unverändert verwenden.`,duration:3,animation:'zoom',textPosition:'top'},
+        {title: String(defaults.flyerSubject || company.industryLabel || 'UNSERE LEISTUNG').toUpperCase().slice(0,38),prompt: `${defaults.imageIdea || 'Professionelle Leistung'}, hochwertig im Stil von ${companyName}.`,duration:4,animation:'pan-right',textPosition:'bottom'},
+        {title:'JETZT KONTAKT AUFNEHMEN',prompt:`Abschluss im Firmenstil von ${companyName}. Firmenlogo unverändert. Kontakt: ${contact || 'Firmenkontakt'}.`,duration:3,animation:'zoom-out',textPosition:'bottom'}
+      ];
+      const next = source.map((item,index) => ({...newScene(index),...item,accentColor:company.secondaryColor || '#39d6d0'}));
+      setScenes(next); setSelectedSceneId(next[0].id); setProjectName(`Video – ${companyName}`);
+      setStatus(`PIXVA Brain: Videovorlage für ${company.industryLabel || 'deine Firma'} automatisch vorbereitet.`);
+    }).catch((error) => { if (alive) setStatus(`PIXVA Brain Video: ${error.message}`); });
+    return () => { alive = false; };
+  }, [project?.id]);
+
+function applyVideoTemplate(type) {
     const presets = {
       offer: [
         { title: 'ANGEBOT DER WOCHE', prompt: 'Großer aufmerksamkeitsstarker Einstieg mit Marktlogo und Produktwelt.', duration: 3, animation: 'zoom', textPosition: 'top' },
@@ -663,7 +687,7 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
   return (
     <section className="video-editor-pro">
       <div className="studio-header">
-        <div><h2><Film size={22}/> {uiText.videoTitle || 'Video-Studio'}</h2><p>{uiText.videoSubtitle || 'Szenen, Texte, Musik und Videos in einem Projekt.'}</p></div>
+        <div><div className="pixva-v12-video-brain">PIXVA Brain · {pixvaVideoBrain?.company?.industryLabel||'Firmenprofil wird geladen'}</div><h2><Film size={22}/> {uiText.videoTitle || 'Video-Studio'}</h2><p>{uiText.videoSubtitle || 'Szenen, Texte, Musik und Videos in einem Projekt.'}</p></div>
         <div className="header-actions"><input value={projectName} onChange={(event) => setProjectName(event.target.value)}/><button onClick={saveProject}><Save size={17}/>{canSave ? 'Speichern' : 'Anmelden'}</button><button className="primary-btn" onClick={addScene}><Plus size={17}/>Szene</button></div>
       </div>
 

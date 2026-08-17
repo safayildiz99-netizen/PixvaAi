@@ -1,0 +1,23 @@
+{
+  "id": "v12-programmierer-automation",
+  "name": "KI Automation",
+  "industry": "programmierer",
+  "layout": "tech_flow",
+  "preview": "/templates/pixva-v12/v12-programmierer-automation.svg",
+  "style": {
+    "background": "#0a1020",
+    "primary": "#9b5cff",
+    "secondary": "#18d7c4",
+    "text": "#ffffff",
+    "surface": "#102634"
+  },
+  "content": {
+    "eyebrow": "KI · AUTOMATION",
+    "headline": "WENIGER HANDARBEIT. MEHR AUTOMATION.",
+    "subtitle": "Workflows · KI-Agenten · Integrationen",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "",
+    "newPrice": "DEMO",
+    "badge": "JETZT"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "v12-supermarkt-9er",
+  "name": "Supermarkt 9er Wochenblatt",
+  "industry": "supermarkt",
+  "layout": "market_grid9",
+  "preview": "/templates/pixva-v12/v12-supermarkt-9er.svg",
+  "style": {
+    "background": "#ffffff",
+    "primary": "#2b7b43",
+    "secondary": "#e62a35",
+    "text": "#1f3429",
+    "surface": "#ffffff"
+  },
+  "content": {
+    "eyebrow": "ANGEBOTE DER WOCHE",
+    "headline": "FRISCH & GÜNSTIG",
+    "subtitle": "9 Produkte · 9 Preise",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "",
+    "newPrice": "3,49 €",
+    "badge": "TOP"
+  }
+}

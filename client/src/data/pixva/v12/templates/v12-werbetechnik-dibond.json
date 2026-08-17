@@ -1,0 +1,23 @@
+{
+  "id": "v12-werbetechnik-dibond",
+  "name": "Werbetechnik Dibond",
+  "industry": "werbetechnik",
+  "layout": "signage_dibond",
+  "preview": "/templates/pixva-v12/v12-werbetechnik-dibond.svg",
+  "style": {
+    "background": "#101010",
+    "primary": "#f7c948",
+    "secondary": "#ffffff",
+    "text": "#ffffff",
+    "surface": "#102634"
+  },
+  "content": {
+    "eyebrow": "WERBETECHNIK · DRUCK · MONTAGE",
+    "headline": "BEDRUCKTE DIBOND-PLATTE",
+    "subtitle": "E1 · 3 mm · hochwertiger Direktdruck",
+    "imageLabel": "BILD / MOTIV",
+    "oldPrice": "59,99 €",
+    "newPrice": "44,99 €",
+    "badge": "25% RABATT"
+  }
+}
