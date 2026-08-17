@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, BadgeEuro, CheckCircle2, CloudDownload, Database, Image, KeyRound, LogOut, Save, ShieldCheck, Trash2, UserCircle2, Video } from 'lucide-react';
+import { BarChart3, BadgeEuro, CheckCircle2, CloudDownload, Copy, Database, Image, KeyRound, LogOut, Plus, Save, ShieldCheck, Trash2, UserCircle2, Video } from 'lucide-react';
 import { api, downloadText } from '../api.js';
 import { formatPlanPrice, getPlan, getPlanCatalog, normalizeSubscription } from '../plans.js';
+
+
+const API_SCOPE_LABELS={chat:'Chat',brain:'PIXVA Brain',flyer:'Flyer',website:'Website',image:'Bilder',video:'Video'};
 
 function money(value) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
@@ -20,6 +23,10 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
   const [usage, setUsage] = useState(null);
   const [usageError, setUsageError] = useState('');
   const [dataBusy, setDataBusy] = useState('');
+  const [apiKeys, setApiKeys] = useState([]);
+  const [apiKeyForm, setApiKeyForm] = useState({ name:'Meine Integration', scopes:['chat','brain','flyer','website'], rateLimitPerMinute:30, expiresDays:0 });
+  const [revealedApiKey, setRevealedApiKey] = useState('');
+  const [apiBusy, setApiBusy] = useState('');
   const catalog = useMemo(() => getPlanCatalog(customPlans), [customPlans]);
   const currentSubscription = normalizeSubscription(subscription, customPlans);
   const plan = useMemo(() => getPlan(currentSubscription.planId, customPlans), [currentSubscription.planId, customPlans]);
@@ -29,6 +36,40 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
       .then((result) => { setUsage(result); setUsageError(''); })
       .catch((requestError) => { setUsage(null); setUsageError(requestError.message || 'Nutzung konnte nicht geladen werden.'); });
   }, [currentSubscription.planId]);
+
+
+  async function loadApiKeys() {
+    try { const result = await api('/api/pixva?action=api-keys-list'); setApiKeys(result.keys || []); }
+    catch (requestError) { setError(requestError.message || 'API-Keys konnten nicht geladen werden.'); }
+  }
+  useEffect(() => { loadApiKeys(); }, [user?.id]);
+
+  function toggleApiScope(scope) {
+    setApiKeyForm((old) => ({ ...old, scopes: old.scopes.includes(scope) ? old.scopes.filter((item) => item !== scope) : [...old.scopes, scope] }));
+  }
+  async function createApiKey() {
+    if (!apiKeyForm.scopes.length) return setError('Wähle mindestens eine API-Berechtigung.');
+    setApiBusy('create'); setError(''); setStatus(''); setRevealedApiKey('');
+    try {
+      const result = await api('/api/pixva?action=api-key-create', { method:'POST', body:JSON.stringify(apiKeyForm) });
+      setRevealedApiKey(result.key || '');
+      setStatus('API-Key erstellt. Er wird nur jetzt vollständig angezeigt.');
+      await loadApiKeys();
+    } catch (requestError) { setError(requestError.message || 'API-Key konnte nicht erstellt werden.'); }
+    finally { setApiBusy(''); }
+  }
+  async function revokeApiKey(item) {
+    if (!window.confirm(`API-Key ${item.name || item.prefix} wirklich widerrufen?`)) return;
+    setApiBusy(item.id); setError(''); setStatus('');
+    try { await api('/api/pixva?action=api-key-revoke', { method:'POST', body:JSON.stringify({ id:item.id }) }); setStatus('API-Key wurde widerrufen.'); await loadApiKeys(); }
+    catch (requestError) { setError(requestError.message || 'API-Key konnte nicht widerrufen werden.'); }
+    finally { setApiBusy(''); }
+  }
+  async function copyApiKey() {
+    if (!revealedApiKey) return;
+    try { await navigator.clipboard.writeText(revealedApiKey); setStatus('API-Key kopiert.'); }
+    catch { setError('API-Key konnte nicht automatisch kopiert werden.'); }
+  }
 
   async function changePassword(event) {
     event.preventDefault();
@@ -130,6 +171,34 @@ export default function AccountSettings({ user, onUserChanged, subscription, onS
         </form>
       </article>
     </div>
+
+    <article className="account-card pixva-api-card">
+      <h3><KeyRound size={19}/> PIXVA API-Keys</h3>
+      <p>Erstelle eigene Schlüssel für Websites, Apps und Automationen. Der vollständige Schlüssel wird nur einmal angezeigt; PIXVA speichert serverseitig nur seinen SHA-256-Hash.</p>
+      <div className="pixva-api-create-grid">
+        <label>Name<input value={apiKeyForm.name} onChange={(event)=>setApiKeyForm({...apiKeyForm,name:event.target.value})} placeholder="z. B. Website Integration"/></label>
+        <label>Anfragen pro Minute<input type="number" min="1" max="120" value={apiKeyForm.rateLimitPerMinute} onChange={(event)=>setApiKeyForm({...apiKeyForm,rateLimitPerMinute:Number(event.target.value)})}/></label>
+        <label>Gültigkeit<select value={apiKeyForm.expiresDays} onChange={(event)=>setApiKeyForm({...apiKeyForm,expiresDays:Number(event.target.value)})}><option value={0}>Unbegrenzt</option><option value={30}>30 Tage</option><option value={90}>90 Tage</option><option value={365}>1 Jahr</option></select></label>
+      </div>
+      <div className="pixva-api-scopes">{Object.entries(API_SCOPE_LABELS).map(([scope,label])=><label key={scope}><input type="checkbox" checked={apiKeyForm.scopes.includes(scope)} onChange={()=>toggleApiScope(scope)}/>{label}</label>)}</div>
+      <button className="primary-btn" onClick={createApiKey} disabled={apiBusy==='create'}><Plus size={17}/>{apiBusy==='create'?'Wird erstellt …':'API-Key erstellen'}</button>
+
+      {revealedApiKey && <div className="pixva-api-reveal"><b>Nur jetzt vollständig sichtbar</b><code>{revealedApiKey}</code><button onClick={copyApiKey}><Copy size={16}/>Kopieren</button><small>Speichere diesen Key sicher. Nach dem Verlassen dieser Ansicht kann PIXVA ihn nicht erneut im Klartext anzeigen.</small></div>}
+
+      <div className="pixva-api-key-list">{apiKeys.length===0?<p>Noch keine API-Keys.</p>:apiKeys.map((item)=><div className="pixva-api-key-row" key={item.id}>
+        <div><b>{item.name}</b><code>pixva_live_{item.prefix}_••••••••</code><small>{(item.scopes||[]).map(scope=>API_SCOPE_LABELS[scope]||scope).join(' · ')} · {item.rateLimitPerMinute}/Min. · {item.active?'AKTIV':'WIDERRUFEN'}</small>{item.lastUsedAt&&<small>Zuletzt verwendet: {new Date(item.lastUsedAt).toLocaleString('de-DE')}</small>}</div>
+        {item.active&&<button onClick={()=>revokeApiKey(item)} disabled={apiBusy===item.id}><Trash2 size={16}/>Widerrufen</button>}
+      </div>)}</div>
+
+      <details className="pixva-api-docs"><summary>Public API Beispiele</summary>
+        <p>Basis-URL: <code>{typeof window==='undefined'?'https://deine-domain.de':window.location.origin}</code></p>
+        <pre>{`curl -X POST ${typeof window==='undefined'?'https://deine-domain.de':window.location.origin}/api/v1/chat \
+  -H "Authorization: Bearer <DEIN_PIXVA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Erstelle einen kurzen Werbetext für meine Firma"}'`}</pre>
+        <p>Weitere Endpunkte: <code>/api/v1/brain</code>, <code>/api/v1/blueprint</code>, <code>/api/v1/image</code>, <code>/api/v1/video</code>, <code>/api/v1/status</code>. Bei Bild und Video muss zusätzlich <code>confirmCost=true</code> gesendet werden.</p>
+      </details>
+    </article>
 
     {usageError && <article className="account-card usage-card"><div className="info-box">KI-Nutzung konnte nicht geladen werden: {usageError}</div></article>}
     {usage && <article className="account-card usage-card">

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { readJson, send, validateUser } from '../_lib.js';
 import { authorizeUsage, bindUsageProvider, finishUsage, verifyUsageAccess } from '../_usage.js';
+import { logServerError } from '../../lib/pixva-observability.js';
 
 function query(req) {
   if (req.query) return req.query;
@@ -175,6 +176,7 @@ async function createVideo(req, res, apiKey) {
     if (data.status === 'completed') await finishUsage(req, { requestId, status: 'completed' });
     return send(res, 200, { ...data, requestId, estimatedCostUsd: cost, referenceUsed, referenceWarning, size, seconds, model });
   } catch (error) {
+    await logServerError({userId:pixvaUser?.id||null,area:'video-create',error,publicMessage:error?.message||'Videogenerierung fehlgeschlagen.'});
     await finishUsage(req, { requestId, status: 'failed', actualCostUsd: 0, error: error?.message });
     return send(res, error?.status || (/anmelden/i.test(error?.message || '') ? 401 : 500), { error: error?.message || 'Sora-Video konnte nicht gestartet werden.' });
   }
@@ -244,6 +246,7 @@ export default async function handler(req, res) {
     return send(res, 405, { error: 'Nicht unterstützte Video-Aktion.' });
   } catch (error) {
     console.error('OpenAI video API failed', error);
+    await logServerError({area:'video-api',error,publicMessage:error?.message||'Video-API fehlgeschlagen.'});
     const message = error?.message || 'Die OpenAI-Videogenerierung ist fehlgeschlagen.';
     const status = error?.status || (/anmelden/i.test(message) ? 401 : /kein zugriff|gehört nicht/i.test(message) ? 403 : 500);
     return send(res, status, { error: message });

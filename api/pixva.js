@@ -7,6 +7,8 @@ import QRCode from 'qrcode';
 import nodemailer from 'nodemailer';
 import { readJson, readToken, send, validateUser } from './_lib.js';
 import { brainInstructions, deterministicBlueprint, getPixvaBrainContext, upsertCompanyProfile } from '../lib/pixva-brain.js';
+import { listPixvaApiKeys, createPixvaApiKey, updatePixvaApiKey, revokePixvaApiKey } from '../lib/pixva-api-keys.js';
+import { DEFAULT_PROVIDER_ROUTING, normalizeProviderRouting } from '../lib/pixva-provider-routing.js';
 
 export const config={maxDuration:300};
 const BUCKET='pixva-private';
@@ -207,6 +209,44 @@ async function enforcePublicRate(client,req,scope,subject,limit=8,seconds=900){
   if(error)throw new Error(error.message||'Sicherheitslimit konnte nicht geprüft werden.');
   if(data?.allowed===false){const e=new Error('Zu viele Wiederherstellungsversuche. Bitte später erneut versuchen.');e.status=429;throw e}
 }
+async function getProviderSettings(client){
+  try{
+    const {data,error}=await client.from('app_global_settings').select('settings').eq('id',1).maybeSingle();
+    if(error)throw error;
+    return normalizeProviderRouting(data?.settings?.pixvaProviderRouting||DEFAULT_PROVIDER_ROUTING);
+  }catch{return DEFAULT_PROVIDER_ROUTING}
+}
+async function saveProviderSettings(client,user,input){
+  const routing=normalizeProviderRouting(input||{});
+  const {data:row,error}=await client.from('app_global_settings').select('settings').eq('id',1).maybeSingle();
+  if(error)throw error;
+  const settings={...(row?.settings||{}),pixvaProviderRouting:routing};
+  const {error:updateError}=await client.from('app_global_settings').upsert({id:1,settings,updated_by:user.id,updated_at:new Date().toISOString()},{onConflict:'id'});
+  if(updateError)throw updateError;
+  await audit(client,user,'provider_routing_changed',user.id,routing);
+  return routing;
+}
+async function autoSnapshotIfDue(client,user){
+  try{
+    const since=new Date(Date.now()-24*60*60*1000).toISOString();
+    const {data:recent,error}=await client.from('app_user_snapshots').select('id,created_at').eq('user_id',user.id).like('label','PIXVA Auto-Sicherung%').gte('created_at',since).order('created_at',{ascending:false}).limit(1);
+    if(error)throw error;if(recent?.length)return{created:false,id:recent[0].id};
+    const payload=await snapshotPayload(client,user),label=`PIXVA Auto-Sicherung ${new Date().toISOString().slice(0,10)}`;
+    const {data,error:insertError}=await client.from('app_user_snapshots').insert({user_id:user.id,label,payload}).select('id,label,created_at').single();
+    if(insertError)throw insertError;return{created:true,...data};
+  }catch{return{created:false,error:true}}
+}
+function qualityCheck(brain,target,payload={}){
+  const issues=[],warnings=[],c=brain?.company||{},isCompany=Boolean(brain?.isCompany),text=JSON.stringify(payload||{});
+  if(isCompany){
+    if(/BEISPIEL FIRMA|beispiel-firma|\+49 711 1234567|info@beispiel-firma/i.test(text))issues.push('Beispieldaten in echtem Geschäftskonto gefunden.');
+    if(/\/pixva-logo\.png/i.test(text)&&!c.logoDataUrl&&!c.logoUrl&&!c.logoPath)warnings.push('Kein eigenes Firmenlogo gespeichert; PIXVA darf nicht als Kundenlogo eingesetzt werden.');
+    if(c.companyName&&!text.toLowerCase().includes(String(c.companyName).toLowerCase()))warnings.push('Gespeicherter Firmenname ist im aktuellen Inhalt nicht enthalten.');
+    if(c.companyPhone&&!text.includes(String(c.companyPhone)))warnings.push('Gespeicherte Firmen-Telefonnummer ist im aktuellen Inhalt nicht enthalten.');
+    if(c.companyEmail&&!text.toLowerCase().includes(String(c.companyEmail).toLowerCase()))warnings.push('Gespeicherte Firmen-E-Mail ist im aktuellen Inhalt nicht enthalten.');
+  }
+  return{passed:issues.length===0,score:Math.max(0,100-issues.length*30-warnings.length*8),target,issues,warnings,checkedAt:new Date().toISOString()};
+}
 async function safeQuery(promise,fallback=[]){try{const {data,error}=await promise;if(error)throw error;return data??fallback}catch{return fallback}}
 async function overview(client,user){
   const [brand,memories,products,files,runs,notes,versions,snapshots,jobs]=await Promise.all([
@@ -221,19 +261,23 @@ async function overview(client,user){
     safeQuery(client.from('app_usage_events').select('id,kind,model,status,units,estimated_cost_usd,actual_cost_usd,created_at').eq('user_id',user.id).order('created_at',{ascending:false}).limit(30))
   ]);
   let admin=null;
+  const providerRouting=await getProviderSettings(client);
+  const apiKeys=await listPixvaApiKeys(user.id).catch(()=>[]);
   if(user.role==='admin'){
-    const [errors,users]=await Promise.all([
+    const [errors,users,apiAudit]=await Promise.all([
       safeQuery(client.from('app_error_logs').select('*').order('created_at',{ascending:false}).limit(50)),
-      safeQuery(client.from('app_users').select('id,username,role,active,created_at').order('created_at',{ascending:false}).limit(250))
+      safeQuery(client.from('app_users').select('id,username,role,active,created_at').order('created_at',{ascending:false}).limit(250)),
+      safeQuery(client.from('app_audit_log').select('id,actor_id,target_user_id,action,details,created_at').like('action','public_api_%').order('created_at',{ascending:false}).limit(50))
     ]);
-    admin={errors,users};
+    admin={errors,users,apiAudit};
   }
   const hydratedRuns=await hydrateRuns(client,runs);
   return{
     brand,memories,products,files,runs:hydratedRuns,notifications:notes,versions,snapshots,jobs,admin,
+    api:{activeKeys:apiKeys.filter(k=>k.active).length,totalKeys:apiKeys.length},
     system:{database:true,privateStorage:true,geminiConfigured:Boolean(process.env.GEMINI_API_KEY),
       openaiConfigured:Boolean(process.env.OPENAI_API_KEY),soraConfigured:Boolean(process.env.OPENAI_API_KEY),
-      supabaseServiceConfigured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),paypalUntouched:true,semanticSearch:Boolean(process.env.OPENAI_API_KEY),backgroundJobs:true,emailConfigured:emailConfigured(),twoFactor:true,instagramPublishing:true}
+      supabaseServiceConfigured:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),paypalUntouched:true,semanticSearch:Boolean(process.env.OPENAI_API_KEY),backgroundJobs:true,emailConfigured:emailConfigured(),twoFactor:true,instagramPublishing:true,providerRouting}
   };
 }
 async function extractFileText(buffer,mime,name){
@@ -413,6 +457,34 @@ export default async function handler(req,res){
     if(action==='profile-email-save'&&req.method==='POST'){
       const email=String(body.email||'').trim().toLowerCase();if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return send(res,400,{error:'E-Mail-Adresse ist ungültig.'});const {error}=await client.from('app_users').update({email:email||null}).eq('id',user.id);if(error)throw error;await audit(client,user,'email_changed',user.id,{hasEmail:Boolean(email)});return send(res,200,{ok:true,email});
     }
+    if(action==='api-keys-list'&&req.method==='GET'){
+      const keys=await listPixvaApiKeys(user.id);return send(res,200,{keys});
+    }
+    if(action==='api-key-create'&&req.method==='POST'){
+      const created=await createPixvaApiKey(user.id,{name:body.name,scopes:body.scopes,rateLimitPerMinute:body.rateLimitPerMinute,expiresDays:body.expiresDays});return send(res,200,created);
+    }
+    if(action==='api-key-update'&&req.method==='POST'){
+      const key=await updatePixvaApiKey(user.id,body);return send(res,200,{key});
+    }
+    if(action==='api-key-revoke'&&req.method==='POST'){
+      const key=await revokePixvaApiKey(user.id,body.id);return send(res,200,{key});
+    }
+    if(action==='provider-settings'&&req.method==='GET'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});return send(res,200,{routing:await getProviderSettings(client),configured:{gemini:Boolean(process.env.GEMINI_API_KEY),openai:Boolean(process.env.OPENAI_API_KEY)}});
+    }
+    if(action==='provider-settings-save'&&req.method==='POST'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const routing=await saveProviderSettings(client,user,body);return send(res,200,{routing});
+    }
+    if(action==='error-resolve'&&req.method==='POST'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const id=String(body.id||'');const {error}=await client.from('app_error_logs').update({resolved_at:new Date().toISOString()}).eq('id',id);if(error)throw error;await audit(client,user,'error_resolved',null,{id});return send(res,200,{ok:true});
+    }
+    if(action==='snapshot-auto'&&req.method==='POST'){
+      return send(res,200,await autoSnapshotIfDue(client,user));
+    }
+    if(action==='quality-check'&&req.method==='POST'){
+      const brain=await getPixvaBrainContext(user),target=String(body.target||'general').slice(0,30),result=qualityCheck(brain,target,body.payload||{});return send(res,200,{result,brain:{isCompany:brain.isCompany,company:brain.company,ready:brain.ready,missing:brain.missing}});
+    }
+
     if(action==='team-list'&&req.method==='GET'){
       if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
       const [{data:users,error:usersError},{data:brands},{data:logs},{data:approvals}]=await Promise.all([

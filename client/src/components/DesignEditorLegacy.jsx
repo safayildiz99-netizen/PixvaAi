@@ -1251,12 +1251,42 @@ function addText() {
     }
   }
 
-  function runPixvaV12Audit() {
-    const result = auditPixvaV12Canvas(fabricRef.current);
+  async function evaluatePixvaQuality() {
+    const local = auditPixvaV12Canvas(fabricRef.current);
+    let central = { passed:true, score:100, issues:[], warnings:[] };
+    try {
+      const response = await api('/api/pixva?action=quality-check', {
+        method:'POST',
+        body:JSON.stringify({
+          target:mode==='flyer'?'flyer':'design',
+          payload:{projectName,mode,format:formatKey,templateId:v12TemplateId,canvas:fabricRef.current?.toJSON(customProps)||{}}
+        })
+      });
+      central = response?.result || central;
+    } catch (error) {
+      central = { passed:true, score:92, issues:[], warnings:[`Zentraler Firmencheck nicht verfügbar: ${error.message}`] };
+    }
+    const issues=[...(local.issues||[]),...(central.issues||[])];
+    const warnings=[...(local.warnings||[]),...(central.warnings||[])];
+    const result={passed:local.passed!==false&&central.passed!==false&&issues.length===0,score:Math.min(Number(local.score??100),Number(central.score??100)),issues,warnings};
     setV12Audit(result);
+    return result;
+  }
+
+  async function runPixvaV12Audit() {
+    const result = await evaluatePixvaQuality();
+    const details=[...result.issues,...result.warnings].join(' ');
     setStatus(result.passed
-      ? `PIXVA Design-Check: ${result.score}/100 · bereit.`
-      : `PIXVA Design-Check: ${result.score}/100 · ${result.issues.join(' ')}`);
+      ? `PIXVA Design-Check: ${result.score}/100 · bereit.${details?` ${details}`:''}`
+      : `PIXVA Design-Check: ${result.score}/100 · ${details}`);
+    return result;
+  }
+
+  async function allowExportAfterQualityCheck(){
+    const result=await runPixvaV12Audit();
+    if(result.passed)return true;
+    setStatus(`Export gestoppt: ${result.issues.join(' ')}`);
+    return false;
   }
 
   async function renderJsonData(json) {
@@ -1320,14 +1350,16 @@ function addText() {
     return canvas.toDataURL({ format: 'png', multiplier, quality: 1 });
   }
 
-  function exportPng() {
+  async function exportPng() {
+    if(!await allowExportAfterQualityCheck())return;
     const anchor = document.createElement('a');
     anchor.download = `${safeName(projectName)}.png`;
     anchor.href = currentPngData();
     anchor.click();
   }
 
-  function exportPdf() {
+  async function exportPdf() {
+    if(!await allowExportAfterQualityCheck())return;
     const data = currentPngData();
     const orientation = format.export[0] > format.export[1] ? 'landscape' : 'portrait';
     const doc = new jsPDF({ orientation, unit: 'px', format: [format.export[0], format.export[1]] });
@@ -1337,6 +1369,7 @@ function addText() {
   }
 
   async function exportZip() {
+    if(!await allowExportAfterQualityCheck())return;
     const data = currentPngData();
     const zip = new JSZip();
     const safe = safeName(projectName);

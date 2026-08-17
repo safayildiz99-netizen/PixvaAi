@@ -217,12 +217,18 @@ export default function WebsiteBuilder({project,onSaved}){
 
   async function save(){
     try{
+      const quality=await api('/api/pixva?action=quality-check',{method:'POST',body:JSON.stringify({target:'website',payload:{projectName,site:data}})});
+      if(quality?.result?.passed===false){
+        setStatus(`Website-Check gestoppt: ${(quality.result.issues||[]).join(' ')}`);
+        return;
+      }
       const payload={
         name:projectName,
         type:'website',
         data:{
           site:data,
           pixvaAutoCompany:true,
+          qualityCheck:quality?.result||null,
           templateVersion:websiteVorlage?.version||'1.0'
         }
       };

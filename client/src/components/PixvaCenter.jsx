@@ -28,6 +28,8 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   const [webQuery,setWebQuery]=useState(''),[webAnswer,setWebAnswer]=useState(null);
   const [translate,setTranslate]=useState({text:'',target:'Türkisch'}),[translation,setTranslation]=useState('');
   const [flyerCheck,setFlyerCheck]=useState(null),[recoveryCodes,setRecoveryCodes]=useState([]),[deleteForm,setDeleteForm]=useState({password:'',confirmation:''}),[status,setStatus]=useState(null);
+  const [providerRouting,setProviderRouting]=useState({chatPrimary:'gemini',chatFallback:'openai',chatFallbackEnabled:false,maxRetries:2});
+  const [providerConfigured,setProviderConfigured]=useState({gemini:false,openai:false});
   const [securityState,setSecurityState]=useState(null),[twofaSetup,setTwofaSetup]=useState(null),[twofaCode,setTwofaCode]=useState('');
   const [email,setEmail]=useState(''),[team,setTeam]=useState(null),[instagram,setInstagram]=useState(null);
   const emptyAccount={username:'',password:'',firstName:'',lastName:'',email:'',phone:'',birthDate:'',role:'user',teamRole:'member',isCompany:true,companyName:'',companyType:'supermarkt',companyTypeOther:'',companyOwner:'',companyEmail:'',companyPhone:'',privatePhone:'',companyWebsite:'',companyInstagram:'',companyAddress:'',companyLogoDataUrl:''};
@@ -40,6 +42,7 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     if(!silent)setLoading(true);
     try{
       const result=await api('/api/pixva?action=overview');setData(result);setBrand({...emptyBrand,...(result.brand||{})});
+      if(result?.system?.providerRouting)setProviderRouting(old=>({...old,...result.system.providerRouting}));
       setAgentRun(prev=>{if(!prev?.run?.id)return prev;const fresh=(result.runs||[]).find(r=>r.id===prev.run.id);return fresh?{...prev,run:fresh,plan:fresh.plan||prev.plan}:prev});
       const unread=(result.notifications||[]).filter(n=>!n.read_at);
       if('Notification'in window&&Notification.permission==='granted'){
@@ -49,6 +52,7 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
     }catch(e){setError(e.message)}finally{if(!silent)setLoading(false)}
   }
   useEffect(()=>{load();const timer=setInterval(()=>load(true),30000);return()=>clearInterval(timer)},[]);
+  useEffect(()=>{if(user.role==='admin')loadProviderSettings()},[user?.id,user?.role]);
 
   const products=data?.products||[],files=data?.files||[],memories=data?.memories||[],notifications=data?.notifications||[];
   const versions=data?.versions||[],snapshots=data?.snapshots||[],jobs=data?.jobs||[],runs=data?.runs||[];
@@ -137,6 +141,21 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
   async function restoreVersion(id){if(!confirm('Projekt auf diese Version zurücksetzen?'))return;try{await call('project-version-restore',{id});setMessage('Projektversion wiederhergestellt.');await load(true)}catch{}}
   async function readNotifications(){try{await call('notification-read',{});await load(true)}catch{}}
   async function loadStatus(deep=false){resetFeedback();setBusy('status');try{setStatus(await api(`/api/pixva?action=status${deep?'&deep=1':''}`))}catch(e){setError(e.message)}finally{setBusy('')}}
+  async function loadProviderSettings(){
+    if(user.role!=='admin')return;
+    try{const r=await api('/api/pixva?action=provider-settings');setProviderRouting(v=>({...v,...(r.routing||{})}));setProviderConfigured(r.configured||{});}
+    catch(e){setError(e.message)}
+  }
+  async function saveProviderRouting(){
+    if(user.role!=='admin')return;
+    resetFeedback();setBusy('provider-settings');
+    try{const r=await api('/api/pixva?action=provider-settings-save',{method:'POST',body:JSON.stringify(providerRouting)});setProviderRouting(r.routing||providerRouting);setMessage('KI-Provider-Routing gespeichert.');await load(true)}
+    catch(e){setError(e.message)}finally{setBusy('')}
+  }
+  async function resolveSystemError(id){
+    if(user.role!=='admin'||!id)return;
+    try{await call('error-resolve',{id});setMessage('Fehler als erledigt markiert.');await load(true)}catch{}
+  }
   async function allowNotifications(){if(!('Notification'in window))return setError('Browser-Benachrichtigungen werden hier nicht unterstützt.');const r=await Notification.requestPermission();setMessage(r==='granted'?'Browser-Benachrichtigungen aktiviert.':'Benachrichtigungen wurden nicht freigegeben.')}
 
   async function loadSecurity(){try{const r=await api('/api/pixva?action=security-state');setSecurityState(r);setEmail(r.email||'')}catch(e){setError(e.message)}}
@@ -380,7 +399,7 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
             twoFactor:'2FA',
             instagramPublishing:'Instagram Publishing'
           };
-          const hidden=new Set(['adminUserCount','adminOpenErrors','bucketPublic']);
+          const hidden=new Set(['adminUserCount','adminOpenErrors','bucketPublic','providerRouting']);
           return <div className="pixva-status-grid">{Object.entries(current).filter(([k])=>!hidden.has(k)).map(([k,v])=>{
             const text=typeof v==='boolean'?(v?'OK':'FEHLT'):String(v??'—');
             const positive=v===true||['OK','PIXVA_OK','PRIVAT','BEREIT'].includes(text);
@@ -388,9 +407,17 @@ export default function PixvaCenter({user,onOpenImageProject,onOpenVideoProject}
             return <div key={k}><span>{labels[k]||k}</span><b className={positive?'ok':neutral?'':v===false?'bad':''}>{text}</b></div>
           })}</div>
         })()}
-        {user.role==='admin'&&<><hr/><h3>Admin-System</h3><p>{status?.adminUserCount??data?.admin?.users?.length??'—'} Konten · {status?.adminOpenErrors??data?.admin?.errors?.filter(e=>!e.resolved_at).length??'—'} offene Fehler</p><div className="pixva-table compact-table">{(data?.admin?.errors||[]).slice(0,10).map(e=><div className="pixva-row" key={e.id}><div><b>{e.area}</b><span>{e.public_message}</span><small>{fmtDate(e.created_at)}</small></div></div>)}</div></>}
+        {user.role==='admin'&&<><hr/><h3>Admin-System</h3><p>{status?.adminUserCount??data?.admin?.users?.length??'—'} Konten · {status?.adminOpenErrors??data?.admin?.errors?.filter(e=>!e.resolved_at).length??'—'} offene Fehler · {data?.api?.activeKeys??0} aktive API-Keys</p><div className="pixva-table compact-table">{(data?.admin?.errors||[]).slice(0,10).map(e=><div className="pixva-row" key={e.id}><div><b>{e.area}</b><span>{e.public_message}</span><small>{fmtDate(e.created_at)}</small></div>{!e.resolved_at&&<button onClick={()=>resolveSystemError(e.id)} disabled={busy==='error-resolve'}><CheckCircle2 size={15}/>Erledigt</button>}</div>)}</div></>}
       </article>
       <article className="pixva-card"><h3>KI-Auftragszentrum</h3><div className="pixva-table">{jobs.map(j=><div className="pixva-row" key={j.id}><div><b>{j.kind} · {j.model}</b><span>{j.status} · {fmtDate(j.created_at)}</span></div>{j.status==='completed'?<CheckCircle2 className="ok"/>:j.status==='failed'?<span className="bad">Fehler</span>:<LoaderCircle className="spin"/>}</div>)}</div></article>
+      {user.role==='admin'&&<article className="pixva-card pixva-provider-card"><div className="pixva-card-title"><BrainCircuit/><div><h3>KI-Provider & Fallback</h3><p>Steuert den Text-Chat zentral. Der kostenpflichtige Fallback bleibt bewusst optional.</p></div></div>
+        <div className="pixva-status-grid"><div><span>Gemini Key</span><b className={providerConfigured.gemini?'ok':'warn'}>{providerConfigured.gemini?'BEREIT':'FEHLT'}</b></div><div><span>OpenAI Key</span><b className={providerConfigured.openai?'ok':'warn'}>{providerConfigured.openai?'BEREIT':'FEHLT'}</b></div></div>
+        <div className="pixva-provider-grid"><label>Primärer Chat-Provider<select value={providerRouting.chatPrimary} onChange={e=>setProviderRouting({...providerRouting,chatPrimary:e.target.value})}><option value="gemini">Gemini</option><option value="openai">OpenAI</option></select></label><label>Fallback<select value={providerRouting.chatFallback} onChange={e=>setProviderRouting({...providerRouting,chatFallback:e.target.value})}><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></label><label>Retries<select value={providerRouting.maxRetries} onChange={e=>setProviderRouting({...providerRouting,maxRetries:Number(e.target.value)})}><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option></select></label></div>
+        <label className="pixva-switch-row"><input type="checkbox" checked={providerRouting.chatFallbackEnabled===true} onChange={e=>setProviderRouting({...providerRouting,chatFallbackEnabled:e.target.checked})}/><span>Automatischen Chat-Fallback aktivieren</span></label>
+        <small>Ist der Fallback ausgeschaltet, startet PIXVA bei einem Provider-Fehler nicht automatisch einen zweiten kostenpflichtigen Anbieter.</small>
+        <button className="pixva-primary" onClick={saveProviderRouting} disabled={busy==='provider-settings'}><Save size={16}/>{busy==='provider-settings'?'Wird gespeichert …':'Provider-Einstellungen speichern'}</button>
+      </article>}
+      {user.role==='admin'&&<article className="pixva-card"><h3>Public API Aktivität</h3><p>Letzte Aufrufe über persönliche PIXVA API-Keys.</p><div className="pixva-table compact-table">{(data?.admin?.apiAudit||[]).slice(0,20).map(a=><div className="pixva-row" key={a.id}><div><b>{a.action}</b><span>{fmtDate(a.created_at)}</span><small>{JSON.stringify(a.details||{})}</small></div></div>)}</div>{!(data?.admin?.apiAudit||[]).length&&<small>Noch keine Public-API-Aufrufe protokolliert.</small>}</article>}
     </div>}
   </section>;
 }

@@ -25,3 +25,6 @@
 .pixva-danger summary{cursor:pointer;color:#ff9aaa;font-weight:800}.pixva-danger input{margin-top:8px}.pixva-danger button{margin-top:8px;border-color:#b94c5e;color:#ffc3cd}
 .spin{animation:pixspin 1s linear infinite}@keyframes pixspin{to{transform:rotate(360deg)}}
 @media(max-width:1000px){.pixva-grid.two{grid-template-columns:1fr}}@media(max-width:650px){.pixva-center{padding:12px}.pixva-hub-head{display:grid}.pixva-tabs{overflow:auto;flex-wrap:nowrap}.pixva-tabs button{white-space:nowrap}.pixva-form-grid,.pixva-codes,.pixva-status-grid{grid-template-columns:1fr}.pixva-card{padding:14px}}
+
+/* PIXVA V13 · Provider routing */
+.pixva-provider-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.pixva-switch-row{display:flex!important;align-items:center!important;gap:8px!important;padding:10px 12px;border:1px solid #294e63;border-radius:10px;background:#081923}.pixva-switch-row input{width:auto!important;margin:0}.pixva-provider-card small{color:#91adbc;line-height:1.5}@media(max-width:760px){.pixva-provider-grid{grid-template-columns:1fr}}

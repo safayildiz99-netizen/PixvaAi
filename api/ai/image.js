@@ -3,6 +3,7 @@ import { brainInstructions, getPixvaBrainContext } from '../../lib/pixva-brain.j
 import { randomUUID } from 'node:crypto';
 import { readJson, send, validateUser } from '../_lib.js';
 import { authorizeUsage, finishUsage } from '../_usage.js';
+import { logServerError } from '../../lib/pixva-observability.js';
 
 const sizeMap = {
   square: '1024x1024',
@@ -249,9 +250,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Nur POST-Anfragen sind erlaubt.' });
 
   let requestId = '';
+  let pixvaUser = null;
   try {
     const body = await readJson(req);
-    const pixvaUser=await validateUser(req);
+    pixvaUser=await validateUser(req);
     const pixvaBrain=await getPixvaBrainContext(pixvaUser).catch(()=>null);
     const prompt = String(body?.prompt || '').trim().slice(0, 3000);
     const aspect = Object.hasOwn(sizeMap, body?.aspect) ? String(body.aspect) : 'post';
@@ -309,6 +311,7 @@ export default async function handler(req, res) {
     return send(res, lastStatus, { error: message });
   } catch (error) {
     console.error('OpenAI image generation failed', error);
+    await logServerError({userId:pixvaUser?.id||null,area:'image',error,publicMessage:error?.message||'Bildgenerierung fehlgeschlagen.'});
     if (requestId) await finishUsage(req, { requestId, status: 'failed', actualCostUsd: 0, error: error?.message });
     return send(res, error?.status || (/anmelden/i.test(error?.message || '') ? 401 : 500), { error: error?.message || 'Die OpenAI-Bildgenerierung ist fehlgeschlagen.' });
   }

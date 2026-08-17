@@ -140,6 +140,11 @@ export default function App(){
   },[]);
 
   useEffect(()=>{
+    if(!user || guest) return;
+    api('/api/pixva?action=snapshot-auto',{method:'POST',body:JSON.stringify({source:'login'})}).catch(()=>{});
+  },[user?.id,guest]);
+
+  useEffect(()=>{
     let cancelled=false;
     if(!user || guest){setSubscription(DEFAULT_SUBSCRIPTION);return()=>{cancelled=true}}
     api('/api/subscription').then((result)=>{
