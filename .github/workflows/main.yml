@@ -1,4 +1,4 @@
-name: PIXVA V12 SAFE REPAIR
+name: PIXVA V12 SAFE RECOVERY
 
 on:
   workflow_dispatch:
@@ -15,10 +15,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Geldsystem Hauptlogo und Basis schützen
+      - name: Schutzdateien und Basis prüfen
         shell: bash
         run: |
           set -euo pipefail
+
           test -f client/src/components/DesignEditorLegacy.jsx
           test -f client/src/components/Login.jsx
           test -f client/src/components/AdminAccounts.jsx
@@ -34,10 +35,11 @@ jobs:
           sha256sum client/src/plans.js > /tmp/plans.before
           sha256sum client/public/pixva-logo.png > /tmp/logo.before
 
-      - name: Originales V12 Komplettpaket aus Git Verlauf holen
+      - name: Originales V12 Komplettpaket sicher aus Git holen
         shell: bash
         run: |
           set -euo pipefail
+
           rm -rf /tmp/pixva-v12
           mkdir -p /tmp/pixva-v12
 
@@ -54,11 +56,11 @@ jobs:
           done < <(git rev-list HEAD~1)
 
           if [ -z "$V12_COMMIT" ]; then
-            echo "Das vorherige PIXVA-V12-Workflow-Paket wurde im Git-Verlauf nicht gefunden."
+            echo "FEHLER: Das originale PIXVA-V12-Komplettpaket wurde im Git-Verlauf nicht gefunden."
             exit 1
           fi
 
-          echo "V12 Basis gefunden: $V12_COMMIT"
+          echo "Originale V12 Basis gefunden: $V12_COMMIT"
 
           python - <<'PY'
           from pathlib import Path
@@ -67,24 +69,25 @@ jobs:
           text = Path('/tmp/v12-original-workflow.yml').read_text(encoding='utf-8')
           patterns = [
               r"echo\s+'([A-Za-z0-9+/=]+)'\s*\|\s*base64\s+--decode\s*>\s*/tmp/pixva-v12/payload\.tar\.gz",
-              r"echo\s+\"([A-Za-z0-9+/=]+)\"\s*\|\s*base64\s+--decode\s*>\s*/tmp/pixva-v12/payload\.tar\.gz",
+              r'echo\s+"([A-Za-z0-9+/=]+)"\s*\|\s*base64\s+--decode\s*>\s*/tmp/pixva-v12/payload\.tar\.gz',
           ]
+
           blob = None
           for pattern in patterns:
-              match = re.search(pattern, text)
-              if match:
-                  blob = match.group(1)
+              m = re.search(pattern, text)
+              if m:
+                  blob = m.group(1)
                   break
 
           if not blob:
-              raise SystemExit('V12 Payload im vorherigen Workflow nicht gefunden.')
+              raise SystemExit('V12 Payload im originalen Workflow nicht gefunden.')
 
           data = base64.b64decode(blob, validate=True)
           if not data.startswith(b'\x1f\x8b'):
               raise SystemExit('V12 Payload ist kein gültiges gzip Archiv.')
 
           Path('/tmp/pixva-v12/payload.tar.gz').write_bytes(data)
-          print('V12 Payload sicher aus dem vorherigen Workflow wiederhergestellt.')
+          print('Originales V12 Payload wiederhergestellt.')
           PY
 
           tar -tzf /tmp/pixva-v12/payload.tar.gz >/dev/null
@@ -100,17 +103,19 @@ jobs:
 
           python - <<'PY'
           import glob, json
+
           files = glob.glob('/tmp/pixva-v12/payload/client/src/data/pixva/v12/templates/*.json')
           assert len(files) == 12, f'Erwartet 12 Templates, gefunden: {len(files)}'
+
           data = [json.load(open(f, encoding='utf-8')) for f in files]
           assert len({d['id'] for d in data}) == 12
           assert len({d['layout'] for d in data}) == 12
-          print('12 separate V12 Vorlagen und 12 Layouts OK')
+          print('12 Template-Dateien und 12 verschiedene Layout-IDs OK.')
           PY
 
           test "$(find /tmp/pixva-v12/payload/client/public/templates/pixva-v12 -maxdepth 1 -name '*.svg' | wc -l | tr -d ' ')" -eq 12
 
-      - name: V12 Galerie Anker robust reparieren
+      - name: V12 Galeriefehler korrekt reparieren
         shell: bash
         run: |
           set -euo pipefail
@@ -123,117 +128,179 @@ jobs:
           error_text = "DesignEditor: Galerie nicht gefunden."
 
           if error_text not in src:
-              raise SystemExit('Bekannter V12 Galerie-Schutzpunkt wurde im Original-Patcher nicht gefunden.')
+              raise SystemExit('Der bekannte V12 Galerie-Schutzpunkt wurde nicht gefunden.')
 
-          marker = '# PIXVA V12 ROBUST GALERIE FALLBACK'
+          marker = '# PIXVA V12 SAFE RECOVERY GALLERY'
           if marker not in src:
               pos = src.find(error_text)
               line_start = src.rfind('\n', 0, pos) + 1
-              original_line = src[line_start:src.find('\n', line_start) if src.find('\n', line_start) != -1 else len(src)]
-              indent = original_line[:len(original_line) - len(original_line.lstrip())]
+              line_end = src.find('\n', line_start)
+              if line_end < 0:
+                  line_end = len(src)
 
-              block_lines = [
-                  marker,
-                  "if start is None or end is None:",
-                  "    _pixva_candidates = []",
-                  "    _vm = s.find('Vorlagenmodus')",
-                  "    if _vm >= 0:",
-                  "        _pixva_candidates.append((_vm, 'forward'))",
-                  "    for _needle in ('pixvaTemplateList.map', 'applyPixvaFileTemplate(', 'onClick={() => applyTemplate(', 'atlas-grid', 'fresh-grid', 'tea-single'):",
-                  "        _p = s.find(_needle)",
-                  "        if _p >= 0:",
-                  "            _pixva_candidates.append((_p, 'backward'))",
-                  "    for _anchor, _direction in _pixva_candidates:",
-                  "        if _direction == 'forward':",
-                  "            _grid_class = s.find('className=\"tool-grid\"', _anchor)",
-                  "            if _grid_class < 0:",
-                  "                _grid_class = s.find(\"className='tool-grid'\", _anchor)",
-                  "        else:",
-                  "            _grid_class = s.rfind('className=\"tool-grid\"', 0, _anchor + 1)",
-                  "            if _grid_class < 0:",
-                  "                _grid_class = s.rfind(\"className='tool-grid'\", 0, _anchor + 1)",
-                  "        if _grid_class < 0:",
-                  "            continue",
-                  "        _grid_open = s.rfind('<div', 0, _grid_class + 1)",
-                  "        if _grid_open < 0:",
-                  "            continue",
-                  "        _label = s.rfind('<label', max(0, _grid_open - 2500), _grid_open)",
-                  "        _start = _grid_open",
-                  "        if _label >= 0 and 'Vorlag' in s[_label:_grid_open + 200]:",
-                  "            _start = _label",
-                  "        _scan = _grid_open",
-                  "        _depth = 0",
-                  "        _end = None",
-                  "        while _scan < len(s):",
-                  "            _open = s.find('<div', _scan)",
-                  "            _close = s.find('</div>', _scan)",
-                  "            if _close < 0:",
-                  "                break",
-                  "            if _open >= 0 and _open < _close:",
-                  "                _depth += 1",
-                  "                _scan = _open + 4",
-                  "            else:",
-                  "                _depth -= 1",
-                  "                _scan = _close + len('</div>')",
-                  "                if _depth == 0:",
-                  "                    _end = _scan",
-                  "                    break",
-                  "        if _end is not None and _end > _start:",
-                  "            start, end = _start, _end",
-                  "            break",
-              ]
+              old_line = src[line_start:line_end]
+              indent = old_line[:len(old_line) - len(old_line.lstrip())]
 
-              block = ''.join(indent + line + '\n' for line in block_lines)
-              src = src[:line_start] + block + src[line_start:]
+              if 'raise ' not in old_line:
+                  raise SystemExit('Unerwartete Galerie-Fehlerzeile im V12 Patcher.')
+
+              block = r'''# PIXVA V12 SAFE RECOVERY GALLERY
+          # Wir befinden uns bereits im ursprünglichen "Galerie nicht gefunden"-Zweig.
+          # Erst mehrere echte Strukturen probieren; NUR wenn danach nichts passt, abbrechen.
+          _candidates = []
+          
+          for _needle in (
+              'className="template-gallery"',
+              "className='template-gallery'",
+              'className="tool-grid"',
+              "className='tool-grid'",
+              'className="template-grid"',
+              "className='template-grid'",
+              'pixvaTemplateList.map',
+              'applyPixvaFileTemplate(',
+              'applyTemplate(',
+              'Vorlagenmodus',
+              'Vorlagen',
+          ):
+              _p = s.find(_needle)
+              if _p >= 0:
+                  _candidates.append((_p, _needle))
+          
+          def _match_tag_region(_text, _anchor):
+              _opens = []
+              for _tag in ('div', 'section', 'article', 'aside'):
+                  _o = _text.rfind('<' + _tag, 0, _anchor + 1)
+                  if _o >= 0:
+                      _opens.append((_o, _tag))
+              if not _opens:
+                  return None, None
+          
+              _open, _tag = max(_opens, key=lambda x: x[0])
+              _scan = _open
+              _depth = 0
+              _open_token = '<' + _tag
+              _close_token = '</' + _tag + '>'
+          
+              while _scan < len(_text):
+                  _next_open = _text.find(_open_token, _scan)
+                  _next_close = _text.find(_close_token, _scan)
+          
+                  if _next_close < 0:
+                      return None, None
+          
+                  if _next_open >= 0 and _next_open < _next_close:
+                      _depth += 1
+                      _scan = _next_open + len(_open_token)
+                  else:
+                      _depth -= 1
+                      _scan = _next_close + len(_close_token)
+                      if _depth == 0:
+                          return _open, _scan
+          
+              return None, None
+          
+          for _anchor, _needle in _candidates:
+              _a, _b = _match_tag_region(s, _anchor)
+              if _a is None or _b is None or _b <= _a:
+                  continue
+          
+              if _needle in ('Vorlagenmodus', 'Vorlagen'):
+                  _label = s.rfind('<label', max(0, _a - 3000), _a)
+                  if _label >= 0:
+                      _a = _label
+          
+              start, end = _a, _b
+              break
+          
+          if start is None or end is None:
+              raise RuntimeError('DesignEditor: Galerie nicht gefunden.')
+          '''
+              block = ''.join(indent + line + '\n' for line in block.splitlines())
+              src = src[:line_start] + block + src[line_end + (1 if line_end < len(src) else 0):]
               patcher.write_text(src, encoding='utf-8')
 
-          print('V12 Galerie-Fallback eingesetzt.')
+          print('Unbedingter Galerie-Abbruch wurde durch echten bedingten Recovery-Fallback ersetzt.')
           PY
 
           python -m py_compile /tmp/pixva-v12/payload/apply-pixva-v12.py
 
-          python - <<'PY'
-          from pathlib import Path
-
-          s = Path('client/src/components/DesignEditorLegacy.jsx').read_text(encoding='utf-8')
-          candidates = []
-
-          p = s.find('Vorlagenmodus')
-          if p >= 0:
-              candidates.append((p, 'forward'))
-
-          for needle in ('pixvaTemplateList.map', 'applyPixvaFileTemplate(', 'onClick={() => applyTemplate(', 'atlas-grid', 'fresh-grid', 'tea-single'):
-              p = s.find(needle)
-              if p >= 0:
-                  candidates.append((p, 'backward'))
-
-          found = False
-          for anchor, direction in candidates:
-              if direction == 'forward':
-                  grid = s.find('className="tool-grid"', anchor)
-                  if grid < 0:
-                      grid = s.find("className='tool-grid'", anchor)
-              else:
-                  grid = s.rfind('className="tool-grid"', 0, anchor + 1)
-                  if grid < 0:
-                      grid = s.rfind("className='tool-grid'", 0, anchor + 1)
-              if grid >= 0 and s.rfind('<div', 0, grid + 1) >= 0:
-                  found = True
-                  break
-
-          if not found:
-              raise SystemExit('Sicherheitsprüfung: Die aktuelle Galerie konnte auch mit dem robusten Fallback nicht erkannt werden.')
-
-          print('Aktuelle DesignEditor-Galerie wird vom robusten V12-Fallback erkannt.')
-          PY
-
-      - name: V12 alles in einem einsetzen
+      - name: V12 zuerst schnell gegen echten Code und Git Historie testen
         shell: bash
         run: |
           set -euo pipefail
+
+          PROBE=/tmp/pixva-v12-probe
+          rm -rf "$PROBE"
+          git worktree add --detach "$PROBE" "$GITHUB_SHA" >/dev/null
+
+          cleanup() {
+            git worktree remove -f "$PROBE" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          {
+            echo CURRENT
+            git log --format=%H --follow -- client/src/components/DesignEditorLegacy.jsx | head -n 30
+          } | awk '!seen[$0]++' > /tmp/v12-editor-candidates.txt
+
+          FOUND=""
+          TRY=0
+
+          while read -r CANDIDATE; do
+            [ -n "$CANDIDATE" ] || continue
+            TRY=$((TRY + 1))
+
+            git -C "$PROBE" reset --hard "$GITHUB_SHA" >/dev/null
+            git -C "$PROBE" clean -fdx >/dev/null
+
+            if [ "$CANDIDATE" != "CURRENT" ]; then
+              if ! git show "$CANDIDATE:client/src/components/DesignEditorLegacy.jsx" > "$PROBE/client/src/components/DesignEditorLegacy.jsx" 2>/dev/null; then
+                continue
+              fi
+            fi
+
+            echo "V12 Schnelltest $TRY: $CANDIDATE"
+
+            if (cd "$PROBE" && python /tmp/pixva-v12/payload/apply-pixva-v12.py > "/tmp/v12-probe-$TRY.log" 2>&1); then
+              if grep -Fq "PIXVA V12 ALL IN ONE EDITOR" "$PROBE/client/src/components/DesignEditorLegacy.jsx" \
+                 && grep -Fq "PIXVA V12 TEMPLATE GALLERY" "$PROBE/client/src/components/DesignEditorLegacy.jsx" \
+                 && grep -Fq "applyPixvaV12Template" "$PROBE/client/src/components/DesignEditorLegacy.jsx"; then
+                FOUND="$CANDIDATE"
+                echo "Passende echte Editor-Basis gefunden: $FOUND"
+                break
+              fi
+            fi
+
+            echo "Schnelltest nicht passend; kein langer Build gestartet."
+            tail -n 12 "/tmp/v12-probe-$TRY.log" 2>/dev/null || true
+          done < /tmp/v12-editor-candidates.txt
+
+          if [ -z "$FOUND" ]; then
+            echo "FEHLER: Keine der letzten 30 echten DesignEditor-Versionen konnte vom originalen V12-Paket vollständig gepatcht werden."
+            echo "Es wurde NICHT installiert, NICHT gebaut und NICHT gepusht."
+            exit 1
+          fi
+
+          printf '%s' "$FOUND" > /tmp/v12-editor-source
+
+          cleanup
+          trap - EXIT
+
+      - name: V12 alles in einem wirklich einsetzen
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SOURCE="$(cat /tmp/v12-editor-source)"
+          echo "Verwendete Editor-Basis: $SOURCE"
+
+          if [ "$SOURCE" != "CURRENT" ]; then
+            git show "$SOURCE:client/src/components/DesignEditorLegacy.jsx" > client/src/components/DesignEditorLegacy.jsx
+          fi
+
           python /tmp/pixva-v12/payload/apply-pixva-v12.py
 
-      - name: V12 Funktionen vor Build prüfen
+      - name: V12 Funktionen vor langem Build streng prüfen
         shell: bash
         run: |
           set -euo pipefail
@@ -256,6 +323,66 @@ jobs:
 
           grep -Fq "PIXVA V12 VIDEO BRAIN" client/src/components/VideoStudio.jsx
 
+          node --check client/src/data/pixva/v12/catalog.js
+          node --check client/src/data/pixva/v12/templateEngineV12.js
+
+          python - <<'PY'
+          import glob, json
+          files = glob.glob('client/src/data/pixva/v12/templates/*.json')
+          assert len(files) == 12
+          data = [json.load(open(f, encoding='utf-8')) for f in files]
+          assert len({d['id'] for d in data}) == 12
+          assert len({d['layout'] for d in data}) == 12
+          print('Installierte V12 JSON-Vorlagen vollständig und eindeutig.')
+          PY
+
+      - name: Gepatchtes JSX vor npm Build prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf /tmp/pixva-jsx-check
+          npm install --prefix /tmp/pixva-jsx-check typescript@5.9.2 --no-save --no-audit --no-fund --ignore-scripts >/dev/null
+
+          cat > /tmp/check-jsx.cjs <<'NODE'
+          const ts = require('typescript');
+          const fs = require('fs');
+
+          for (const file of process.argv.slice(2)) {
+            const source = fs.readFileSync(file, 'utf8');
+            const result = ts.transpileModule(source, {
+              compilerOptions: {
+                jsx: ts.JsxEmit.ReactJSX,
+                target: ts.ScriptTarget.ES2022,
+                module: ts.ModuleKind.ESNext
+              },
+              reportDiagnostics: true,
+              fileName: file
+            });
+
+            const errors = (result.diagnostics || []).filter(
+              d => d.category === ts.DiagnosticCategory.Error
+            );
+
+            if (errors.length) {
+              console.error('JSX FEHLER:', file);
+              for (const d of errors) {
+                console.error(ts.flattenDiagnosticMessageText(d.messageText, ' '));
+              }
+              process.exit(1);
+            }
+          }
+
+          console.log('V12 gepatchtes JSX syntaktisch OK.');
+          NODE
+
+          NODE_PATH=/tmp/pixva-jsx-check/node_modules node /tmp/check-jsx.cjs \
+            client/src/components/DesignEditorLegacy.jsx \
+            client/src/components/Login.jsx \
+            client/src/components/AdminAccounts.jsx \
+            client/src/components/VideoStudio.jsx \
+            client/src/components/WebsiteBuilder.jsx
+
       - name: Geld Preise Abos und PIXVA Hauptlogo unverändert
         shell: bash
         run: |
@@ -271,7 +398,7 @@ jobs:
           diff /tmp/plans.before /tmp/plans.after
           diff /tmp/logo.before /tmp/logo.after
 
-      - name: Produktions Build
+      - name: Produktions Build erst nach allen Schnelltests
         shell: bash
         run: |
           set -euo pipefail
@@ -285,6 +412,7 @@ jobs:
 
           test -d client/dist
           grep -Fq "PIXVA V12 ALL IN ONE EDITOR" client/src/components/DesignEditorLegacy.jsx
+          grep -Fq "PIXVA V12 TEMPLATE GALLERY" client/src/components/DesignEditorLegacy.jsx
           grep -Fq "PIXVA V12 VIDEO BRAIN" client/src/components/VideoStudio.jsx
           test "$(find client/src/data/pixva/v12/templates -maxdepth 1 -name '*.json' | wc -l | tr -d ' ')" -eq 12
           test "$(find client/public/templates/pixva-v12 -maxdepth 1 -name '*.svg' | wc -l | tr -d ' ')" -eq 12
@@ -310,5 +438,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "PIXVA V12 Safe Repair"
+          git commit -m "PIXVA V12 Safe Recovery"
           git push origin HEAD:main
