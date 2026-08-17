@@ -49,13 +49,14 @@ function preparedSite(brain){
   const tpl=templateFor(kind);
   const offer=offerFor(kind);
 
+  const realCompany=Boolean(brain?.isCompany);
   const hasReal=Boolean(
     c.companyName||c.companyPhone||c.companyEmail||c.website||c.instagram||
     c.address||c.ownerName||c.logoDataUrl||c.logoUrl||c.logoPath
   );
 
-  const valueOr=(real,fallbackValue='')=>String(real||'').trim()?real:fallbackValue;
-  const exampleCompanyName=kind==='programmierer'?'PIXVA':(fallback.companyName||'BEISPIEL FIRMA');
+  const valueOr=(real,fallbackValue='')=>String(real||'').trim()?real:(realCompany?'':fallbackValue);
+  const exampleCompanyName=fallback.companyName||'BEISPIEL FIRMA';
 
   return{
     company:valueOr(c.companyName,exampleCompanyName),
@@ -75,14 +76,14 @@ function preparedSite(brain){
     primary:c.primaryColor||tpl.primaryColor||'#101A2D',
     secondary:c.secondaryColor||tpl.secondaryColor||'#35D1D1',
     font:c.fontFamily||'Inter',
-    logo:c.logoDataUrl||c.logoUrl||c.logoPath||fallback.logo||PIXVA_LOGO,
-    exampleMode:!hasReal,
+    logo:c.logoDataUrl||c.logoUrl||c.logoPath||(realCompany?'':(fallback.logo||PIXVA_LOGO)),
+    exampleMode:!realCompany&&!hasReal,
     ...offer
   };
 }
 
 function buildHtml(d){
-  const safeLogo=d.logo||PIXVA_LOGO;
+  const safeLogo=d.logo||'';
   const websiteHref=/^https?:\/\//i.test(d.website)?d.website:`https://${d.website||'pixva.example'}`;
 
   const contacts=[
@@ -116,7 +117,7 @@ function buildHtml(d){
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(d.company||'PIXVA')}</title>
+<title>${esc(d.company||d.industry||'Unternehmen')}</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:${esc(d.font)},Arial,sans-serif;background:#f5f7f9;color:#071923}
@@ -154,7 +155,7 @@ footer{background:#061923;color:#9eb2bd;padding:25px 6vw;display:flex;justify-co
 ${d.exampleMode?'<div class="example">BEISPIELVORSCHAU · gespeicherte Firmendaten ersetzen diese Angaben automatisch</div>':''}
 <header>
   <div class="top">
-    <img class="logo" src="${attr(safeLogo)}" alt="${attr(d.company||'PIXVA')} Logo">
+    ${safeLogo?`<img class="logo" src="${attr(safeLogo)}" alt="${attr(d.company||'Firma')} Logo">`:''}
     <div class="links">${contacts}</div>
   </div>
   <div class="hero">
@@ -174,11 +175,11 @@ ${d.exampleMode?'<div class="example">BEISPIELVORSCHAU · gespeicherte Firmendat
 </header>
 <section class="services"><h2>Unsere Leistungen</h2><div class="grid">${cards}</div></section>
 <section class="contact" id="kontakt">
-  <div><h2>${esc(d.cta)}</h2><p>${esc(d.company||'PIXVA')}</p><p>${esc(d.address||'')}</p></div>
+  <div><h2>${esc(d.cta)}</h2>${d.company?`<p>${esc(d.company)}</p>`:''}<p>${esc(d.address||'')}</p></div>
   <div class="contact-list">${contacts}</div>
 </section>
 <footer>
-  <span>© ${new Date().getFullYear()} ${esc(d.company||'PIXVA')}</span>
+  <span>© ${new Date().getFullYear()} ${esc(d.company||d.industry||'Unternehmen')}</span>
   <span>${esc([d.phone,d.email,d.website].filter(Boolean).join(' · '))}</span>
 </footer>
 </body>

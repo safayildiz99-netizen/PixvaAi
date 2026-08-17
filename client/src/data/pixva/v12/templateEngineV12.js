@@ -23,8 +23,9 @@ const industryKey=(raw='')=>{
 
 export function normalizePixvaV12Brand(source={}){
   const c=source?.company?source.company:source;
+  const exampleMode=source?.pixva_example_mode??c?.pixva_example_mode??!source?.isCompany;
   return{
-    companyName:first(c,['company_name','companyName','name'],'BEISPIEL FIRMA'),
+    companyName:first(c,['company_name','companyName','name'],exampleMode?'BEISPIEL FIRMA':''),
     companyType:industryKey(`${first(c,['company_type','companyType','industry'],'')} ${first(c,['company_type_other','companyTypeOther','industryOther'],'')}`),
     ownerName:first(c,['owner_name','ownerName'],''),
     companyEmail:first(c,['company_email','companyEmail','email'],''),

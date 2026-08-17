@@ -131,7 +131,6 @@ export default async function handler(req,res){
     if(req.method==='POST'&&action==='setup-account'){
       const b=await readJson(req),userId=String(b.userId||''),accountType=normalizeType(b.accountType);
       if(!/^[0-9a-f-]{36}$/i.test(userId))return send(res,400,{error:'Ungültiges Konto.'});if(!accountType)return send(res,400,{error:'Ungültiger Kontotyp.'});if(!validLogo(b.logoDataUrl))return send(res,400,{error:'Logo ist zu groß oder kein PNG/JPG/WebP.'});
-      if(accountType==='company'&&!cleanLine(b.companyName))return send(res,400,{error:'Für ein Geschäftskonto fehlt der Firmenname.'});
       const saved=await persistProfile(userId,{...b,accountType},'admin');
       return send(res,200,{ok:true,...saved});
     }
@@ -139,7 +138,6 @@ export default async function handler(req,res){
     if(req.method==='POST'&&action==='update-account'){
       const b=await readJson(req),userId=String(b.userId||''),accountType=normalizeType(b.accountType),createdSource=normalizeSource(b.createdSource||'legacy');
       if(!/^[0-9a-f-]{36}$/i.test(userId))return send(res,400,{error:'Ungültiges Konto.'});if(!accountType)return send(res,400,{error:'Ungültiger Kontotyp.'});if(!validLogo(b.logoDataUrl))return send(res,400,{error:'Logo ist zu groß oder kein PNG/JPG/WebP.'});
-      if(accountType==='company'&&!cleanLine(b.companyName))return send(res,400,{error:'Für ein Geschäftskonto fehlt der Firmenname.'});
       const saved=await persistProfile(userId,{...b,accountType,createdSource},createdSource);
       return send(res,200,{ok:true,...saved});
     }
@@ -157,7 +155,12 @@ export default async function handler(req,res){
       const b=brandMap.get(u.id)||{},p=profileMap.get(u.id)||{},m=metaMap.get(u.id)||{};
       const candidateCompany=first(m['firma'],p.company_name,b.company_name);
       const metaType=normalizeType(m['kontotyp']),dbType=normalizeType(u.account_type);
-      const accountType=metaType||dbType||(candidateCompany?'company':'private');
+      const companySignal=Boolean(first(
+        candidateCompany,m['branche'],m['firmen-e-mail'],m['firmen-telefon'],m['website'],m['instagram'],m['adresse'],m['logo-pfad'],
+        p.company_type,p.company_type_other,p.company_email,p.company_phone,p.website,p.instagram,p.address,p.logo_path,p.logo_data_url,
+        b.company_name,b.logo_path,b.address,b.opening_hours,b.instagram
+      ));
+      const accountType=metaType||(companySignal?'company':(dbType||'private'));
       const isCompany=accountType==='company';
       const companyName=isCompany?candidateCompany:'';
       const ownSessions=sessionMap.get(u.id)||[],chat=(chatMap.get(u.id)||[])[0]||null;

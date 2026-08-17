@@ -289,15 +289,15 @@ export default function VideoStudio({ project, onSaved, canSave = true, subscrip
       setPixvaVideoBrain(brain);
       const company = brain?.company || {};
       const defaults = brain?.defaults || {};
-      const companyName = company.companyName || 'DEINE FIRMA';
+      const companyName = company.companyName || (brain?.isCompany ? '' : 'BEISPIEL FIRMA');
       const contact = [company.companyPhone,company.companyEmail,company.website,company.instagram].filter(Boolean).join(' · ');
       const source = [
-        {title: companyName.toUpperCase().slice(0,38),prompt: `${defaults.imageIdea || 'Professionelle Unternehmensszene'}, passend zu ${company.industryLabel || 'Unternehmen'}, Firmenlogo unverändert verwenden.`,duration:3,animation:'zoom',textPosition:'top'},
+        {title: (companyName||company.industryLabel||'UNTERNEHMEN').toUpperCase().slice(0,38),prompt: `${defaults.imageIdea || 'Professionelle Unternehmensszene'}, passend zu ${company.industryLabel || 'Unternehmen'}${company.logoDataUrl||company.logoUrl||company.logoPath?', vorhandenes Firmenlogo unverändert verwenden':''}.`,duration:3,animation:'zoom',textPosition:'top'},
         {title: String(defaults.flyerSubject || company.industryLabel || 'UNSERE LEISTUNG').toUpperCase().slice(0,38),prompt: `${defaults.imageIdea || 'Professionelle Leistung'}, hochwertig im Stil von ${companyName}.`,duration:4,animation:'pan-right',textPosition:'bottom'},
-        {title:'JETZT KONTAKT AUFNEHMEN',prompt:`Abschluss im Firmenstil von ${companyName}. Firmenlogo unverändert. Kontakt: ${contact || 'Firmenkontakt'}.`,duration:3,animation:'zoom-out',textPosition:'bottom'}
+        {title:'JETZT KONTAKT AUFNEHMEN',prompt:`Abschluss im Firmenstil${companyName?` von ${companyName}`:''}.${company.logoDataUrl||company.logoUrl||company.logoPath?' Vorhandenes Firmenlogo unverändert.':''}${contact?` Kontakt: ${contact}.`:''}`,duration:3,animation:'zoom-out',textPosition:'bottom'}
       ];
       const next = source.map((item,index) => ({...newScene(index),...item,accentColor:company.secondaryColor || '#39d6d0'}));
-      setScenes(next); setSelectedSceneId(next[0].id); setProjectName(`Video – ${companyName}`);
+      setScenes(next); setSelectedSceneId(next[0].id); setProjectName(`Video – ${companyName||company.industryLabel||'Unternehmen'}`);
       setStatus(`PIXVA Brain: Videovorlage für ${company.industryLabel || 'deine Firma'} automatisch vorbereitet.`);
     }).catch((error) => { if (alive) setStatus(`PIXVA Brain Video: ${error.message}`); });
     return () => { alive = false; };

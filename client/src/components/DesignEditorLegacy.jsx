@@ -420,27 +420,23 @@ async function pixvaCompanyTemplate(canvas,width,height,mode,brand={}){
 function pixvaBrainBrand(brain){
   const c=brain?.company||{};
   const type=c.companyType||'sonstiges';
+  if(brain?.isCompany){
+    return{
+      company_name:c.companyName||'',company_type:type,company_type_other:c.companyTypeOther||'',owner_name:c.ownerName||'',
+      company_email:c.companyEmail||'',company_phone:c.companyPhone||'',private_phone:c.privatePhone||c.personalPhone||'',
+      website:c.website||'',instagram:c.instagram||'',address:c.address||'',logo_data_url:c.logoDataUrl||c.logoUrl||'',logo_path:c.logoPath||'',
+      primary_color:c.primaryColor||'#7258ff',secondary_color:c.secondaryColor||'#39d6d0',pixva_example_mode:false
+    };
+  }
   const example=type==='supermarkt'?{name:'BEISPIEL MARKT',email:'info@beispiel-markt.de',phone:'+49 711 1234567',website:'www.beispiel-markt.de',instagram:'@beispielmarkt',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
     type==='werbetechnik'?{name:'BEISPIEL WERBETECHNIK',email:'info@beispiel-werbetechnik.de',phone:'+49 711 1234567',website:'www.beispiel-werbetechnik.de',instagram:'@beispielwerbetechnik',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
     type==='elektriker'?{name:'BEISPIEL ELEKTRO',email:'info@beispiel-elektro.de',phone:'+49 711 1234567',website:'www.beispiel-elektro.de',instagram:'@beispielelektro',address:'Musterstraße 12 · 70173 Stuttgart',other:''}:
-    type==='programmierer'?{name:'PIXVA',email:'info@pixva-beispiel.de',phone:'+49 711 1234567',website:'www.pixva-beispiel.de',instagram:'@pixvaai',address:'Stuttgart, Deutschland',other:''}:
+    type==='programmierer'?{name:'BEISPIEL SOFTWARE',email:'info@beispiel-software.de',phone:'+49 711 1234567',website:'www.beispiel-software.de',instagram:'@beispielsoftware',address:'Stuttgart, Deutschland',other:''}:
     {name:'BEISPIEL FIRMA',email:'info@beispiel-firma.de',phone:'+49 711 1234567',website:'www.beispiel-firma.de',instagram:'@beispielfirma',address:'Musterstraße 12 · 70173 Stuttgart',other:c.companyTypeOther||'Unternehmen'};
   return{
-    company_name:c.companyName||example.name,
-    company_type:type,
-    company_type_other:c.companyTypeOther||example.other,
-    owner_name:c.ownerName||'Max Mustermann',
-    company_email:c.companyEmail||example.email,
-    company_phone:c.companyPhone||example.phone,
-    private_phone:c.privatePhone||c.personalPhone||'',
-    website:c.website||example.website,
-    instagram:c.instagram||example.instagram,
-    address:c.address||example.address,
-    logo_data_url:c.logoDataUrl||c.logoUrl||example_logo,
-    logo_path:c.logoPath||'',
-    primary_color:c.primaryColor||'#7258ff',
-    secondary_color:c.secondaryColor||'#39d6d0',
-    pixva_example_mode:!(c.companyName||c.companyPhone||c.companyEmail||c.website||c.logoDataUrl||c.logoUrl)
+    company_name:example.name,company_type:type,company_type_other:c.companyTypeOther||example.other,owner_name:'Max Mustermann',
+    company_email:example.email,company_phone:example.phone,private_phone:'',website:example.website,instagram:example.instagram,address:example.address,
+    logo_data_url:example_logo,logo_path:'',primary_color:c.primaryColor||'#7258ff',secondary_color:c.secondaryColor||'#39d6d0',pixva_example_mode:true
   };
 }
 
@@ -684,28 +680,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   }, [format]);
 
 
-  /* PIXVA BRAIN GUARANTEED TEMPLATE V11.6 */
-  useEffect(()=>{
-    if(project?.id||project?.data?.pixvaPrepared)return;
-    let cancelled=false;
-    const timer=window.setTimeout(async()=>{
-      try{
-        const brain=await api('/api/pixva?action=brain-context');
-        if(cancelled)return;
-        setPixvaBrain(brain);
-        const brand=pixvaBrainBrand(brain);
-        setCompanyBrand(brand);
-        const canvas=fabricRef.current;
-        if(!canvas)return;
-        await applyPixvaFileTemplate(canvas,pixvaTemplateIdForBrand(brand,mode),canvas.width,canvas.height,brand);
-        setBackground(canvas.backgroundColor||brand.primary_color||'#f4f0e8');
-        setStatus(brand.pixva_example_mode?'PIXVA Datei-Vorlage: BEISPIEL aktiv · echte Firmendaten ersetzen die Beispiele automatisch':`PIXVA Datei-Vorlage: ${brain.company?.companyName||'Firma'} · Firmenlogo & Kontaktdaten aktiv`);
-      }catch(error){
-        if(!cancelled)setStatus(`PIXVA Brain konnte Firmenprofil nicht laden: ${error.message}`);
-      }
-    },180);
-    return()=>{cancelled=true;window.clearTimeout(timer)};
-  },[project?.id,mode]);
+  /* PIXVA V12: alte V11-Autovorlage deaktiviert, damit keine Beispiel-Firmendaten vor der zentralen V12-Vorlage aufblitzen. */
 
     /* PIXVA V12 AUTO INDUSTRY TEMPLATE */
   useEffect(() => {
