@@ -520,25 +520,31 @@ export default async function handler(req,res){
     if(action==='overview'&&req.method==='GET')return send(res,200,await overview(client,user));
 
     if(action==='brand-save'&&req.method==='POST'){
-      const brand={user_id:user.id,company_name:String(body.company_name||'').slice(0,160),logo_path:String(body.logo_path||'').slice(0,600),
-        logo_data_url:String(body.logo_data_url||'').slice(0,6000000),
-        primary_color:String(body.primary_color||'#7258ff').slice(0,30),secondary_color:String(body.secondary_color||'#39d6d0').slice(0,30),
-        font_family:String(body.font_family||'Inter').slice(0,100),address:String(body.address||'').slice(0,500),
-        opening_hours:String(body.opening_hours||'').slice(0,1000),instagram:String(body.instagram||'').slice(0,200),
-        language:String(body.language||'de').slice(0,20),design_style:String(body.design_style||'modern-premium').slice(0,100),
-        notes:String(body.notes||'').slice(0,3000),
-        company_type:String(body.company_type||'').slice(0,100),
-        company_type_other:String(body.company_type_other||'').slice(0,160),
-        owner_name:String(body.owner_name||'').slice(0,160),
-        website:String(body.website||'').slice(0,300),
-        company_email:String(body.company_email||'').slice(0,200),
-        company_phone:String(body.company_phone||'').slice(0,80),
-        private_phone:String(body.private_phone||'').slice(0,80),
-        updated_at:new Date().toISOString()};
-      if(brand.logo_path)ownPath(user,brand.logo_path);
-      const {data,error}=await client.from('app_brand_kits').upsert(brand,{onConflict:'user_id'}).select().single();if(error)throw error;
-      await upsertCompanyProfile(user.id,{...body,source:'brand-save'}).catch(()=>{});
-      return send(res,200,{brand:data});
+      await upsertCompanyProfile(user.id,{
+        ...body,
+        accountType:'company',
+        companyName:body.company_name,
+        companyType:body.company_type,
+        companyTypeOther:body.company_type_other,
+        ownerName:body.owner_name,
+        companyEmail:body.company_email,
+        companyPhone:body.company_phone,
+        privatePhone:body.private_phone,
+        website:body.website,
+        instagram:body.instagram,
+        address:body.address,
+        openingHours:body.opening_hours,
+        logoDataUrl:body.logo_data_url,
+        logoPath:body.logo_path,
+        primaryColor:body.primary_color,
+        secondaryColor:body.secondary_color,
+        fontFamily:body.font_family,
+        designStyle:body.design_style,
+        source:'brand-save'
+      });
+      const brain=await getPixvaBrainContext(user);
+      const c=brain.company||{};
+      return send(res,200,{brand:{user_id:user.id,company_name:c.companyName||'',company_type:c.companyType||'',company_type_other:c.companyTypeOther||'',owner_name:c.ownerName||'',company_email:c.companyEmail||'',company_phone:c.companyPhone||'',private_phone:c.privatePhone||'',website:c.website||'',instagram:c.instagram||'',address:c.address||'',opening_hours:c.openingHours||'',logo_data_url:c.logoDataUrl||'',logo_path:c.logoPath||'',primary_color:c.primaryColor||'#7258ff',secondary_color:c.secondaryColor||'#39d6d0',font_family:c.fontFamily||'Inter',design_style:c.designStyle||'modern-premium'}});
     }
 
     if(action==='memory-save'&&req.method==='POST'){
