@@ -669,11 +669,20 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
       if (project?.data?.offerDraft) {
         try {
           let brain=await api('/api/pixva?action=brain-context');
-          if(project.data.offerDraft?.companyName){
-            brain={...(brain||{}),isCompany:true,company:{...(brain?.company||{}),companyName:project.data.offerDraft.companyName}};
+          const draftCompany={};
+          if(project.data.offerDraft?.companyName) draftCompany.companyName=project.data.offerDraft.companyName;
+          if(project.data.offerDraft?.companyType){
+            draftCompany.companyType=project.data.offerDraft.companyType;
+            draftCompany.company_type=project.data.offerDraft.companyType;
+            draftCompany.industry=project.data.offerDraft.companyType;
+          }
+          if(Object.keys(draftCompany).length){
+            brain={...(brain||{}),isCompany:true,company:{...(brain?.company||{}),...draftCompany}};
           }
           setPixvaBrain(brain);
-          const v12Id=recommendPixvaV12Template(brain,'flyer');
+          const v12Id=project.data.offerDraft?.companyType==='supermarkt'
+            ? 'v12-supermarkt-einzel'
+            : recommendPixvaV12Template(brain,'flyer');
           await applyPixvaV12Template(canvas,v12Id,format.canvas[0],format.canvas[1],brain);
           currentTemplateRef.current=v12Id;
           setV12TemplateId(v12Id);

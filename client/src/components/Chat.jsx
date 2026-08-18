@@ -1435,7 +1435,7 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
 
   async function generateOfferFlyerMessage(clean, signal, runId){
     const draft=extractOfferDraft(clean);
-    const query=`${draft.productName} Produktbild`;
+    const query=`${draft.productName} Produktbild Packung`;
     setGenerationStatus(runId,'PIXVA sucht kostenlos ein passendes Produktbild …');
 
     let data={results:[],searchLinks:{}};
@@ -1448,11 +1448,20 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       data={results:[],searchLinks:{googleImages:`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`},warning:error?.message||''};
     }
 
-    const first=(Array.isArray(data.results)?data.results:[])[0]||null;
+    const candidates=(Array.isArray(data.results)?data.results:[]).slice(0,6);
+    let first=candidates[0]||null;
     let imageDataUrl='';
-    if(first){
-      const remote=first.imageUrl||first.thumbnailUrl||'';
-      try{ if(remote) imageDataUrl=await fetchRemoteImageDataUrl(remote); }catch{}
+    for(const candidate of candidates){
+      const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
+      if(!remote)continue;
+      try{
+        const loaded=await fetchRemoteImageDataUrl(remote);
+        if(String(loaded||'').startsWith('data:image/')){
+          imageDataUrl=loaded;
+          first=candidate;
+          break;
+        }
+      }catch{}
     }
 
     const readyDraft={

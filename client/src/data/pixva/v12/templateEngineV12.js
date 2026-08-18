@@ -157,8 +157,18 @@ async function techFlow(canvas,t,w,h,b){
 }
 async function marketSingle(canvas,t,w,h,b){
   const{X,Y,S}=scaler(w,h),c=colors(t,b);clearCanvas(canvas,c.background);
-  canvas.add(rect({left:0,top:0,width:w,height:Y(118),fill:c.primary}),rect({left:0,top:Y(118),width:w,height:Y(15),fill:c.secondary}),text(t.content.eyebrow,{left:X(28),top:Y(23),fontSize:S(10),fill:'#ffffff'}),box(t.content.headline,{left:X(28),top:Y(55),width:X(395),fontSize:S(29),fill:'#ffffff',fontWeight:900}));
-  await addLogo(canvas,b,X(450),Y(24),X(115),Y(62),c,S);addSlot(canvas,X(34),Y(170),X(332),Y(338),'PRODUKTBILD',c,S);addPrice(canvas,t,c,X(390),Y(205),X(175),Y(245),S);canvas.add(box(t.content.subtitle,{left:X(34),top:Y(530),width:X(530),fontSize:S(13),fill:c.text,opacity:.72}));addFooter(canvas,b,c,X,Y,S);
+  canvas.add(
+    rect({left:0,top:0,width:w,height:Y(118),fill:c.primary}),
+    rect({left:0,top:Y(118),width:w,height:Y(15),fill:c.secondary}),
+    text(t.content.eyebrow,{left:X(28),top:Y(23),fontSize:S(10),fill:'#ffffff',charSpacing:45}),
+    box(t.content.headline,{left:X(28),top:Y(52),width:X(385),fontSize:S(28),fill:'#ffffff',fontWeight:900}),
+    box('PRODUKTNAME',{left:X(34),top:Y(150),width:X(530),fontSize:S(22),lineHeight:1.02,fill:c.text,fontWeight:900,dataRole:'product-title:1',displayName:'Produktname'})
+  );
+  await addLogo(canvas,b,X(450),Y(24),X(115),Y(62),c,S);
+  addSlot(canvas,X(34),Y(200),X(332),Y(300),'PRODUKTBILD',c,S);
+  addPrice(canvas,t,c,X(390),Y(215),X(175),Y(235),S);
+  canvas.add(box(t.content.subtitle,{left:X(34),top:Y(525),width:X(530),fontSize:S(13),fill:c.text,opacity:.72}));
+  addFooter(canvas,b,c,X,Y,S);
 }
 async function marketGrid6(canvas,t,w,h,b){
   const{X,Y,S}=scaler(w,h),c=colors(t,b);clearCanvas(canvas,c.background);canvas.add(rect({left:0,top:0,width:w,height:Y(92),fill:c.primary}),box(t.content.headline,{left:X(26),top:Y(32),width:X(390),fontSize:S(23),fill:'#ffffff',fontWeight:900}));await addLogo(canvas,b,X(470),Y(18),X(95),Y(55),c,S);gridCards(canvas,t,c,X,Y,S,2,3);addFooter(canvas,b,c,X,Y,S);

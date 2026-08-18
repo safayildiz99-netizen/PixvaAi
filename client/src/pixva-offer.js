@@ -103,13 +103,24 @@ export function extractOfferDraft(text='') {
   productName = productName.slice(0, 90);
   companyName = companyName.slice(0, 90);
 
+  const normalized = normalizeOfferText(original);
+  const companyType = /\b(supermarkt|markt|market|lebensmittel|mega center)\b/.test(normalized) ? 'supermarkt' : '';
+  const toNumber = (value='') => Number(String(value).replace(/[^0-9,.-]/g,'').replace(',','.')) || 0;
+  const oldNumber = toNumber(oldPrice);
+  const newNumber = toNumber(newPrice);
+  const discountPercent = oldNumber > 0 && newNumber >= 0 && newNumber < oldNumber
+    ? Math.max(1, Math.round(((oldNumber - newNumber) / oldNumber) * 100))
+    : 0;
+
   return {
     companyName,
+    companyType,
     productName,
     newPrice,
     oldPrice,
-    headline:'ANGEBOT',
-    badge:'JETZT',
+    headline: companyType === 'supermarkt' ? 'WOCHENANGEBOT' : 'ANGEBOT',
+    badge: discountPercent ? `${discountPercent}% RABATT` : 'JETZT',
+    discountPercent,
     sourcePrompt: original
   };
 }
