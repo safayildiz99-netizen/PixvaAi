@@ -455,13 +455,30 @@ async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
   if(draft.oldPrice)setText('old-price',`STATT ${draft.oldPrice}`);
   if(draft.badge)setText('badge',draft.badge);
   const slot=objects.find(object=>String(object.dataRole||'')==='product-slot:1');
-  if(draft.imageDataUrl&&slot){
+  const remoteProductUrl=draft.imageUrl||draft.thumbnailUrl||'';
+  const loadableProductSource=draft.imageDataUrl||remoteProductUrl;
+  if(loadableProductSource&&slot){
     try{
       const existing=canvas.getObjects().filter(object=>String(object.dataRole||'')==='product-image:1');
       existing.forEach(object=>canvas.remove(object));
       const label=canvas.getObjects().find(object=>String(object.dataRole||'')==='product-slot-label:1');
       if(label)canvas.remove(label);
-      const img=await FabricImage.fromURL(draft.imageDataUrl,{crossOrigin:'anonymous'});
+      let source=loadableProductSource;
+      if(!String(source).startsWith('data:image/')){
+        try{
+          const proxy=await fetch(`/api/ai/image-proxy?url=${encodeURIComponent(source)}`);
+          if(proxy.ok){
+            const blob=await proxy.blob();
+            source=await new Promise((resolve,reject)=>{
+              const reader=new FileReader();
+              reader.onload=()=>resolve(String(reader.result||''));
+              reader.onerror=()=>reject(new Error('Produktbild konnte nicht in den Editor geladen werden.'));
+              reader.readAsDataURL(blob);
+            });
+          }
+        }catch{}
+      }
+      const img=await FabricImage.fromURL(source,{crossOrigin:'anonymous'});
       const targetW=Math.max(20,Number(slot.width||0)*Number(slot.scaleX||1)*.9);
       const targetH=Math.max(20,Number(slot.height||0)*Number(slot.scaleY||1)*.9);
       const factor=Math.min(targetW/Math.max(1,img.width),targetH/Math.max(1,img.height));

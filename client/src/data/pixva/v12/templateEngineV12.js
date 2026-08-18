@@ -164,11 +164,15 @@ function marketPalette(t,b){
   return{
     ...t.style,
     ...picked,
-    primary:b.primary||picked.primary,
-    secondary:b.secondary||picked.secondary,
+    /* Supermarkt-Stile dürfen NICHT von allgemeinen Firmenfarben überschrieben werden.
+       Sonst sehen alle Supermarktvorlagen wieder lila/türkis aus und die neuen Vorlagen wirken nicht geladen. */
+    primary:picked.primary,
+    secondary:picked.secondary,
+    accent:picked.accent,
     background:picked.background,
     text:picked.text,
     surface:picked.surface,
+    dark:picked.dark,
     styleId:picked.id,
     styleName:picked.name
   };

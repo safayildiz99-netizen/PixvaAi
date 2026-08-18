@@ -1435,7 +1435,7 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
 
   async function generateOfferFlyerMessage(clean, signal, runId){
     const draft=extractOfferDraft(clean);
-    const query=`${draft.productName} Produktbild Packung`;
+    const query=`${draft.productName} Produktbild Packung freigestellt`;
     setGenerationStatus(runId,'PIXVA sucht kostenlos ein passendes Produktbild …');
 
     let data={results:[],searchLinks:{}};
@@ -1467,6 +1467,8 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     const readyDraft={
       ...draft,
       imageDataUrl,
+      imageUrl:first?.imageUrl||'',
+      thumbnailUrl:first?.thumbnailUrl||'',
       sourceUrl:first?.sourceUrl||first?.imageUrl||'',
       provider:data.provider||productImageSource||'web'
     };

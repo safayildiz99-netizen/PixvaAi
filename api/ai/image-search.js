@@ -1,6 +1,6 @@
 import { send } from '../_lib.js';
 
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36 PIXVA/14.0';
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36 PIXVA/14.5';
 
 function cleanQuery(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 180);
@@ -14,6 +14,15 @@ function safeHttpUrl(value) {
   } catch {
     return '';
   }
+}
+
+function decodeHtml(value='') {
+  return String(value || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
 }
 
 async function fetchText(url, headers = {}) {
@@ -31,6 +40,11 @@ async function fetchText(url, headers = {}) {
   }
 }
 
+async function fetchJson(url, headers = {}) {
+  const raw = await fetchText(url, { Accept: 'application/json', ...headers });
+  return JSON.parse(raw);
+}
+
 async function searchGoogle(query) {
   const key = String(process.env.GOOGLE_CSE_API_KEY || '').trim();
   const cx = String(process.env.GOOGLE_CSE_CX || '').trim();
@@ -42,8 +56,7 @@ async function searchGoogle(query) {
   url.searchParams.set('searchType', 'image');
   url.searchParams.set('num', '8');
   url.searchParams.set('safe', 'active');
-  const raw = await fetchText(url.toString(), { Accept: 'application/json' });
-  const data = JSON.parse(raw);
+  const data = await fetchJson(url.toString());
   return (Array.isArray(data?.items) ? data.items : []).map((item, index) => ({
     id: `google-${index}-${Date.now()}`,
     title: String(item?.title || query).replace(/<[^>]+>/g, '').slice(0, 180),
@@ -63,14 +76,47 @@ async function searchDuckDuckGo(query) {
     || homepage.match(/vqd%3D([\d-]+)/i)?.[1];
   if (!token) throw new Error('Bildsuch-Token konnte nicht geladen werden.');
   const endpoint = `https://duckduckgo.com/i.js?l=de-de&o=json&q=${encodeURIComponent(query)}&vqd=${encodeURIComponent(token)}&f=,,,`;
-  const raw = await fetchText(endpoint, { Referer: 'https://duckduckgo.com/' });
-  const data = JSON.parse(raw);
+  const data = JSON.parse(await fetchText(endpoint, { Referer: 'https://duckduckgo.com/' }));
   return (Array.isArray(data?.results) ? data.results : []).map((item, index) => ({
     id: `ddg-${index}-${Date.now()}`,
     title: String(item?.title || query).replace(/<[^>]+>/g, '').slice(0, 180),
-    imageUrl: safeHttpUrl(item?.image), thumbnailUrl: safeHttpUrl(item?.thumbnail), sourceUrl: safeHttpUrl(item?.url),
-    source: String(item?.source || 'Web').slice(0, 100), width: Number(item?.width || 0), height: Number(item?.height || 0)
+    imageUrl: safeHttpUrl(item?.image),
+    thumbnailUrl: safeHttpUrl(item?.thumbnail),
+    sourceUrl: safeHttpUrl(item?.url),
+    source: String(item?.source || 'Web').slice(0, 100),
+    width: Number(item?.width || 0),
+    height: Number(item?.height || 0)
   })).filter(item => item.imageUrl || item.thumbnailUrl).slice(0, 8);
+}
+
+async function searchBing(query) {
+  const html = await fetchText(`https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC3&first=1&tsc=ImageBasicHover`);
+  const matches = [...html.matchAll(/<a[^>]+class="iusc"[^>]+m="([^"]+)"/gi)];
+  const results = [];
+  for (const [_, metaRaw] of matches) {
+    try {
+      const meta = JSON.parse(decodeHtml(metaRaw));
+      const imageUrl = safeHttpUrl(meta?.murl || meta?.imgurl || meta?.turl || '');
+      const thumbnailUrl = safeHttpUrl(meta?.turl || meta?.imgurl || meta?.murl || '');
+      const title = String(meta?.t || meta?.title || query).replace(/<[^>]+>/g, '').slice(0, 180);
+      const sourceUrl = safeHttpUrl(meta?.purl || meta?.surl || meta?.ru || '');
+      if (!imageUrl && !thumbnailUrl) continue;
+      results.push({
+        id: `bing-${results.length}-${Date.now()}`,
+        title,
+        imageUrl,
+        thumbnailUrl,
+        sourceUrl,
+        source: 'Bing Images',
+        width: Number(meta?.w || 0),
+        height: Number(meta?.h || 0)
+      });
+      if (results.length >= 8) break;
+    } catch {
+    }
+  }
+  if (!results.length) throw new Error('Bing lieferte keine Bildtreffer.');
+  return results;
 }
 
 async function searchWikimedia(query) {
@@ -79,11 +125,54 @@ async function searchWikimedia(query) {
   endpoint.searchParams.set('gsrnamespace', '6'); endpoint.searchParams.set('gsrlimit', '8'); endpoint.searchParams.set('prop', 'imageinfo|info');
   endpoint.searchParams.set('iiprop', 'url|mime|size'); endpoint.searchParams.set('iiurlwidth', '600'); endpoint.searchParams.set('inprop', 'url');
   endpoint.searchParams.set('format', 'json'); endpoint.searchParams.set('origin', '*');
-  const raw = await fetchText(endpoint.toString()); const data = JSON.parse(raw);
+  const data = await fetchJson(endpoint.toString());
   return Object.values(data?.query?.pages || {}).map((page, index) => {
     const info = page?.imageinfo?.[0] || {};
-    return { id:`commons-${page?.pageid || index}`, title:String(page?.title || query).replace(/^File:/i,'').slice(0,180), imageUrl:safeHttpUrl(info?.url), thumbnailUrl:safeHttpUrl(info?.thumburl||info?.url), sourceUrl:safeHttpUrl(page?.canonicalurl||page?.fullurl), source:'Wikimedia Commons', width:Number(info?.width||0), height:Number(info?.height||0) };
+    return {
+      id:`commons-${page?.pageid || index}`,
+      title:String(page?.title || query).replace(/^File:/i,'').slice(0,180),
+      imageUrl:safeHttpUrl(info?.url),
+      thumbnailUrl:safeHttpUrl(info?.thumburl||info?.url),
+      sourceUrl:safeHttpUrl(page?.canonicalurl||page?.fullurl),
+      source:'Wikimedia Commons',
+      width:Number(info?.width||0),
+      height:Number(info?.height||0)
+    };
   }).filter(item => item.imageUrl || item.thumbnailUrl).slice(0,8);
+}
+
+function normalizeOpenFoodFacts(product, index, query) {
+  const imageUrl = safeHttpUrl(product?.image_front_url || product?.image_url || product?.selected_images?.front?.display?.de || product?.selected_images?.front?.display?.fr || product?.selected_images?.front?.display?.en || '');
+  const thumbnailUrl = safeHttpUrl(product?.image_front_small_url || product?.image_small_url || imageUrl);
+  const sourceUrl = safeHttpUrl(product?.url || `https://world.openfoodfacts.org/product/${encodeURIComponent(product?.code || '')}`);
+  return {
+    id: String(product?.code || `off-${index}-${Date.now()}`),
+    title: String(product?.product_name || product?.generic_name || query).slice(0, 180),
+    imageUrl,
+    thumbnailUrl,
+    sourceUrl,
+    source: 'Open Food Facts',
+    width: 0,
+    height: 0,
+    ean: String(product?.code || ''),
+    brand: String(product?.brands || ''),
+    weight: String(product?.quantity || '')
+  };
+}
+
+async function searchOpenFoodFacts(query) {
+  const url = new URL('https://world.openfoodfacts.org/cgi/search.pl');
+  url.searchParams.set('search_terms', query.replace(/produktbild|packung|freigestellt/gi, '').trim());
+  url.searchParams.set('search_simple', '1');
+  url.searchParams.set('action', 'process');
+  url.searchParams.set('json', '1');
+  url.searchParams.set('page_size', '8');
+  url.searchParams.set('fields', 'code,product_name,generic_name,brands,quantity,image_front_url,image_front_small_url,image_url,image_small_url,url,selected_images');
+  const data = await fetchJson(url.toString());
+  return (Array.isArray(data?.products) ? data.products : [])
+    .map((item, index) => normalizeOpenFoodFacts(item, index, query))
+    .filter(item => item.imageUrl || item.thumbnailUrl)
+    .slice(0, 8);
 }
 
 function normalizeDatabaseItem(item, index, query) {
@@ -104,10 +193,22 @@ async function searchPixvaDatabase(query) {
   if (!base || !key) throw new Error('PIXVA Produktdatenbank ist noch nicht verbunden. Später PIXVA_PRODUCT_DB_URL und PIXVA_PRODUCT_DB_API_KEY in Vercel hinterlegen.');
   const url = new URL(base);
   url.searchParams.set('q', query);
-  const raw = await fetchText(url.toString(), { Authorization:`Bearer ${key}`, Accept:'application/json' });
-  const data = JSON.parse(raw);
+  const data = await fetchJson(url.toString(), { Authorization:`Bearer ${key}` });
   const items = Array.isArray(data) ? data : (data?.results || data?.products || data?.items || data?.data || []);
   return (Array.isArray(items) ? items : []).map((item,index)=>normalizeDatabaseItem(item,index,query)).filter(item=>item.imageUrl||item.thumbnailUrl).slice(0,8);
+}
+
+function dedupeResults(items=[]) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items) {
+    const key = safeHttpUrl(item?.imageUrl || item?.thumbnailUrl || item?.sourceUrl || '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+    if (out.length >= 8) break;
+  }
+  return out;
 }
 
 export default async function handler(req, res) {
@@ -118,30 +219,66 @@ export default async function handler(req, res) {
     const requestedSource = String(input?.source || 'web').toLowerCase() === 'database' ? 'database' : 'web';
     if (!query) return send(res, 400, { error: 'Bitte gib einen Suchbegriff ein.' });
 
-    let results = []; const warnings = []; let provider = requestedSource;
+    let results = [];
+    const warnings = [];
+    let provider = requestedSource;
+
     if (requestedSource === 'database') {
       try { results = await searchPixvaDatabase(query); provider = 'pixva-database'; }
       catch (error) { warnings.push(error.message); }
     } else {
-      try { results = await searchGoogle(query); provider = 'google'; }
-      catch (error) { warnings.push(`Google: ${error.message}`); }
-      if (results.length < 3) {
-        try { results = await searchDuckDuckGo(query); provider = results.length ? 'web-fallback' : provider; }
-        catch (error) { warnings.push(`Web: ${error.message}`); }
+      try {
+        const google = await searchGoogle(query);
+        results.push(...google);
+        if (google.length) provider = 'google';
+      } catch (error) { warnings.push(`Google: ${error.message}`); }
+
+      if (results.length < 4) {
+        try {
+          const ddg = await searchDuckDuckGo(query);
+          results.push(...ddg);
+          if (ddg.length && provider === 'web') provider = 'duckduckgo';
+        } catch (error) { warnings.push(`DuckDuckGo: ${error.message}`); }
       }
+
+      if (results.length < 4) {
+        try {
+          const bing = await searchBing(query);
+          results.push(...bing);
+          if (bing.length && provider === 'web') provider = 'bing';
+        } catch (error) { warnings.push(`Bing: ${error.message}`); }
+      }
+
+      if (results.length < 4) {
+        try {
+          const foods = await searchOpenFoodFacts(query);
+          results.push(...foods);
+          if (foods.length && provider === 'web') provider = 'openfoodfacts';
+        } catch (error) { warnings.push(`OpenFoodFacts: ${error.message}`); }
+      }
+
       if (results.length < 3) {
         try {
-          const commons = await searchWikimedia(query); const known = new Set(results.map(item=>item.imageUrl));
-          results.push(...commons.filter(item=>!known.has(item.imageUrl)));
+          const commons = await searchWikimedia(query);
+          results.push(...commons);
         } catch (error) { warnings.push(`Wikimedia: ${error.message}`); }
       }
     }
 
+    const finalResults = dedupeResults(results);
+
     return send(res, 200, {
-      query, free:true, requestedSource, provider, results:results.slice(0,8),
-      searchLinks:{ googleImages:`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`, bingImages:`https://www.bing.com/images/search?q=${encodeURIComponent(query)}` },
-      warning: results.length ? undefined : (warnings[0] || 'Direkte Bilder konnten gerade nicht geladen werden.'),
-      technical:warnings.length?warnings:undefined
+      query,
+      free: true,
+      requestedSource,
+      provider,
+      results: finalResults,
+      searchLinks: {
+        googleImages:`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`,
+        bingImages:`https://www.bing.com/images/search?q=${encodeURIComponent(query)}`
+      },
+      warning: finalResults.length ? undefined : (warnings[0] || 'Direkte Bilder konnten gerade nicht geladen werden.'),
+      technical: warnings.length ? warnings : undefined
     });
   } catch (error) {
     return send(res, 500, { error: error?.message || 'Die kostenlose Bildsuche ist fehlgeschlagen.' });
