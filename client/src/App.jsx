@@ -105,6 +105,7 @@ const DEFAULT_UI_SETTINGS = {
   planPurchasable: { free:false, creator:true, studio:true },
   paidAccessDays: 30,
   productImageSource:'web',
+  templateConfig:{hiddenBuiltInIds:[],customTemplates:[]},
   signupConfig:PIXVA_DEFAULT_SIGNUP_CONFIG
 };
 
@@ -176,6 +177,16 @@ export default function App(){
   useEffect(()=>{
     if(!user || guest) return;
     api('/api/pixva?action=snapshot-auto',{method:'POST',body:JSON.stringify({source:'login'})}).catch(()=>{});
+  },[user?.id,guest]);
+
+  useEffect(()=>{
+    let cancelled=false;
+    if(!user || guest)return()=>{cancelled=true};
+    api('/api/pixva?action=template-settings').then((result)=>{
+      if(cancelled)return;
+      setUiSettings((prev)=>({...prev,templateConfig:result?.config||{hiddenBuiltInIds:[],customTemplates:[]}}));
+    }).catch(()=>{});
+    return()=>{cancelled=true};
   },[user?.id,guest]);
 
   useEffect(()=>{
@@ -294,9 +305,9 @@ export default function App(){
       {activeUser.mustChangePassword&&!guest&&<div className="warning-banner">Das Startpasswort ist noch aktiv. Öffne links „Mein Konto“ und lege dein eigenes Passwort fest.</div>}
       {requestedView&&view==='plans'&&<div className="plan-unlock-banner"><LockKeyhole size={17}/><span>Der Bereich „{titles[requestedView]||requestedView}“ ist in deinem aktuellen Zugang nicht enthalten. Während der Beta kannst du den passenden Zugang kostenlos aktivieren.</span></div>}
       <div className="workspace-content">
-        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} productImageSource={uiSettings.productImageSource||'web'} onOpenImageProject={openGeneratedImageProject} onOpenFlyerProject={openGeneratedFlyerProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
-        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
-        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} productImageSource={uiSettings.productImageSource||'web'} onOpenImageProject={openGeneratedImageProject} onOpenFlyerProject={openGeneratedFlyerProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans} templateConfig={uiSettings.templateConfig}/>} 
+        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans} templateConfig={uiSettings.templateConfig}/>} 
+        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans} templateConfig={uiSettings.templateConfig}/>} 
         {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='website'&&featureAllowed('website')&&<WebsiteBuilder key={selectedProject?.id||'new-site'} project={selectedProject?.type==='website'?selectedProject:null} onSaved={saved} canSave={!guest} uiText={uiText}/>} 
         {view==='projects'&&featureAllowed('projects')&&!guest&&<Projects onOpen={openProject} refreshKey={refreshKey} uiText={uiText}/>} 

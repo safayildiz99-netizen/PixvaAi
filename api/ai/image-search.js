@@ -220,7 +220,8 @@ const PRODUCT_VARIANTS = [
   ['mild', /\b(mild|sanft)\b/],
   ['bio', /\b(bio|organic|oekologisch|ökologisch)\b/],
   ['gefluegel', /\b(gefluegel|geflügel|huhn|chicken|tavuk)\b/],
-  ['rind', /\b(rind|beef|dana)\b/]
+  ['rind', /\b(rind|beef|dana)\b/],
+  ['knoblauch', /\b(knoblauch|garlic|sarimsak|sarımsak)\b/]
 ];
 
 export function scoreProductResult(item, query='') {

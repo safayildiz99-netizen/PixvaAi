@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, ArrowDown, ArrowUp, BadgeEuro, BarChart3, CheckCircle2, ClipboardCopy, Cpu, Crown, Eye, EyeOff, GripVertical, Image, KeyRound, Laptop,
   LayoutDashboard, MessageSquareText, Monitor, Palette, Plus, Redo2, RefreshCw, RotateCcw, Save, Smartphone, Tablet,
   Search, Shield, ShieldAlert, Trash2, Undo2, UserRoundCog, Video, XCircle
 } from 'lucide-react';
 import { api } from '../api.js';
+import { supabase } from '../supabase.js';
+import { pixvaV12Templates } from '../data/pixva/v12/catalog.js';
+import { pixvaMarketStyles } from '../data/pixva/v12/marketStyles.js';
 import { formatPlanPrice, getPlan, getPlanCatalog, normalizeCustomPlan } from '../plans.js';
 
 const DEFAULT_NAV_ITEMS = [
@@ -56,6 +59,7 @@ const DEFAULT_UI_SETTINGS = {
   planPurchasable: { free:false, creator:true, studio:true },
   paidAccessDays: 30,
   productImageSource:'web',
+  templateConfig:{hiddenBuiltInIds:[],customTemplates:[]},
   signupConfig:{industries:[{id:'supermarkt',label:'Supermarkt',enabled:true},{id:'werbetechnik',label:'Werbetechnik',enabled:true},{id:'elektriker',label:'Elektriker',enabled:true},{id:'programmierer',label:'Programmierer / Software & KI',enabled:true},{id:'friseur',label:'Friseur',enabled:true},{id:'sonstiges',label:'Sonstiges',enabled:true}],fields:[
     {id:'username',label:'Benutzername',scope:'all',type:'text',enabled:true,required:true},{id:'password',label:'Passwort',scope:'all',type:'password',enabled:true,required:true},
     {id:'firstName',label:'Vorname',scope:'all',type:'text',enabled:true,required:false},{id:'lastName',label:'Nachname',scope:'all',type:'text',enabled:true,required:false},
@@ -85,6 +89,10 @@ function normalizeSettings(value = {}) {
     costPromptOverrides:{...(value.costPromptOverrides||{})},
     customPlans:Array.isArray(value.customPlans)?value.customPlans.map(normalizeCustomPlan):[],
     productImageSource:['web','database'].includes(value.productImageSource)?value.productImageSource:'web',
+    templateConfig:{
+      hiddenBuiltInIds:Array.isArray(value.templateConfig?.hiddenBuiltInIds)?value.templateConfig.hiddenBuiltInIds:[],
+      customTemplates:Array.isArray(value.templateConfig?.customTemplates)?value.templateConfig.customTemplates:[]
+    },
     signupConfig:{
       industries:Array.isArray(value.signupConfig?.industries)&&value.signupConfig.industries.length?value.signupConfig.industries:DEFAULT_UI_SETTINGS.signupConfig.industries,
       fields:Array.isArray(value.signupConfig?.fields)&&value.signupConfig.fields.length?value.signupConfig.fields:DEFAULT_UI_SETTINGS.signupConfig.fields
@@ -198,6 +206,10 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [newPlan, setNewPlan] = useState({ name:'', description:'', examplePrice:14.99, betaPrice:0, recommended:false, access:{ flyer:true, image:true, paidImages:true, video:false, paidVideos:false, website:false, projects:true } });
   const [newIndustry,setNewIndustry]=useState('');
   const [newSignupField,setNewSignupField]=useState({label:'',scope:'company',type:'text',required:false});
+  const [newTemplateName,setNewTemplateName]=useState('');
+  const [newTemplateIndustry,setNewTemplateIndustry]=useState('supermarkt');
+  const [templateBusy,setTemplateBusy]=useState(false);
+  const templateFileRef=useRef(null);
 
   async function loadCore() {
     try {
@@ -542,13 +554,74 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   function patchSignupField(id,patch){patchSignupConfig({fields:(settingsDraft.signupConfig?.fields||[]).map(x=>x.id===id?{...x,...patch}:x)});}
   function removeSignupField(id){patchSignupConfig({fields:(settingsDraft.signupConfig?.fields||[]).filter(x=>x.id!==id)});}
 
+
+  function normalizedTemplateConfig(value=settingsDraft.templateConfig){
+    return{
+      hiddenBuiltInIds:Array.isArray(value?.hiddenBuiltInIds)?[...new Set(value.hiddenBuiltInIds.map(String))]:[],
+      customTemplates:Array.isArray(value?.customTemplates)?value.customTemplates:[]
+    };
+  }
+
+  async function saveTemplateConfig(nextConfig,message='Vorlagen gespeichert.'){
+    try{
+      setTemplateBusy(true);
+      const response=await api('/api/pixva?action=template-settings-save',{
+        method:'POST',body:JSON.stringify({config:normalizedTemplateConfig(nextConfig)})
+      });
+      const config=response?.config||normalizedTemplateConfig(nextConfig);
+      const next=normalizeSettings({...settingsDraft,templateConfig:config});
+      setSettingsDraft(next);
+      onSettingsChanged?.(next);
+      setStatus(message);
+      return config;
+    }catch(error){setStatus(error.message);return null}finally{setTemplateBusy(false)}
+  }
+
+  async function setBuiltInTemplateVisible(id,visible){
+    const current=normalizedTemplateConfig();
+    const hidden=new Set(current.hiddenBuiltInIds);
+    if(visible)hidden.delete(id);else hidden.add(id);
+    await saveTemplateConfig({...current,hiddenBuiltInIds:[...hidden]},visible?'Vorlage wieder aktiviert.':'Vorlage ausgeblendet. Kunden sehen sie nicht mehr.');
+  }
+
+  async function setCustomTemplateVisible(id,visible){
+    const current=normalizedTemplateConfig();
+    const customTemplates=current.customTemplates.map(item=>item.id===id?{...item,active:visible}:item);
+    await saveTemplateConfig({...current,customTemplates},visible?'Eigene Vorlage wieder aktiviert.':'Eigene Vorlage ausgeblendet. Sie wurde nicht gelöscht.');
+  }
+
+  async function addTemplateWithAI(){
+    const file=templateFileRef.current?.files?.[0];
+    if(!file)return setStatus('Bitte zuerst eine Vorlagen-Datei auswählen.');
+    if(!file.type.startsWith('image/'))return setStatus('Bitte PNG, JPG oder WEBP als Vorlage hochladen.');
+    if(file.size>12*1024*1024)return setStatus('Die Vorlage darf maximal 12 MB groß sein.');
+    try{
+      setTemplateBusy(true);
+      setStatus('Vorlage wird hochgeladen und von PIXVA KI in bearbeitbare Ebenen zerlegt …');
+      const ticket=await api('/api/pixva?action=upload-ticket',{method:'POST',body:JSON.stringify({name:file.name,type:file.type,size:file.size,purpose:'template'})});
+      if(!supabase)throw new Error('Supabase ist im Browser nicht verbunden.');
+      const {error:uploadError}=await supabase.storage.from(ticket.bucket).uploadToSignedUrl(ticket.path,ticket.token,file,{contentType:file.type});
+      if(uploadError)throw new Error(uploadError.message||'Vorlagen-Upload fehlgeschlagen.');
+      const analyzed=await api('/api/pixva?action=template-analyze',{method:'POST',body:JSON.stringify({storagePath:ticket.path,originalName:file.name,mimeType:file.type,name:newTemplateName||file.name.replace(/\.[^.]+$/,''),industry:newTemplateIndustry})});
+      if(!analyzed?.template)throw new Error('PIXVA KI hat keine bearbeitbare Vorlage geliefert.');
+      const current=normalizedTemplateConfig();
+      const config=await saveTemplateConfig({...current,customTemplates:[...current.customTemplates,analyzed.template]},analyzed.aiUsed?'Vorlage hinzugefügt und von PIXVA KI bearbeitbar gemacht.':'Vorlage hinzugefügt. KI-Fallback-Ebenen wurden verwendet.');
+      if(config){setNewTemplateName('');if(templateFileRef.current)templateFileRef.current.value=''}
+    }catch(error){setStatus(error.message)}finally{setTemplateBusy(false)}
+  }
+
   async function saveViewSettings() {
     try {
       const response = await api('/api/admin/ui-settings', {
         method: 'POST',
         body: JSON.stringify({ settings: withLegacyVisibility(settingsDraft) })
       });
-      const saved = normalizeSettings(response.settings || settingsDraft);
+      let templateConfig=settingsDraft.templateConfig;
+      try{
+        const templateResponse=await api('/api/pixva?action=template-settings-save',{method:'POST',body:JSON.stringify({config:normalizedTemplateConfig(settingsDraft.templateConfig)})});
+        templateConfig=templateResponse?.config||templateConfig;
+      }catch{}
+      const saved = normalizeSettings({...settingsDraft,...(response.settings||{}),templateConfig});
       setSettingsDraft(saved);
       setViewHistory({ past: [], future: [] });
       onSettingsChanged?.(saved);
@@ -576,6 +649,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       <button className={tab === 'subscriptions' ? 'active' : ''} onClick={() => setTab('subscriptions')}><BadgeEuro size={16}/>Abos</button>
       <button className={tab === 'view' ? 'active' : ''} onClick={() => setTab('view')}><Palette size={16}/>Ansicht</button>
       <button className={tab === 'automation' ? 'active' : ''} onClick={() => setTab('automation')}><Cpu size={16}/>Anmeldung & Bilder</button>
+      <button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}><Image size={16}/>Vorlagen</button>
       <button className={tab === 'system' ? 'active' : ''} onClick={() => setTab('system')}><Activity size={16}/>System</button>
     </div>
 
@@ -833,8 +907,69 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       <article className="admin-card" style={{gridColumn:'1 / -1'}}><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Anmeldung & Bildquelle sofort speichern</button></article>
     </div>}
 
+
+    {tab === 'templates' && <div className="admin-grid admin-grid-two">
+      <article className="admin-card" style={{gridColumn:'1 / -1'}}>
+        <h3><Image size={19}/> Vorlagen verwalten</h3>
+        <p>„Ausblenden“ löscht nichts. Die Vorlage wandert nur in „Ausgeblendete Vorlagen“ und ist für Kunden unsichtbar. Du kannst sie jederzeit wieder aktivieren.</p>
+      </article>
+
+      <article className="admin-card" style={{gridColumn:'1 / -1'}}>
+        <h3>Aktive Vorlagen</h3>
+        <div className="template-admin-grid">
+          {pixvaV12Templates.filter(item=>!(settingsDraft.templateConfig?.hiddenBuiltInIds||[]).includes(item.id)).map(item=><article className="template-admin-card" key={item.id}>
+            <img src={item.preview} alt={item.name}/><div><b>{item.name}</b><span>{item.industry}</span></div>
+            <button className="danger-btn" disabled={templateBusy} onClick={()=>setBuiltInTemplateVisible(item.id,false)}><EyeOff size={15}/>Ausblenden</button>
+          </article>)}
+          {pixvaMarketStyles.filter(style=>!(settingsDraft.templateConfig?.hiddenBuiltInIds||[]).includes(`market:${style.id}`)).map(style=><article className="template-admin-card" key={`market:${style.id}`}>
+            <img src={style.preview} alt={style.name}/><div><b>{style.name}</b><span>Supermarkt · Einzelstil</span></div>
+            <button className="danger-btn" disabled={templateBusy} onClick={()=>setBuiltInTemplateVisible(`market:${style.id}`,false)}><EyeOff size={15}/>Ausblenden</button>
+          </article>)}
+          {(settingsDraft.templateConfig?.customTemplates||[]).filter(item=>item.active!==false).map(item=><article className="template-admin-card" key={item.id}>
+            {item.previewUrl?<img src={item.previewUrl} alt={item.name}/>:<div className="template-abstract">AI</div>}
+            <div><b>{item.name}</b><span>{item.industry} · KI-bearbeitbar</span></div>
+            <button className="danger-btn" disabled={templateBusy} onClick={()=>setCustomTemplateVisible(item.id,false)}><EyeOff size={15}/>Ausblenden</button>
+          </article>)}
+        </div>
+      </article>
+
+      <article className="admin-card" style={{gridColumn:'1 / -1'}}>
+        <h3><Plus size={19}/> Eigene Vorlage hinzufügen</h3>
+        <p>PNG/JPG/WEBP hochladen. PIXVA KI analysiert Positionen, Textfelder, Textbreite, Preis, Produktbild, Logo und Flächen und baut daraus bearbeitbare Ebenen. Alle KI-Texte bleiben gerade.</p>
+        <div className="new-plan-grid">
+          <label>Name<input value={newTemplateName} onChange={e=>setNewTemplateName(e.target.value)} placeholder="z. B. Angebot Rot Creme"/></label>
+          <label>Branche<select value={newTemplateIndustry} onChange={e=>setNewTemplateIndustry(e.target.value)}>
+            <option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="programmierer">Software & KI</option><option value="sonstiges">Sonstiges</option>
+          </select></label>
+          <label>Vorlagenbild<input ref={templateFileRef} type="file" accept="image/png,image/jpeg,image/webp"/></label>
+        </div>
+        <button className="primary-btn" disabled={templateBusy} onClick={addTemplateWithAI}><Plus size={16}/>{templateBusy?'PIXVA analysiert …':'Hochladen & mit KI bearbeitbar machen'}</button>
+      </article>
+
+      <article className="admin-card" style={{gridColumn:'1 / -1'}}>
+        <h3><EyeOff size={19}/> Ausgeblendete Vorlagen</h3>
+        <p>Diese Vorlagen existieren weiterhin, werden normalen Kunden aber nicht angezeigt.</p>
+        <div className="template-admin-grid">
+          {pixvaV12Templates.filter(item=>(settingsDraft.templateConfig?.hiddenBuiltInIds||[]).includes(item.id)).map(item=><article className="template-admin-card muted" key={item.id}>
+            <img src={item.preview} alt={item.name}/><div><b>{item.name}</b><span>{item.industry}</span></div>
+            <button disabled={templateBusy} onClick={()=>setBuiltInTemplateVisible(item.id,true)}><Eye size={15}/>Wieder aktivieren</button>
+          </article>)}
+          {pixvaMarketStyles.filter(style=>(settingsDraft.templateConfig?.hiddenBuiltInIds||[]).includes(`market:${style.id}`)).map(style=><article className="template-admin-card muted" key={`market:${style.id}`}>
+            <img src={style.preview} alt={style.name}/><div><b>{style.name}</b><span>Supermarkt · Einzelstil</span></div>
+            <button disabled={templateBusy} onClick={()=>setBuiltInTemplateVisible(`market:${style.id}`,true)}><Eye size={15}/>Wieder aktivieren</button>
+          </article>)}
+          {(settingsDraft.templateConfig?.customTemplates||[]).filter(item=>item.active===false).map(item=><article className="template-admin-card muted" key={item.id}>
+            {item.previewUrl?<img src={item.previewUrl} alt={item.name}/>:<div className="template-abstract">AI</div>}
+            <div><b>{item.name}</b><span>{item.industry} · ausgeblendet</span></div>
+            <button disabled={templateBusy} onClick={()=>setCustomTemplateVisible(item.id,true)}><Eye size={15}/>Wieder aktivieren</button>
+          </article>)}
+          {!(settingsDraft.templateConfig?.hiddenBuiltInIds||[]).length && !(settingsDraft.templateConfig?.customTemplates||[]).some(item=>item.active===false) && <div className="info-box">Keine ausgeblendeten Vorlagen.</div>}
+        </div>
+      </article>
+    </div>}
+
     {tab === 'system' && <div className="admin-grid admin-grid-two">
-      <article className="admin-card"><h3><Activity size={19}/> Systemstatus</h3><div className="info-box">Build: PIXVA V14.2 HARD SWITCH · Flyerbefehle laufen vor dem normalen Chat.</div>
+      <article className="admin-card"><h3><Activity size={19}/> Systemstatus</h3><div className="info-box">Build: PIXVA V14.6 TEMPLATE MANAGER · exakte Produkte + aktive/ausgeblendete + KI-bearbeitbare eigene Vorlagen.</div>
         {healthLoading && <div className="service-row warning"><RefreshCw className="spin"/>Konfiguration wird kostenlos geprüft …</div>}
         {!healthLoading && ['supabase','gemini','openai','sora'].map((key) => {
           const service = health?.services?.[key];

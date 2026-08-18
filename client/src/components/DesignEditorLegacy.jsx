@@ -491,7 +491,7 @@ async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
   canvas.requestRenderAll?.();
 }
 
-export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {}, costPromptMode = 'all', customPlans = [] }) {
+export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {}, costPromptMode = 'all', customPlans = [], templateConfig = {} }) {
   const [companyBrand, setCompanyBrand] = useState(null);
   const [pixvaBrain, setPixvaBrain] = useState(null);
 
@@ -529,6 +529,9 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   const [v12TemplateFilter,setV12TemplateFilter]=useState('recommended');
   const [marketStyleId,setMarketStyleId]=useState('red-cream');
   const [v12Audit,setV12Audit]=useState(null);
+  const hiddenTemplateIds=useMemo(()=>new Set(Array.isArray(templateConfig?.hiddenBuiltInIds)?templateConfig.hiddenBuiltInIds:[]),[templateConfig]);
+  const activeCustomTemplates=useMemo(()=>Array.isArray(templateConfig?.customTemplates)?templateConfig.customTemplates.filter(item=>item?.active!==false):[],[templateConfig]);
+  const visibleMarketStyles=useMemo(()=>pixvaMarketStyles.filter(style=>!hiddenTemplateIds.has(`market:${style.id}`)),[hiddenTemplateIds]);
   const [externalExportMode, setExternalExportMode] = useState('edited');
   const [rasterText, setRasterText] = useState({
     text:'Neuer Text',
@@ -702,8 +705,11 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           const v12Id=project.data.offerDraft?.companyType==='supermarkt'
             ? 'v12-supermarkt-einzel'
             : recommendPixvaV12Template(brain,'flyer');
-          const selectedMarketStyle=project.data.offerDraft?.companyType==='supermarkt'
+          const resolvedMarketStyle=project.data.offerDraft?.companyType==='supermarkt'
             ? resolvePixvaMarketStyle(project.data.offerDraft?.sourcePrompt||'',`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||''}`)
+            : marketStyleId;
+          const selectedMarketStyle=project.data.offerDraft?.companyType==='supermarkt'
+            ? (visibleMarketStyles.some(style=>style.id===resolvedMarketStyle)?resolvedMarketStyle:(visibleMarketStyles[0]?.id||'red-cream'))
             : marketStyleId;
           if(project.data.offerDraft?.companyType==='supermarkt')setMarketStyleId(selectedMarketStyle);
           const templateSource=project.data.offerDraft?.companyType==='supermarkt'
@@ -1326,6 +1332,46 @@ function addText() {
     }
   }
 
+
+  async function applyCustomTemplate(template){
+    const canvas=fabricRef.current;
+    if(!canvas||!template)return;
+    try{
+      const width=canvas.width||600,height=canvas.height||750;
+      const sx=width/1000,sy=height/1250,scale=Math.min(sx,sy);
+      canvas.clear();
+      canvas.backgroundColor=template.background||'#f6f0e5';
+      for(const layer of Array.isArray(template.layers)?template.layers:[]){
+        const role=String(layer.role||'decorative');
+        const common={left:Number(layer.x||0)*sx,top:Number(layer.y||0)*sy,angle:0,opacity:Number(layer.opacity??1),dataRole:role,displayName:String(layer.text||role),lockRotation:true};
+        if(layer.type==='text'){
+          const obj=new Textbox(String(layer.text||''),{
+            ...common,width:Math.max(20,Number(layer.w||200)*sx),fontFamily:'Arial',fontSize:Math.max(8,Number(layer.fontSize||28)*scale),fontWeight:Number(layer.fontWeight||700),
+            fill:String(layer.fill||'#17232d'),textAlign:['left','center','right'].includes(layer.align)?layer.align:'left',fontStyle:'normal',editable:true,lockScalingX:false,lockScalingY:false
+          });
+          canvas.add(obj);
+        }else if(layer.type==='image-slot'||layer.type==='logo-slot'){
+          const slotRole=layer.type==='logo-slot'?'logo-slot:1':'product-slot:1';
+          const labelRole=layer.type==='logo-slot'?'logo-slot-label:1':'product-slot-label:1';
+          const rect=new Rect({...common,dataRole:slotRole,width:Math.max(20,Number(layer.w||250)*sx),height:Math.max(20,Number(layer.h||250)*sy),rx:Math.max(0,Number(layer.radius||12)*scale),ry:Math.max(0,Number(layer.radius||12)*scale),fill:String(layer.background||'#ffffff'),stroke:String(layer.stroke||'#b7c3c8'),strokeWidth:2,strokeDashArray:[8,6]});
+          canvas.add(rect);
+          const label=new Textbox(layer.type==='logo-slot'?'LOGO':'PRODUKTBILD',{left:rect.left+8*scale,top:rect.top+(rect.height||100)/2-10*scale,width:Math.max(20,(rect.width||100)-16*scale),fontFamily:'Arial',fontSize:12*scale,fontWeight:700,fill:'#67757d',textAlign:'center',angle:0,dataRole:labelRole,displayName:'Platzhalter',lockRotation:true});
+          canvas.add(label);
+        }else{
+          canvas.add(new Rect({...common,width:Math.max(2,Number(layer.w||100)*sx),height:Math.max(2,Number(layer.h||100)*sy),rx:Math.max(0,Number(layer.radius||0)*scale),ry:Math.max(0,Number(layer.radius||0)*scale),fill:String(layer.background||layer.fill||'#ffffff'),stroke:String(layer.stroke||'transparent'),strokeWidth:layer.stroke&&layer.stroke!=='#00000000'?1:0}));
+        }
+      }
+      if(project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
+      currentTemplateRef.current=template.id;
+      setV12TemplateId(template.id);
+      if(template.industry==='supermarkt')setV12TemplateFilter('supermarkt');
+      baseTemplateRef.current=canvas.toJSON(customProps);
+      setBackground(canvas.backgroundColor||'#ffffff');
+      canvas.discardActiveObject();syncSelected(null);refreshLayers();snapshot();
+      setStatus(`${template.name||'Eigene Vorlage'} geladen · KI-Ebenen vollständig bearbeitbar. Textbreite, Position, Größe, Farben, Bilder und Preise können geändert werden.`);
+    }catch(error){setStatus(error.message||'Eigene Vorlage konnte nicht geladen werden.');}
+  }
+
   async function applyTemplate(type) {
     const canvas = fabricRef.current;
     if (!canvas) { setStatus('Arbeitsfläche ist noch nicht bereit.'); return; }
@@ -1424,7 +1470,7 @@ function addText() {
         angle:object.angle,
         fontStyle:object.fontStyle
       });
-      if(/slot-label|text-replace-mask|editor-guide|editor-grid/.test(role))object.visible=false;
+      if(/slot-label|text-replace-mask|editor-guide|editor-grid|template-reference/.test(role))object.visible=false;
       if(/^(product|logo|hero)-slot:/.test(role)){
         object.stroke='transparent';
         object.strokeWidth=0;
@@ -1679,7 +1725,7 @@ function addText() {
             </div>
             {(v12TemplateFilter==='supermarkt'||(v12TemplateFilter==='recommended'&&((pixvaBrain?.company?.companyType||companyBrand?.company_type||companyBrand?.companyType)==='supermarkt'))) && (
               <div className="template-gallery pixva-v12-gallery market-style-gallery">
-                {pixvaMarketStyles.map((style)=>(
+                {visibleMarketStyles.map((style)=>(
                   <button type="button" key={style.id} className={marketStyleId===style.id?'active':''} onClick={()=>applyMarketStyle(style.id)}>
                     <img src={style.preview} alt={`Supermarkt ${style.name}`}/>
                     <span>{style.name}</span><small>Einzel · 4:5</small>
@@ -1689,6 +1735,7 @@ function addText() {
             )}
             <div className="template-gallery pixva-v12-gallery">
               {pixvaV12Templates.filter((template) => {
+                if(hiddenTemplateIds.has(template.id))return false;
                 const companyKind = pixvaBrain?.company?.companyType || companyBrand?.company_type || companyBrand?.companyType || 'sonstiges';
                 if (v12TemplateFilter === 'all') return true;
                 if (v12TemplateFilter === 'recommended') return template.industry === companyKind || template.industry === 'sonstiges';
@@ -1699,6 +1746,15 @@ function addText() {
                   <span>{template.name}</span><small>{template.industry}</small>
                 </button>
               ))}
+              {activeCustomTemplates.filter((template)=>{
+                const companyKind=pixvaBrain?.company?.companyType||companyBrand?.company_type||companyBrand?.companyType||'sonstiges';
+                if(v12TemplateFilter==='all')return true;
+                if(v12TemplateFilter==='recommended')return template.industry===companyKind||template.industry==='sonstiges';
+                return template.industry===v12TemplateFilter;
+              }).map((template)=><button type="button" key={template.id} className={v12TemplateId===template.id?'active':''} onClick={()=>applyCustomTemplate(template)}>
+                {template.previewUrl?<img src={template.previewUrl} alt={template.name}/>:<span className="template-abstract">AI</span>}
+                <span>{template.name}</span><small>{template.industry} · eigene Vorlage</small>
+              </button>)}
               <button type="button" className={v12TemplateId==='creative'?'active':''} onClick={() => applyTemplate('creative')}><span className="template-abstract">AI</span><span>Kreativ</span></button>
               <button type="button" className={v12TemplateId==='blank'?'active':''} onClick={() => applyTemplate('blank')}><span className="template-blank">+</span><span>Leer</span></button>
             </div>
@@ -1832,6 +1888,7 @@ function addText() {
             <label>Schrift<select value={selected.fontFamily || 'Arial'} onChange={(event) => commitObject('fontFamily', event.target.value)}>{fontOptions.map((font) => <option key={font}>{font}</option>)}</select></label>
             <div className="inspector-grid">
               <label>Größe<input type="number" value={Math.round(selected.fontSize || 40)} onChange={(event) => updateObject('fontSize', Number(event.target.value))} onBlur={snapshot}/></label>
+              <label>Textbreite<input type="number" min="20" value={Math.round(selected.width || selected.getScaledWidth?.() || 200)} onChange={(event)=>{selected.set({width:Number(event.target.value),scaleX:1});selected.setCoords?.();fabricRef.current?.requestRenderAll();syncSelected(selected)}} onBlur={snapshot}/></label>
               <label>Farbe<input type="color" value={typeof selected.fill === 'string' ? selected.fill : '#111111'} onChange={(event) => commitObject('fill', event.target.value)}/></label>
             </div>
             <button className={selected.fontWeight === 700 || selected.fontWeight === 'bold' ? 'active' : ''} onClick={() => commitObject('fontWeight', selected.fontWeight === 700 || selected.fontWeight === 'bold' ? 400 : 700)}><Bold size={16}/>Fett</button>

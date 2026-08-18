@@ -195,6 +195,68 @@ function parseJsonText(text,fallback={}){
   const match=raw.match(/\{[\s\S]*\}/);if(match)try{return JSON.parse(match[0])}catch{}
   return fallback;
 }
+
+const PIXVA_TEMPLATE_LAYER_TYPES=new Set(['rect','text','image-slot','logo-slot']);
+const PIXVA_TEMPLATE_ROLES=new Set([
+  'headline','eyebrow','subtitle','product-title:1','price:1','old-price','badge','company-name','company-contact','address',
+  'product-slot:1','logo-slot:1','decorative'
+]);
+function clampNumber(value,min,max,fallback){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback}
+function safeHexColor(value,fallback='#ffffff'){const v=String(value||'').trim();return /^#[0-9a-f]{3,8}$/i.test(v)?v:fallback}
+function normalizeTemplateLayer(layer,index){
+  const type=PIXVA_TEMPLATE_LAYER_TYPES.has(String(layer?.type||''))?String(layer.type):'rect';
+  const role=PIXVA_TEMPLATE_ROLES.has(String(layer?.role||''))?String(layer.role):'decorative';
+  return{
+    id:String(layer?.id||`layer-${index+1}`).replace(/[^a-z0-9:_-]/gi,'-').slice(0,80),
+    type,role,
+    x:clampNumber(layer?.x,0,1000,40),y:clampNumber(layer?.y,0,1250,40),
+    w:clampNumber(layer?.w,10,1000,200),h:clampNumber(layer?.h,10,1250,80),
+    text:String(layer?.text||'').slice(0,180),
+    fontSize:clampNumber(layer?.fontSize,8,160,28),fontWeight:clampNumber(layer?.fontWeight,300,900,700),
+    align:['left','center','right'].includes(layer?.align)?layer.align:'left',
+    fill:safeHexColor(layer?.fill,'#17232d'),background:safeHexColor(layer?.background,'#ffffff'),
+    stroke:safeHexColor(layer?.stroke,'#00000000'),radius:clampNumber(layer?.radius,0,80,0),
+    opacity:clampNumber(layer?.opacity,0,1,1)
+  };
+}
+function fallbackTemplateLayers(){return[
+  {type:'rect',role:'decorative',x:0,y:0,w:1000,h:235,background:'#E7132A',fill:'#E7132A'},
+  {type:'text',role:'headline',x:335,y:70,w:590,h:100,text:'ANGEBOT DER WOCHE',fontSize:54,fontWeight:900,align:'left',fill:'#ffffff'},
+  {type:'logo-slot',role:'logo-slot:1',x:55,y:45,w:235,h:140,background:'#ffffff',fill:'#ffffff',stroke:'#ffffff'},
+  {type:'text',role:'product-title:1',x:55,y:280,w:870,h:80,text:'PRODUKTNAME',fontSize:44,fontWeight:900,align:'left',fill:'#17232d'},
+  {type:'image-slot',role:'product-slot:1',x:55,y:390,w:560,h:500,background:'#ffffff',fill:'#ffffff',stroke:'#E7132A'},
+  {type:'rect',role:'decorative',x:650,y:420,w:280,h:340,background:'#E7132A',fill:'#E7132A',radius:34},
+  {type:'text',role:'old-price',x:680,y:465,w:220,h:45,text:'STATT 4,99 €',fontSize:24,fontWeight:700,align:'center',fill:'#ffffff'},
+  {type:'text',role:'price:1',x:680,y:555,w:220,h:80,text:'3,99 €',fontSize:55,fontWeight:900,align:'center',fill:'#ffffff'},
+  {type:'text',role:'badge',x:690,y:690,w:200,h:55,text:'ANGEBOT',fontSize:22,fontWeight:900,align:'center',fill:'#ffffff'},
+  {type:'text',role:'company-name',x:55,y:1110,w:520,h:70,text:'DEIN MARKT',fontSize:34,fontWeight:900,align:'left',fill:'#17232d'}
+].map(normalizeTemplateLayer)}
+function normalizeTemplateConfigServer(value={}){
+  const hiddenBuiltInIds=Array.isArray(value?.hiddenBuiltInIds)?value.hiddenBuiltInIds.map(x=>String(x||'').slice(0,100)).filter(Boolean).slice(0,100):[];
+  const customTemplates=(Array.isArray(value?.customTemplates)?value.customTemplates:[]).slice(0,40).map((item,index)=>({
+    id:String(item?.id||`custom-${index+1}`).replace(/[^a-z0-9:_-]/gi,'-').slice(0,100),
+    name:String(item?.name||`Eigene Vorlage ${index+1}`).slice(0,100),
+    industry:String(item?.industry||'supermarkt').replace(/[^a-z0-9_-]/gi,'').slice(0,50)||'supermarkt',
+    active:item?.active!==false,
+    storagePath:String(item?.storagePath||'').slice(0,1000),
+    aiEditable:item?.aiEditable!==false,
+    background:safeHexColor(item?.background,'#f6f0e5'),
+    width:clampNumber(item?.width,300,3000,1000),height:clampNumber(item?.height,300,4000,1250),
+    layers:(Array.isArray(item?.layers)&&item.layers.length?item.layers:fallbackTemplateLayers()).slice(0,60).map(normalizeTemplateLayer),
+    createdAt:String(item?.createdAt||new Date().toISOString()).slice(0,40)
+  })).filter(x=>x.storagePath);
+  return{hiddenBuiltInIds:[...new Set(hiddenBuiltInIds)],customTemplates};
+}
+async function signedTemplateConfig(client,raw){
+  const config=normalizeTemplateConfigServer(raw);
+  const customTemplates=[];
+  for(const item of config.customTemplates){
+    let previewUrl='';
+    try{const {data}=await client.storage.from(BUCKET).createSignedUrl(item.storagePath,3600);previewUrl=data?.signedUrl||''}catch{}
+    customTemplates.push({...item,previewUrl});
+  }
+  return{...config,customTemplates};
+}
 async function enforceRate(client,req,scope,limit=25,seconds=60){
   const {data,error}=await client.rpc('app_take_rate_limit',{p_token:readToken(req),p_scope:scope,p_limit:limit,p_window_seconds:seconds});
   if(error)throw new Error(error.message||'Rate-Limit konnte nicht geprüft werden.');
@@ -474,6 +536,37 @@ export default async function handler(req,res){
     }
     if(action==='provider-settings-save'&&req.method==='POST'){
       if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const routing=await saveProviderSettings(client,user,body);return send(res,200,{routing});
+    }
+
+    if(action==='template-settings'&&req.method==='GET'){
+      const {data:row,error}=await client.from('app_global_settings').select('settings').eq('id',1).maybeSingle();if(error)throw error;
+      const config=await signedTemplateConfig(client,row?.settings?.pixvaTemplateConfig||{});
+      return send(res,200,{config});
+    }
+    if(action==='template-settings-save'&&req.method==='POST'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
+      const config=normalizeTemplateConfigServer(body?.config||{});
+      const {data:row,error}=await client.from('app_global_settings').select('settings').eq('id',1).maybeSingle();if(error)throw error;
+      const settings={...(row?.settings||{}),pixvaTemplateConfig:config};
+      const {error:saveError}=await client.from('app_global_settings').upsert({id:1,settings,updated_by:user.id,updated_at:new Date().toISOString()},{onConflict:'id'});if(saveError)throw saveError;
+      await audit(client,user,'template_settings_saved',null,{hidden:config.hiddenBuiltInIds.length,custom:config.customTemplates.length});
+      return send(res,200,{ok:true,config:await signedTemplateConfig(client,config)});
+    }
+    if(action==='template-analyze'&&req.method==='POST'){
+      if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
+      await enforceRate(client,req,'template-analyze',8,60);
+      const {buffer,path}=await downloadOwnFile(client,user,body.storagePath);
+      const mime=effectiveMime(String(body.originalName||path.split('/').pop()||'template.png'),String(body.mimeType||''));
+      if(!mime.startsWith('image/'))return send(res,400,{error:'Für KI-Vorlagen bitte PNG, JPG oder WEBP hochladen.'});
+      const prompt=`Analysiere diese Werbe-/Flyervorlage und rekonstruiere sie als vollständig bearbeitbare PIXVA-Ebenen. Ausgabe NUR als JSON. Arbeitsfläche 1000x1250 (4:5). Alle Elemente müssen gerade sein: angle 0, keine Rotation, keine schrägen Texte. Erzeuge die wichtigsten farbigen Flächen als rect und alle sichtbaren Texte als text. Produktbereich als image-slot mit role product-slot:1, Logo als logo-slot:1. Verwende semantische Rollen wo passend: headline, eyebrow, subtitle, product-title:1, price:1, old-price, badge, company-name, company-contact, address, product-slot:1, logo-slot:1, decorative. Jede Ebene: {type,role,x,y,w,h,text,fontSize,fontWeight,align,fill,background,stroke,radius,opacity}. Koordinaten beziehen sich auf 1000x1250. Textbreite w muss realistisch sein und später editierbar bleiben. Erfinde keine Produkt- oder Firmendaten; verwende Platzhalter. Hintergrundfarbe separat als background. JSON-Form: {background:'#...',layers:[...]}. Maximal 45 Ebenen.`;
+      let parsed={};
+      try{const result=await gemini({prompt,inline:{buffer,mimeType:mime},json:true,temperature:.1});parsed=parseJsonText(result.text,{})}catch(error){parsed={warning:error.message}}
+      const layers=(Array.isArray(parsed?.layers)&&parsed.layers.length?parsed.layers:fallbackTemplateLayers()).slice(0,60).map(normalizeTemplateLayer);
+      const template={
+        id:`custom-${randomUUID()}`,name:String(body.name||'Eigene Vorlage').trim().slice(0,100)||'Eigene Vorlage',industry:String(body.industry||'supermarkt').slice(0,50)||'supermarkt',
+        active:true,storagePath:path,aiEditable:true,background:safeHexColor(parsed?.background,'#f6f0e5'),width:1000,height:1250,layers,createdAt:new Date().toISOString()
+      };
+      return send(res,200,{template,aiUsed:Boolean(parsed?.layers?.length),warning:parsed?.warning||''});
     }
     if(action==='error-resolve'&&req.method==='POST'){
       if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});const id=String(body.id||'');const {error}=await client.from('app_error_logs').update({resolved_at:new Date().toISOString()}).eq('id',id);if(error)throw error;await audit(client,user,'error_resolved',null,{id});return send(res,200,{ok:true});

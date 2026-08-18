@@ -4,7 +4,8 @@ import JSZip from 'jszip';
 import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Instagram, Menu, MessageSquarePlus, Mic, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, ShieldCheck, Square, Trash2, User, Video, Volume2, WandSparkles, X } from 'lucide-react';
 import { api, getToken } from '../api.js';
 import { canUseFeature, getPlan } from '../plans.js';
-import { extractOfferDraft, resolveOfferFlyerPrompt, normalizeOfferText } from '../pixva-offer.js';
+import { extractOfferDraft, resolveOfferFlyerPrompt } from '../pixva-offer.js';
+import { isExactProductCandidate } from '../pixva-product-match.js';
 
 const quickPrompts = [
   'Erkläre mir ein schwieriges Thema ganz einfach.',
@@ -1433,18 +1434,6 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     setGenerationStatus(runId, 'Kostenlose Bildsuche abgeschlossen · 0,00 €');
   }
 
-  function productVariantMismatch(result, requestedText=''){
-    const requested=normalizeOfferText(requestedText);
-    const candidate=normalizeOfferText(`${result?.title||''} ${result?.brand||''}`);
-    const variants=[
-      /\b(vegan|veggie|vegetarisch|pflanzlich|plant based|plantbased)\b/,
-      /\b(light|leicht|fettreduziert|reduced fat)\b/,
-      /\b(scharf|pikant|hot|acili|aci|extra hot)\b/,
-      /\b(bio|organic|oekologisch)\b/,
-      /\b(gefluegel|huhn|chicken|tavuk)\b/
-    ];
-    return variants.some(pattern=>pattern.test(candidate)&&!pattern.test(requested));
-  }
 
   async function generateOfferFlyerMessage(clean, signal, runId){
     const draft=extractOfferDraft(clean);
@@ -1461,9 +1450,21 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       data={results:[],searchLinks:{googleImages:`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`},warning:error?.message||''};
     }
 
-    const rawCandidates=(Array.isArray(data.results)?data.results:[]);
-    const exactCandidates=rawCandidates.filter(candidate=>!productVariantMismatch(candidate,draft.productName));
-    const candidates=(exactCandidates.length?exactCandidates:rawCandidates).slice(0,6);
+    let rawCandidates=(Array.isArray(data.results)?data.results:[]);
+    let exactCandidates=rawCandidates.filter(candidate=>isExactProductCandidate(candidate,draft.productName,.66));
+    if(!exactCandidates.length){
+      try{
+        const retryQuery=`"${draft.productName}" Original Packung`;
+        const retryResponse=await fetch(`/api/ai/image-search?q=${encodeURIComponent(retryQuery)}&source=${encodeURIComponent(productImageSource||'web')}`,{signal});
+        const retryData=await retryResponse.json().catch(()=>({results:[]}));
+        if(retryResponse.ok&&Array.isArray(retryData.results)){
+          const seen=new Set(rawCandidates.map(item=>item?.imageUrl||item?.thumbnailUrl||''));
+          rawCandidates=[...rawCandidates,...retryData.results.filter(item=>!seen.has(item?.imageUrl||item?.thumbnailUrl||''))];
+          exactCandidates=rawCandidates.filter(candidate=>isExactProductCandidate(candidate,draft.productName,.66));
+        }
+      }catch{}
+    }
+    const candidates=exactCandidates.slice(0,6);
     let first=candidates[0]||null;
     let imageDataUrl='';
     for(const candidate of candidates){
@@ -1504,7 +1505,7 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       id:crypto.randomUUID(),role:'assistant',createdAt:Date.now(),
       content:imageDataUrl
         ? `Flyer wird jetzt geöffnet · 0,00 €. ${draft.productName}${draft.oldPrice?` · ${draft.oldPrice} → ${draft.newPrice}`:draft.newPrice?` · ${draft.newPrice}`:''}. Bild, Name, Preis, Logo und Texte bleiben vollständig bearbeitbar.`
-        : `Flyer wird jetzt geöffnet · 0,00 €. Für „${draft.productName}“ wurde noch kein direkt ladbares Produktbild gefunden; der Flyer wird trotzdem erstellt und du kannst das Bild im Editor ersetzen.`,
+        : `Flyer wird jetzt geöffnet · 0,00 €. PIXVA hat für „${draft.productName}“ keinen ausreichend exakten Produktbild-Treffer bestätigt und setzt deshalb bewusst KEIN falsches Produkt ein. Du kannst das Bild im Editor ersetzen oder die Suche erneut starten.`,
       attachments:resultAttachments
     });
 
