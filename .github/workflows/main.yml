@@ -1,4 +1,4 @@
-name: PIXVA V14.7.2 LOGO CHECK FIX
+name: PIXVA V14.7.3 FINAL BUILD CHECK FIX
 
 on:
   workflow_dispatch:
@@ -182,16 +182,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -d client/dist
-          grep -R -Fq "9er-Supermarktangebot vorbereitet" client/dist/assets
-          grep -R -Fq "Logo für" client/dist/assets
-          echo "PIXVA V14.7 FINAL CHECK PASSED"
+
+          if [ ! -d client/dist/assets ]; then
+            echo "FEHLER: Produktions-Bundle client/dist/assets fehlt."
+            exit 1
+          fi
+
+          if ! find client/dist/assets -type f | grep -q .; then
+            echo "FEHLER: Produktions-Bundle enthält keine Assets."
+            exit 1
+          fi
+
+          if ! grep -R -Fq "Supermarktangebot vorbereitet" client/dist/assets; then
+            echo "FEHLER: Mehrprodukt-Angebotslogik fehlt im gebauten Frontend."
+            exit 1
+          fi
+
+          if ! grep -R -Fq "Produktbilder visuell bestätigt" client/dist/assets; then
+            echo "FEHLER: Mehrprodukt-Bildprüfung fehlt im gebauten Frontend."
+            exit 1
+          fi
+
+          if ! grep -R -Fq "Logo für" client/dist/assets; then
+            echo "FEHLER: Automatische Supermarkt-Logo-Logik fehlt im gebauten Frontend."
+            exit 1
+          fi
+
+          echo "PIXVA V14.7.3 FINAL CHECK PASSED"
 
       - name: Nur vollständig erfolgreichen V14.7 Stand veröffentlichen
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "PIXVA V14.7.2"
+          git config user.name "PIXVA V14.7.3"
           git config user.email "actions@users.noreply.github.com"
           git add -- \
             api/pixva.js \
@@ -201,8 +224,8 @@ jobs:
             client/src/pixva-multi-offer.js
 
           if git diff --cached --quiet; then
-            echo "PIXVA V14.7.2 ist bereits installiert."
+            echo "PIXVA V14.7.3 ist bereits installiert."
             exit 0
           fi
-          git commit -m "PIXVA V14.7.2 Logo Check Fix"
+          git commit -m "PIXVA V14.7.3 Final Build Check Fix"
           git push origin HEAD:main
