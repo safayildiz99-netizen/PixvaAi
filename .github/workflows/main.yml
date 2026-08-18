@@ -1,4 +1,4 @@
-name: PIXVA V14.5.1 SUPERMARKT AUTOFIX
+name: PIXVA V14.5.2 CHECK FIX
 
 on:
   workflow_dispatch:
@@ -55,56 +55,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          engine=Path('client/src/data/pixva/v12/templateEngineV12.js').read_text(encoding='utf-8')
-          chat=Path('client/src/components/Chat.jsx').read_text(encoding='utf-8')
-          editor=Path('client/src/components/DesignEditorLegacy.jsx').read_text(encoding='utf-8')
-          image_search=Path('api/ai/image-search.js').read_text(encoding='utf-8')
 
-          required_engine=[
-              'primary:picked.primary',
-              'secondary:picked.secondary',
-              'accent:picked.accent',
-              'dark:picked.dark'
-          ]
-          for token in required_engine:
-              if token not in engine:
-                  raise SystemExit('FEHLER: Supermarkt-Stil wird noch von Firmenfarben überschrieben: '+token)
+          check_contains() {
+            FILE="$1"
+            NEEDLE="$2"
+            LABEL="$3"
+            if ! grep -Fq -- "$NEEDLE" "$FILE"; then
+              echo "FEHLER: $LABEL"
+              echo "Datei: $FILE"
+              echo "Gesucht: $NEEDLE"
+              exit 1
+            fi
+            echo "OK: $LABEL"
+          }
 
-          required_chat=[
-              'Produktbild Packung freigestellt',
-              'imageUrl:first?.imageUrl||''',
-              'thumbnailUrl:first?.thumbnailUrl||'''
-          ]
-          for token in required_chat:
-              if token not in chat:
-                  raise SystemExit('FEHLER: Flyer-Produktbild wird nicht vollständig vorbereitet: '+token)
+          check_contains client/src/data/pixva/v12/templateEngineV12.js "primary:picked.primary" "Supermarkt-Primärfarbe kommt aus dem neuen Stil."
+          check_contains client/src/data/pixva/v12/templateEngineV12.js "secondary:picked.secondary" "Supermarkt-Sekundärfarbe kommt aus dem neuen Stil."
+          check_contains client/src/data/pixva/v12/templateEngineV12.js "accent:picked.accent" "Supermarkt-Akzentfarbe kommt aus dem neuen Stil."
+          check_contains client/src/data/pixva/v12/templateEngineV12.js "dark:picked.dark" "Supermarkt-Kontrastfarbe kommt aus dem neuen Stil."
 
-          required_editor=[
-              'remoteProductUrl=draft.imageUrl||draft.thumbnailUrl||''',
-              '/api/ai/image-proxy?url=${encodeURIComponent(source)}',
-              'Produktbild konnte nicht in den Editor geladen werden.'
-          ]
-          for token in required_editor:
-              if token not in editor:
-                  raise SystemExit('FEHLER: Editor lädt Internet-Produktbilder nicht automatisch nach: '+token)
+          check_contains client/src/components/Chat.jsx "Produktbild Packung freigestellt" "Produktbildsuche nutzt den verbesserten Packshot-Suchtext."
+          check_contains client/src/components/Chat.jsx "imageUrl:first?.imageUrl||''" "Original-Bild-URL wird im Flyerentwurf gespeichert."
+          check_contains client/src/components/Chat.jsx "thumbnailUrl:first?.thumbnailUrl||''" "Thumbnail-URL wird im Flyerentwurf gespeichert."
 
-          required_image_search=[
-              'async function searchBing(query)',
-              'async function searchOpenFoodFacts(query)',
-              'provider = 'openfoodfacts'',
-              'provider = 'bing''
-          ]
-          for token in required_image_search:
-              if token not in image_search:
-                  raise SystemExit('FEHLER: Bildsuche-Fallback fehlt: '+token)
+          check_contains client/src/components/DesignEditorLegacy.jsx "remoteProductUrl=draft.imageUrl||draft.thumbnailUrl||''" "Editor kann Internet-Produktbild direkt nachladen."
+          check_contains client/src/components/DesignEditorLegacy.jsx '/api/ai/image-proxy?url=${encodeURIComponent(source)}' "Editor lädt Internetbilder über den bestehenden Proxy."
+          check_contains client/src/components/DesignEditorLegacy.jsx "Produktbild konnte nicht in den Editor geladen werden." "Editor hat klare Produktbild-Fehlerbehandlung."
 
-          print('OK: Supermarkt-Farben werden nicht mehr von allgemeinen Firmenfarben überschrieben.')
-          print('OK: Flyer übernimmt Produktbild-URLs zusätzlich direkt in den Entwurf.')
-          print('OK: Editor lädt Produktbilder automatisch über den Proxy nach.')
-          print('OK: Kostenlose Bildsuche nutzt jetzt mehrere Internet-Fallbacks.')
-          PY
+          check_contains api/ai/image-search.js "async function searchBing(query)" "Bing-Bildsuche ist als Fallback vorhanden."
+          check_contains api/ai/image-search.js "async function searchOpenFoodFacts(query)" "Open Food Facts ist als Produktbild-Fallback vorhanden."
+          check_contains api/ai/image-search.js "provider = 'bing'" "Bing-Provider wird erkannt."
+          check_contains api/ai/image-search.js "provider = 'openfoodfacts'" "Open-Food-Facts-Provider wird erkannt."
+
+          echo "PIXVA V14.5.2 FUNKTIONSCHECK PASSED"
 
       - name: JavaScript prüfen
         shell: bash
@@ -167,19 +150,19 @@ jobs:
           grep -R -Fq 'Supermarkt-Stil' client/dist/assets
           echo 'PIXVA V14.5.1 FINAL CHECK PASSED'
 
-      - name: Nur vollständig erfolgreichen V14.5.1 Stand veröffentlichen
+      - name: Nur vollständig erfolgreichen V14.5.2 Stand veröffentlichen
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'PIXVA V14.5.1'
+          git config user.name 'PIXVA V14.5.2'
           git config user.email 'actions@users.noreply.github.com'
 
           git add --             api/ai/image-search.js             client/src/components/Chat.jsx             client/src/components/DesignEditorLegacy.jsx             client/src/data/pixva/v12/templateEngineV12.js
 
           if git diff --cached --quiet; then
-            echo 'PIXVA V14.5.1 ist bereits installiert.'
+            echo 'PIXVA V14.5.2 ist bereits installiert.'
             exit 0
           fi
 
-          git commit -m 'PIXVA V14.5.1 Supermarkt Vorlagen und Auto Produktbild Fix'
+          git commit -m 'PIXVA V14.5.2 Supermarkt Vorlagen und Auto Produktbild Fix'
           git push origin HEAD:main
