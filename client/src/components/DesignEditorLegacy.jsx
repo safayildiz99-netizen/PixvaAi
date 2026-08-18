@@ -15,6 +15,9 @@ import { applyPixvaV12Template, pixvaV12Templates, recommendPixvaV12Template, au
 import { pixvaMarketStyles, resolvePixvaMarketStyle } from '../data/pixva/v12/marketStyles.js';
 import { applyPixvaFileTemplate, pixvaTemplateIdForBrand, pixvaTemplateList } from '../data/pixva/flyerTemplateEngine.js';
 import { canUseFeature } from '../plans.js';
+import { getFixedStoreLogo } from '../storeLogoResolver.js';
+import { extractMultiOfferDraft } from '../pixva-multi-offer.js';
+import { extractOfferDraft, normalizeOfferText } from '../pixva-offer.js';
 
 const formats = {
   square: { label: '1:1 · 1080 × 1080', canvas: [650, 650], export: [1080, 1080] },
@@ -441,6 +444,53 @@ function pixvaBrainBrand(brain){
   };
 }
 
+function repairOfferDraftForEditor(draft={}){
+  const sourcePrompt=String(draft?.sourcePrompt||'').trim();
+  let repaired={...draft};
+
+  if(sourcePrompt){
+    const multi=extractMultiOfferDraft(sourcePrompt);
+    if(multi?.products?.length>1){
+      const oldProducts=Array.isArray(draft?.products)?draft.products:[];
+      const oldByName=new Map(oldProducts.map(item=>[normalizeOfferText(item?.productName||''),item]));
+      repaired={
+        ...draft,
+        ...multi,
+        products:multi.products.map(product=>{
+          const old=oldByName.get(normalizeOfferText(product.productName||''))||{};
+          return{
+            ...old,
+            ...product,
+            imageDataUrl:old.imageDataUrl||'',
+            imageUrl:old.imageUrl||'',
+            thumbnailUrl:old.thumbnailUrl||'',
+            imageVerified:old.imageVerified===true
+          };
+        })
+      };
+    }else{
+      const single=extractOfferDraft(sourcePrompt);
+      if(single?.productName&&single.productName!=='Produkt'){
+        repaired={...draft,...single};
+      }
+    }
+  }
+
+  const fixedLogo=getFixedStoreLogo(repaired.companyName||'');
+  if(fixedLogo){
+    repaired={
+      ...repaired,
+      logoVerified:true,
+      logoDataUrl:'',
+      logoImageUrl:fixedLogo,
+      logoSourceUrl:fixedLogo,
+      logoProvider:'fixed-local'
+    };
+  }
+
+  return repaired;
+}
+
 async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
   if(!canvas||!draft)return;
 
@@ -457,21 +507,28 @@ async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
   const loadSource=async(source)=>{
     let resolved=String(source||'');
     if(!resolved)return'';
-    if(!resolved.startsWith('data:image/')){
-      try{
-        const proxy=await fetch(`/api/ai/image-proxy?url=${encodeURIComponent(resolved)}`);
-        if(proxy.ok){
-          const blob=await proxy.blob();
-          resolved=await new Promise((resolve,reject)=>{
-            const reader=new FileReader();
-            reader.onload=()=>resolve(String(reader.result||''));
-            reader.onerror=()=>reject(new Error('Bild konnte nicht in den Editor geladen werden.'));
-            reader.readAsDataURL(blob);
-          });
-        }
-      }catch{}
-    }
-    return resolved;
+    if(resolved.startsWith('data:image/'))return resolved;
+
+    const blobToDataUrl=(blob)=>new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result||''));
+      reader.onerror=()=>reject(new Error('Bild konnte nicht in den Editor geladen werden.'));
+      reader.readAsDataURL(blob);
+    });
+
+    try{
+      // Lokale, vom Nutzer bestätigte Logos liegen unter /store-logos/.
+      // Sie dürfen NICHT durch den Remote-Proxy geschickt werden.
+      if(resolved.startsWith('/')&&!resolved.startsWith('//')){
+        const local=await fetch(resolved,{cache:'no-store'});
+        if(local.ok)return await blobToDataUrl(await local.blob());
+        return'';
+      }
+
+      const proxy=await fetch(`/api/ai/image-proxy?url=${encodeURIComponent(resolved)}`);
+      if(proxy.ok)return await blobToDataUrl(await proxy.blob());
+    }catch{}
+    return'';
   };
 
   const placeInSlot=async({slotRole,imageRole,labelRole,source,displayName,allowExistingBounds=false})=>{
@@ -767,42 +824,44 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
 
       if (project?.data?.offerDraft) {
         try {
+          const offerDraft=repairOfferDraftForEditor(project.data.offerDraft);
           let brain=await api('/api/pixva?action=brain-context');
           const draftCompany={};
-          if(project.data.offerDraft?.companyName) draftCompany.companyName=project.data.offerDraft.companyName;
-          if(project.data.offerDraft?.companyType){
-            draftCompany.companyType=project.data.offerDraft.companyType;
-            draftCompany.company_type=project.data.offerDraft.companyType;
-            draftCompany.industry=project.data.offerDraft.companyType;
+          if(offerDraft?.companyName) draftCompany.companyName=offerDraft.companyName;
+          if(offerDraft?.companyType){
+            draftCompany.companyType=offerDraft.companyType;
+            draftCompany.company_type=offerDraft.companyType;
+            draftCompany.industry=offerDraft.companyType;
           }
           if(Object.keys(draftCompany).length){
             brain={...(brain||{}),isCompany:true,company:{...(brain?.company||{}),...draftCompany}};
           }
           setPixvaBrain(brain);
-          const offerProducts=Array.isArray(project.data.offerDraft?.products)?project.data.offerDraft.products:[];
-          const v12Id=project.data.offerDraft?.templateId
-            || (project.data.offerDraft?.companyType==='supermarkt'
-              ? (offerProducts.length>=9?'v12-supermarkt-9er':offerProducts.length>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel')
-              : recommendPixvaV12Template(brain,'flyer'));
-          const resolvedMarketStyle=project.data.offerDraft?.companyType==='supermarkt'
-            ? resolvePixvaMarketStyle(project.data.offerDraft?.sourcePrompt||'',`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||project.data.offerDraft?.products?.[0]?.productName||''}`)
+          const offerProducts=Array.isArray(offerDraft?.products)?offerDraft.products:[];
+          const defaultMarketTemplate=offerProducts.length>=9?'v12-supermarkt-9er':offerProducts.length>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
+          const requestedTemplate=String(offerDraft?.templateId||'');
+          const v12Id=offerDraft?.companyType==='supermarkt'
+            ? (offerProducts.length>=6?defaultMarketTemplate:(requestedTemplate.startsWith('v12-supermarkt-')?requestedTemplate:defaultMarketTemplate))
+            : (requestedTemplate||recommendPixvaV12Template(brain,'flyer'));
+          const resolvedMarketStyle=offerDraft?.companyType==='supermarkt'
+            ? resolvePixvaMarketStyle(offerDraft?.sourcePrompt||'',`${offerDraft?.companyName||''} ${offerDraft?.productName||offerDraft?.products?.[0]?.productName||''}`)
             : marketStyleId;
-          const selectedMarketStyle=project.data.offerDraft?.companyType==='supermarkt'
+          const selectedMarketStyle=offerDraft?.companyType==='supermarkt'
             ? (visibleMarketStyles.some(style=>style.id===resolvedMarketStyle)?resolvedMarketStyle:(visibleMarketStyles[0]?.id||'red-cream'))
             : marketStyleId;
-          if(project.data.offerDraft?.companyType==='supermarkt')setMarketStyleId(selectedMarketStyle);
-          const templateSource=project.data.offerDraft?.companyType==='supermarkt'
-            ? {...(brain||{}),marketStyle:selectedMarketStyle,marketSeed:`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||project.data.offerDraft?.products?.[0]?.productName||''}`}
+          if(offerDraft?.companyType==='supermarkt')setMarketStyleId(selectedMarketStyle);
+          const templateSource=offerDraft?.companyType==='supermarkt'
+            ? {...(brain||{}),marketStyle:selectedMarketStyle,marketSeed:`${offerDraft?.companyName||''} ${offerDraft?.productName||offerDraft?.products?.[0]?.productName||''}`}
             : brain;
           await applyPixvaV12Template(canvas,v12Id,format.canvas[0],format.canvas[1],templateSource);
           currentTemplateRef.current=v12Id;
           setV12TemplateId(v12Id);
-          await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
+          await applyPixvaOfferDraftToCanvas(canvas,offerDraft);
           baseTemplateRef.current=canvas.toJSON(customProps);
           setBackground(canvas.backgroundColor||'#ffffff');
           canvas.discardActiveObject();syncSelected(null);refreshLayers();snapshot();
           setV12Audit(auditPixvaV12Canvas(canvas));
-          setStatus(`PIXVA Angebot vorbereitet · ${project.data.offerDraft.productName||'Produkt'} · vollständig bearbeitbar.`);
+          setStatus(`PIXVA Angebot vorbereitet · ${offerDraft.productName||offerDraft.products?.[0]?.productName||'Produkt'} · vollständig bearbeitbar.`);
         } catch(error) {
           setStatus(error.message||'Angebotsentwurf konnte nicht geladen werden.');
           await applyPixvaFileTemplate(canvas,pixvaTemplateIdForBrand(brand||{},mode),format.canvas[0],format.canvas[1],brand||{});
@@ -1389,13 +1448,15 @@ function addText() {
     const canvas=fabricRef.current;
     if(!canvas)return;
     try{
+      const repairedDraft=project?.data?.offerDraft?repairOfferDraftForEditor(project.data.offerDraft):null;
       const brand=await resolvePixvaV12Brand();
-      const activeTemplate=['v12-supermarkt-6er','v12-supermarkt-9er'].includes(v12TemplateId)?v12TemplateId:'v12-supermarkt-einzel';
+      const productCount=Array.isArray(repairedDraft?.products)?repairedDraft.products.length:0;
+      const activeTemplate=productCount>=9?'v12-supermarkt-9er':productCount>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
       setMarketStyleId(styleId);
-      const source={...(pixvaBrain||{}),...(brand||{}),marketStyle:styleId,marketSeed:project?.data?.offerDraft?.productName||projectName};
+      const source={...(pixvaBrain||{}),...(brand||{}),marketStyle:styleId,marketSeed:repairedDraft?.productName||repairedDraft?.products?.[0]?.productName||projectName};
       setStatus(`Supermarkt-Stil ${pixvaMarketStyles.find(s=>s.id===styleId)?.name||styleId} wird geladen …`);
       await applyPixvaV12Template(canvas,activeTemplate,canvas.width,canvas.height,source);
-      if(project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
+      if(project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,repairOfferDraftForEditor(project.data.offerDraft));
       currentTemplateRef.current=activeTemplate;
       setV12TemplateId(activeTemplate);
       baseTemplateRef.current=canvas.toJSON(customProps);
@@ -1440,7 +1501,7 @@ function addText() {
           canvas.add(new Rect({...common,width:Math.max(2,Number(layer.w||100)*sx),height:Math.max(2,Number(layer.h||100)*sy),rx:Math.max(0,Number(layer.radius||0)*scale),ry:Math.max(0,Number(layer.radius||0)*scale),fill:String(layer.background||layer.fill||'#ffffff'),stroke:String(layer.stroke||'transparent'),strokeWidth:layer.stroke&&layer.stroke!=='#00000000'?1:0}));
         }
       }
-      if(project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
+      if(project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,repairOfferDraftForEditor(project.data.offerDraft));
       currentTemplateRef.current=template.id;
       setV12TemplateId(template.id);
       if(template.industry==='supermarkt')setV12TemplateFilter('supermarkt');
@@ -1457,13 +1518,26 @@ function addText() {
     try {
       const template = pixvaV12Templates.find((item) => item.id === type);
       if (template) {
+        const repairedDraft=project?.data?.offerDraft?repairOfferDraftForEditor(project.data.offerDraft):null;
+        if(repairedDraft?.companyType==='supermarkt'&&template.industry!=='supermarkt'){
+          setStatus('Für diesen Supermarkt-Flyer kannst du nur Supermarkt-Vorlagen auswählen. Produkt, Preise und Logo bleiben dadurch korrekt.');
+          setV12TemplateFilter('supermarkt');
+          return;
+        }
+        const repairedProducts=Array.isArray(repairedDraft?.products)?repairedDraft.products:[];
+        const requiredMarketTemplate=repairedProducts.length>=9?'v12-supermarkt-9er':repairedProducts.length>=6?'v12-supermarkt-6er':repairedDraft?.companyType==='supermarkt'?'v12-supermarkt-einzel':'';
+        if(requiredMarketTemplate&&template.industry==='supermarkt'&&template.id!==requiredMarketTemplate){
+          setStatus(`Dieses Angebot braucht die ${repairedProducts.length>=9?'9er':repairedProducts.length>=6?'6er':'Einzel'}-Supermarktvorlage. Ändere stattdessen links den Supermarkt-Stil.`);
+          setV12TemplateFilter('supermarkt');
+          return;
+        }
         const brand = await resolvePixvaV12Brand();
         setStatus(`${template.name} wird geladen …`);
         const templateSource=template.industry==='supermarkt'
-          ? {...(pixvaBrain||{}),...(brand||{}),marketStyle:marketStyleId,marketSeed:project?.data?.offerDraft?.productName||projectName}
+          ? {...(pixvaBrain||{}),...(brand||{}),marketStyle:marketStyleId,marketSeed:repairedDraft?.productName||repairedDraft?.products?.[0]?.productName||projectName}
           : (brand||{});
         await applyPixvaV12Template(canvas, template.id, canvas.width, canvas.height, templateSource);
-        if(project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
+        if(repairedDraft)await applyPixvaOfferDraftToCanvas(canvas,repairedDraft);
         currentTemplateRef.current = template.id;
         setV12TemplateId(template.id);
         if(template.industry==='supermarkt')setV12TemplateFilter('supermarkt');
@@ -1815,7 +1889,14 @@ function addText() {
             <div className="template-gallery pixva-v12-gallery">
               {pixvaV12Templates.filter((template) => {
                 if(hiddenTemplateIds.has(template.id))return false;
-                const companyKind = pixvaBrain?.company?.companyType || companyBrand?.company_type || companyBrand?.companyType || 'sonstiges';
+                const repairedDraft=project?.data?.offerDraft?repairOfferDraftForEditor(project.data.offerDraft):null;
+                const companyKind = repairedDraft?.companyType || pixvaBrain?.company?.companyType || companyBrand?.company_type || companyBrand?.companyType || 'sonstiges';
+                if(repairedDraft?.companyType==='supermarkt'){
+                  if(template.industry!=='supermarkt')return false;
+                  const count=Array.isArray(repairedDraft?.products)?repairedDraft.products.length:0;
+                  const required=count>=9?'v12-supermarkt-9er':count>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
+                  if(template.id!==required)return false;
+                }
                 if (v12TemplateFilter === 'all') return true;
                 if (v12TemplateFilter === 'recommended') return template.industry === companyKind || template.industry === 'sonstiges';
                 return template.industry === v12TemplateFilter;
@@ -1834,8 +1915,10 @@ function addText() {
                 {template.previewUrl?<img src={template.previewUrl} alt={template.name}/>:<span className="template-abstract">AI</span>}
                 <span>{template.name}</span><small>{template.industry} · eigene Vorlage</small>
               </button>)}
-              <button type="button" className={v12TemplateId==='creative'?'active':''} onClick={() => applyTemplate('creative')}><span className="template-abstract">AI</span><span>Kreativ</span></button>
-              <button type="button" className={v12TemplateId==='blank'?'active':''} onClick={() => applyTemplate('blank')}><span className="template-blank">+</span><span>Leer</span></button>
+              {repairOfferDraftForEditor(project?.data?.offerDraft||{}).companyType!=='supermarkt' && <>
+                <button type="button" className={v12TemplateId==='creative'?'active':''} onClick={() => applyTemplate('creative')}><span className="template-abstract">AI</span><span>Kreativ</span></button>
+                <button type="button" className={v12TemplateId==='blank'?'active':''} onClick={() => applyTemplate('blank')}><span className="template-blank">+</span><span>Leer</span></button>
+              </>}
             </div>
             <div className={`pixva-v12-audit ${v12Audit?.passed?'good':v12Audit?'warn':''}`}>
               <button type="button" onClick={runPixvaV12Audit}>PIXVA Design-Check</button>

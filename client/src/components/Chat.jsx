@@ -4,10 +4,10 @@ import JSZip from 'jszip';
 import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Instagram, Menu, MessageSquarePlus, Mic, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, ShieldCheck, Square, Trash2, User, Video, Volume2, WandSparkles, X } from 'lucide-react';
 import { api, getToken } from '../api.js';
 import { canUseFeature, getPlan } from '../plans.js';
-import { extractOfferDraft, resolveOfferFlyerPrompt } from '../pixva-offer.js';
+import { extractOfferDraft, resolveOfferFlyerPrompt, normalizeOfferText } from '../pixva-offer.js';
 import {getFixedStoreLogo} from '../storeLogoResolver.js';
 import { extractMultiOfferDraft, looksLikeMultiOfferPrompt } from '../pixva-multi-offer.js';
-import { isExactProductCandidate } from '../pixva-product-match.js';
+import { isExactProductCandidate, productMatchStrength, productVariantMismatch } from '../pixva-product-match.js';
 
 const quickPrompts = [
   'Erkläre mir ein schwieriges Thema ganz einfach.',
@@ -1505,12 +1505,29 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     }
   }
 
-  async function findVerifiedProductImage(productName, signal){
-    const queries=[
+  function isFreshUnbrandedOfferProduct(productName=''){
+    const value=normalizeOfferText(productName);
+    return /\b(kemikli|incik|kanat|pirzola|kusbasi|kusbasi|kiyma|but|gogus|tavuk|dana eti|kuzu eti|et kg|fleisch|haehnchen|hahnchen)\b/.test(value)
+      && !/\b(egeturk|ulker|kervan|yorem|birinci|duru|marmara|oncu|balkaneeta|egem)\b/.test(value);
+  }
+
+  function productSearchQueries(productName=''){
+    const value=normalizeOfferText(productName);
+    const queries=[];
+    if(/\begeturk\b/.test(value)&&/\bsucuk\b/.test(value)&&/\bdilim\b/.test(value)&&!/\b(vegan|egem|knoblauch|sarimsak|light|bio|tavuk|gefluegel)\b/.test(value)){
+      queries.push('Egetürk Sucuk Dilim Classic Original 200g -vegan -egem -knoblauch');
+      queries.push('Egetürk Dilim Sucuk Original Packung -vegan -egem');
+    }
+    queries.push(
       `${productName} Produktbild Packung freigestellt`,
       `"${productName}" Original Packung`,
       `${productName} Produktfoto kaufen`
-    ];
+    );
+    return [...new Set(queries)];
+  }
+
+  async function findVerifiedProductImage(productName, signal){
+    const queries=productSearchQueries(productName);
     const raw=[];
     let provider='web';
     let searchLinks={};
@@ -1549,6 +1566,50 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
           };
         }
       }catch{}
+    }
+
+    // Frische, unmarkierte Fleischartikel besitzen oft keine Verpackung.
+    // Hier reicht ein gut passendes Produktfoto, solange keine fremde Marke/Variante im Treffer steckt.
+    if(isFreshUnbrandedOfferProduct(productName)){
+      const freshCandidates=raw.filter(candidate=>!productVariantMismatch(candidate,productName)).slice(0,4);
+      for(const candidate of freshCandidates){
+        const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
+        if(!remote)continue;
+        try{
+          const loaded=await fetchRemoteImageDataUrl(remote);
+          if(!String(loaded||'').startsWith('data:image/'))continue;
+          return{
+            ...candidate,
+            imageDataUrl:loaded,
+            imageVerified:true,
+            imageVerification:{exactMatch:true,confidence:.78,reason:'Frischer unmarkierter Artikel: passendstes Produktfoto aus der exakten Suche.'},
+            provider,
+            searchLinks
+          };
+        }catch{}
+      }
+    }
+
+    // Falls Gemini/Vision technisch nicht verfügbar ist, darf bei einem sehr starken
+    // Metadaten-Treffer ein sicherer Fallback verwendet werden. Variantenfilter bleibt aktiv.
+    if(verificationUnavailable){
+      const safeFallback=exact.find(candidate=>!productVariantMismatch(candidate,productName)&&productMatchStrength(candidate,productName)>=.90);
+      if(safeFallback){
+        const remote=safeFallback?.imageUrl||safeFallback?.thumbnailUrl||'';
+        try{
+          const loaded=await fetchRemoteImageDataUrl(remote);
+          if(String(loaded||'').startsWith('data:image/')){
+            return{
+              ...safeFallback,
+              imageDataUrl:loaded,
+              imageVerified:true,
+              imageVerification:{exactMatch:true,confidence:.90,reason:'Sehr starker Produktname/Marken-Treffer; Vision war technisch nicht verfügbar.'},
+              provider,
+              searchLinks
+            };
+          }
+        }catch{}
+      }
     }
 
     return{imageDataUrl:'',imageVerified:false,verificationUnavailable,provider,searchLinks};
