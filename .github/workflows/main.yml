@@ -1,4 +1,4 @@
-name: PIXVA V14.2 HARD SWITCH FINAL
+name: PIXVA V14.2.1 TESTPATH FIX
 
 on:
   workflow_dispatch:
@@ -90,7 +90,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo 'aW1wb3J0IHtsb29rc0xpa2VPZmZlckZseWVyUHJvbXB0LHJlc29sdmVPZmZlckZseWVyUHJvbXB0LGV4dHJhY3RPZmZlckRyYWZ0fSBmcm9tICcuL2NsaWVudC9zcmMvcGl4dmEtb2ZmZXIuanMnOwoKY29uc3QgZXhhY3Q9J2Vyc3RlbGUgbWlyIGVpbmVuIGZseWVyIGbDvHIgZGVuIHN1cGVybWFya3QgeWF6IG1lZ2EgY2VudGVyIG1pdCBkZW0gcHJvZHVmdCBlZ2V0w7xyayBzdWN1ayBkaWxpbSB2b24gNCw5OeKCrCB6dXIgMyw5OeKCrCc7CmlmKCFsb29rc0xpa2VPZmZlckZseWVyUHJvbXB0KGV4YWN0KSkgdGhyb3cgbmV3IEVycm9yKCdEZXIgZXhha3RlIE51dHplci1Qcm9tcHQgd2lyZCBuaWNodCBhbHMgRmx5ZXIgZXJrYW5udC4nKTsKCmNvbnN0IGQ9ZXh0cmFjdE9mZmVyRHJhZnQoZXhhY3QpOwpjb25zdCBleHBlY3RlZD17Y29tcGFueU5hbWU6J3lheiBtZWdhIGNlbnRlcicscHJvZHVjdE5hbWU6J2VnZXTDvHJrIHN1Y3VrIGRpbGltJyxvbGRQcmljZTonNCw5OSDigqwnLG5ld1ByaWNlOiczLDk5IOKCrCd9Owpmb3IoY29uc3QgW2tleSx2YWx1ZV0gb2YgT2JqZWN0LmVudHJpZXMoZXhwZWN0ZWQpKXsKICBpZihTdHJpbmcoZFtrZXldfHwnJykudG9Mb3dlckNhc2UoKSE9PVN0cmluZyh2YWx1ZSkudG9Mb3dlckNhc2UoKSl7CiAgICB0aHJvdyBuZXcgRXJyb3IoYCR7a2V5fSBmYWxzY2g6ICR7ZFtrZXldfSBzdGF0dCAke3ZhbHVlfWApOwogIH0KfQoKY29uc3QgZm9sbG93PXJlc29sdmVPZmZlckZseWVyUHJvbXB0KCdhbHMgYmlsZCcsW3tyb2xlOid1c2VyJyxjb250ZW50OmV4YWN0fSx7cm9sZTonYXNzaXN0YW50Jyxjb250ZW50OidhbHRlciBUZXh0J31dKTsKaWYoZm9sbG93IT09ZXhhY3QpIHRocm93IG5ldyBFcnJvcignS3VyemVzIEZvbGxvdy11cCAiYWxzIGJpbGQiIHd1cmRlIG5pY2h0IGF1ZiBkZW4gRmx5ZXJ3dW5zY2ggenVyw7xja2dlZsO8aHJ0LicpOwoKY29uc3QgcXR5PWV4dHJhY3RPZmZlckRyYWZ0KCdtYWNoIGVpbiBhbmdlYm90IGNvY2EgY29sYSAxLDI1bCAyLDQ54oKsIDEsNDnigqwnKTsKaWYocXR5LnByb2R1Y3ROYW1lLnRvTG93ZXJDYXNlKCkhPT0nY29jYSBjb2xhIDEsMjVsJ3x8cXR5Lm9sZFByaWNlIT09JzIsNDkg4oKsJ3x8cXR5Lm5ld1ByaWNlIT09JzEsNDkg4oKsJyl7CiAgdGhyb3cgbmV3IEVycm9yKCdNZW5nZSB1bmQgUHJlaXNlIHdlcmRlbiB2ZXJ3ZWNoc2VsdDogJytKU09OLnN0cmluZ2lmeShxdHkpKTsKfQoKY29uc29sZS5sb2coJ1BJWFZBIFYxNC4yIE9GRkVSIEhBUkQgU1dJVENIIFRFU1QgUEFTU0VEJyk7Cg==' | base64 --decode > /tmp/pixva-v14-2-offer-test.mjs
+          echo 'Y29uc3QgbW9kID0gYXdhaXQgaW1wb3J0KCdmaWxlOi8vJyArIHByb2Nlc3MuY3dkKCkgKyAnL2NsaWVudC9zcmMvcGl4dmEtb2ZmZXIuanMnKTsKY29uc3Qge2xvb2tzTGlrZU9mZmVyRmx5ZXJQcm9tcHQscmVzb2x2ZU9mZmVyRmx5ZXJQcm9tcHQsZXh0cmFjdE9mZmVyRHJhZnR9PW1vZDsKCmNvbnN0IGV4YWN0PSdlcnN0ZWxlIG1pciBlaW5lbiBmbHllciBmw7xyIGRlbiBzdXBlcm1hcmt0IHlheiBtZWdhIGNlbnRlciBtaXQgZGVtIHByb2R1ZnQgZWdldMO8cmsgc3VjdWsgZGlsaW0gdm9uIDQsOTnigqwgenVyIDMsOTnigqwnOwppZighbG9va3NMaWtlT2ZmZXJGbHllclByb21wdChleGFjdCkpIHRocm93IG5ldyBFcnJvcignRGVyIGV4YWt0ZSBOdXR6ZXItUHJvbXB0IHdpcmQgbmljaHQgYWxzIEZseWVyIGVya2FubnQuJyk7Cgpjb25zdCBkPWV4dHJhY3RPZmZlckRyYWZ0KGV4YWN0KTsKY29uc3QgZXhwZWN0ZWQ9e2NvbXBhbnlOYW1lOid5YXogbWVnYSBjZW50ZXInLHByb2R1Y3ROYW1lOidlZ2V0w7xyayBzdWN1ayBkaWxpbScsb2xkUHJpY2U6JzQsOTkg4oKsJyxuZXdQcmljZTonMyw5OSDigqwnfTsKZm9yKGNvbnN0IFtrZXksdmFsdWVdIG9mIE9iamVjdC5lbnRyaWVzKGV4cGVjdGVkKSl7CiAgaWYoU3RyaW5nKGRba2V5XXx8JycpLnRvTG93ZXJDYXNlKCkhPT1TdHJpbmcodmFsdWUpLnRvTG93ZXJDYXNlKCkpewogICAgdGhyb3cgbmV3IEVycm9yKGAke2tleX0gZmFsc2NoOiAke2Rba2V5XX0gc3RhdHQgJHt2YWx1ZX1gKTsKICB9Cn0KCmNvbnN0IGZvbGxvdz1yZXNvbHZlT2ZmZXJGbHllclByb21wdCgnYWxzIGJpbGQnLFt7cm9sZTondXNlcicsY29udGVudDpleGFjdH0se3JvbGU6J2Fzc2lzdGFudCcsY29udGVudDonYWx0ZXIgVGV4dCd9XSk7CmlmKGZvbGxvdyE9PWV4YWN0KSB0aHJvdyBuZXcgRXJyb3IoJ0t1cnplcyBGb2xsb3ctdXAgImFscyBiaWxkIiB3dXJkZSBuaWNodCBhdWYgZGVuIEZseWVyd3Vuc2NoIHp1csO8Y2tnZWbDvGhydC4nKTsKCmNvbnN0IHF0eT1leHRyYWN0T2ZmZXJEcmFmdCgnbWFjaCBlaW4gYW5nZWJvdCBjb2NhIGNvbGEgMSwyNWwgMiw0OeKCrCAxLDQ54oKsJyk7CmlmKHF0eS5wcm9kdWN0TmFtZS50b0xvd2VyQ2FzZSgpIT09J2NvY2EgY29sYSAxLDI1bCd8fHF0eS5vbGRQcmljZSE9PScyLDQ5IOKCrCd8fHF0eS5uZXdQcmljZSE9PScxLDQ5IOKCrCcpewogIHRocm93IG5ldyBFcnJvcignTWVuZ2UgdW5kIFByZWlzZSB3ZXJkZW4gdmVyd2VjaHNlbHQ6ICcrSlNPTi5zdHJpbmdpZnkocXR5KSk7Cn0KCmNvbnNvbGUubG9nKCdQSVhWQSBWMTQuMi4xIE9GRkVSIFRFU1QgUEFTU0VEJyk7Cg==' | base64 --decode > /tmp/pixva-v14-2-offer-test.mjs
           node /tmp/pixva-v14-2-offer-test.mjs
 
           grep -Fq "resolveOfferFlyerPrompt(clean, messages)" client/src/components/Chat.jsx
@@ -201,7 +201,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          git config user.name "PIXVA V14.2"
+          git config user.name "PIXVA V14.2.1"
           git config user.email "actions@users.noreply.github.com"
 
           git add --             client/src/App.jsx             client/src/api.js             client/src/pixva-offer.js             client/src/components/Login.jsx             client/src/components/AdminLegacy.jsx             client/src/components/AdminAccounts.jsx             client/src/components/Chat.jsx             client/src/components/DesignEditorLegacy.jsx             client/src/components/WebsiteBuilder.jsx             client/src/components/VideoStudio.jsx             client/src/data/pixva/v12/templateEngineV12.js             api/ai/image-search.js             api/ai/admin-accounts.js             api/pixva.js             api/public.js             lib/pixva-brain.js             vercel.json
@@ -211,9 +211,9 @@ jobs:
           fi
 
           if git diff --cached --quiet; then
-            echo "PIXVA V14.2 ist bereits installiert."
+            echo "PIXVA V14.2.1 ist bereits installiert."
             exit 0
           fi
 
-          git commit -m "PIXVA V14.2 Hard Switch Flyer Anmeldung und Bildquelle"
+          git commit -m "PIXVA V14.2.1 Hard Switch Flyer Anmeldung und Bildquelle"
           git push origin HEAD:main
