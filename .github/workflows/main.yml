@@ -1,4 +1,4 @@
-name: PIXVA V14.7.1 SLOTINDEX CHECK FIX
+name: PIXVA V14.7.2 LOGO CHECK FIX
 
 on:
   workflow_dispatch:
@@ -115,7 +115,7 @@ jobs:
           grep -Fq "offizielles Logo PNG" client/src/components/Chat.jsx
           grep -Fq "mode:'logo',source:'web'" client/src/components/Chat.jsx
           grep -Fq "action==='verify-company-logo'" api/pixva.js
-          grep -Fq "mode === 'logo'" api/ai/image-search.js
+          grep -Fq "mode==='logo'" api/ai/image-search.js
           grep -Fq "const google = await searchGoogle(query, mode)" api/ai/image-search.js
           grep -Fq "draft.logoVerified===true" client/src/components/DesignEditorLegacy.jsx
           grep -Fq "logo-image:1" client/src/components/DesignEditorLegacy.jsx
@@ -191,7 +191,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "PIXVA V14.7.1"
+          git config user.name "PIXVA V14.7.2"
           git config user.email "actions@users.noreply.github.com"
           git add -- \
             api/pixva.js \
@@ -201,8 +201,8 @@ jobs:
             client/src/pixva-multi-offer.js
 
           if git diff --cached --quiet; then
-            echo "PIXVA V14.7.1 ist bereits installiert."
+            echo "PIXVA V14.7.2 ist bereits installiert."
             exit 0
           fi
-          git commit -m "PIXVA V14.7.1 9er und Logo Check Fix"
+          git commit -m "PIXVA V14.7.2 Logo Check Fix"
           git push origin HEAD:main
