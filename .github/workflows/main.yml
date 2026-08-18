@@ -1,4 +1,4 @@
-name: PIXVA V14 ALL IN ONE FIRMEN KI UND ANMELDUNG
+name: PIXVA V14.0.1 FINAL PUBLISH FIX
 
 on:
   workflow_dispatch:
@@ -256,15 +256,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          git config user.name "PIXVA V14"
+          git config user.name "PIXVA V14.0.1"
           git config user.email "actions@users.noreply.github.com"
 
-          git add -A             client/src/App.jsx             client/src/components/Login.jsx             client/src/components/AdminLegacy.jsx             client/src/components/Chat.jsx             client/src/components/DesignEditorLegacy.jsx             api/ai/image-search.js             lib/pixva-brain.js             api/public.js             vercel.json             api/v1
+          git add --             client/src/App.jsx             client/src/components/Login.jsx             client/src/components/AdminLegacy.jsx             client/src/components/Chat.jsx             client/src/components/DesignEditorLegacy.jsx             api/ai/image-search.js             lib/pixva-brain.js             api/public.js             vercel.json
+
+          # Nur falls api/v1 im Repository noch als getrackte Datei existiert:
+          # Löschungen sauber stagen, ohne bei bereits fehlendem Ordner abzubrechen.
+          if git ls-files 'api/v1/**' | grep -q .; then
+            git add -u -- api/v1
+          else
+            echo "OK: api/v1 ist bereits nicht mehr getrackt."
+          fi
 
           if git diff --cached --quiet; then
-            echo "PIXVA V14 ist bereits installiert."
+            echo "PIXVA V14.0.1 ist bereits installiert."
             exit 0
           fi
 
-          git commit -m "PIXVA V14 Firmen KI Bildsuche Flyer und dynamische Anmeldung"
+          git commit -m "PIXVA V14.0.1 Firmen KI Bildsuche Flyer und dynamische Anmeldung"
           git push origin HEAD:main
