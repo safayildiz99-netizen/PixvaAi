@@ -29,6 +29,38 @@ const NAV_DEFINITIONS = {
 
 const DEFAULT_NAV_ITEMS = Object.values(NAV_DEFINITIONS).map(({id,label})=>({id,label,visible:true}));
 
+const PIXVA_DEFAULT_SIGNUP_CONFIG = {
+  industries:[
+    {id:'supermarkt',label:'Supermarkt',enabled:true},
+    {id:'werbetechnik',label:'Werbetechnik',enabled:true},
+    {id:'elektriker',label:'Elektriker',enabled:true},
+    {id:'programmierer',label:'Programmierer / Software & KI',enabled:true},
+    {id:'friseur',label:'Friseur',enabled:true},
+    {id:'sonstiges',label:'Sonstiges',enabled:true}
+  ],
+  fields:[
+    {id:'username',label:'Benutzername',scope:'all',type:'text',enabled:true,required:true},
+    {id:'password',label:'Passwort',scope:'all',type:'password',enabled:true,required:true},
+    {id:'firstName',label:'Vorname',scope:'all',type:'text',enabled:true,required:false},
+    {id:'lastName',label:'Nachname',scope:'all',type:'text',enabled:true,required:false},
+    {id:'email',label:'Normale E-Mail',scope:'all',type:'email',enabled:true,required:false},
+    {id:'phone',label:'Private Telefonnummer',scope:'all',type:'tel',enabled:true,required:false},
+    {id:'birthDate',label:'Geburtsdatum',scope:'all',type:'date',enabled:true,required:false},
+    {id:'companyName',label:'Firmenname',scope:'company',type:'text',enabled:true,required:true},
+    {id:'companyType',label:'Branche',scope:'company',type:'industry',enabled:true,required:true},
+    {id:'companyTypeOther',label:'Welche Branche?',scope:'company',type:'text',enabled:true,required:false,showWhen:{field:'companyType',equals:'sonstiges'}},
+    {id:'ownerName',label:'Firmeninhaber / Ansprechpartner',scope:'company',type:'text',enabled:true,required:false},
+    {id:'companyEmail',label:'Firmen-E-Mail',scope:'company',type:'email',enabled:true,required:false},
+    {id:'companyPhone',label:'Firmen-Telefon',scope:'company',type:'tel',enabled:true,required:false},
+    {id:'privatePhone',label:'Zusätzliche private Tel.',scope:'company',type:'tel',enabled:true,required:false},
+    {id:'website',label:'Bestehende Website',scope:'company',type:'url',enabled:true,required:false},
+    {id:'instagram',label:'Instagram',scope:'company',type:'text',enabled:true,required:false},
+    {id:'address',label:'Adresse',scope:'company',type:'text',enabled:true,required:false},
+    {id:'logoDataUrl',label:'Firmenlogo',scope:'company',type:'logo',enabled:true,required:true}
+  ]
+};
+
+
 const titles = {
   chat:'PIXVA Chat', flyer:'Angebote & Flyer', image:'Motive & Editor',
   video:'Video-Studio', website:'Website-Builder', projects:'Projekte', pixva:'PIXVA KI-Zentrale', plans:'Abos & Preise', account:'Mein Konto', admin:'Admin & Einstellungen'
@@ -71,7 +103,9 @@ const DEFAULT_UI_SETTINGS = {
   paymentProvider: 'paypal',
   paymentMerchantLabel: '',
   planPurchasable: { free:false, creator:true, studio:true },
-  paidAccessDays: 30
+  paidAccessDays: 30,
+  productImageSource:'web',
+  signupConfig:PIXVA_DEFAULT_SIGNUP_CONFIG
 };
 
 const guestUser = { id:'guest', username:'Gast', role:'guest', active:true, mustChangePassword:false };
@@ -216,6 +250,13 @@ export default function App(){
     setView('image');
   }
 
+  function openGeneratedFlyerProject(flyerProject){
+    if(!flyerProject?.data) return;
+    if(!canUseFeature(subscription,'flyer',activeUser?.role,uiSettings.customPlans)){setRequestedView('flyer');setView('plans');return}
+    setSelectedProject({id:`generated-flyer-${Date.now()}`,type:'flyer',name:flyerProject.name||'PIXVA Angebotsflyer',data:flyerProject.data});
+    setView('flyer');
+  }
+
   function openGeneratedVideoProject(videoProject){
     if(!videoProject?.data?.scenes?.length) return;
     if(!canUseFeature(subscription,'video',activeUser?.role,uiSettings.customPlans)){setRequestedView('video');setView('plans');return}
@@ -224,7 +265,7 @@ export default function App(){
   }
 
   if(loading) return <div className="app-loader"><Sparkles/>PIXVA Studio lädt …</div>;
-  if(!activeUser) return <Login onLogin={loggedIn} onGuest={enterGuest} allowGuest={uiSettings.allowGuest!==false}/>;
+  if(!activeUser) return <Login onLogin={loggedIn} onGuest={enterGuest} allowGuest={uiSettings.allowGuest!==false} signupConfig={uiSettings.signupConfig||PIXVA_DEFAULT_SIGNUP_CONFIG}/>;
 
   const uiText={...DEFAULT_UI_SETTINGS.texts,...(uiSettings.texts||{})};
   const uiTheme={...DEFAULT_UI_SETTINGS.theme,...(uiSettings.theme||{})};
@@ -253,13 +294,13 @@ export default function App(){
       {activeUser.mustChangePassword&&!guest&&<div className="warning-banner">Das Startpasswort ist noch aktiv. Öffne links „Mein Konto“ und lege dein eigenes Passwort fest.</div>}
       {requestedView&&view==='plans'&&<div className="plan-unlock-banner"><LockKeyhole size={17}/><span>Der Bereich „{titles[requestedView]||requestedView}“ ist in deinem aktuellen Zugang nicht enthalten. Während der Beta kannst du den passenden Zugang kostenlos aktivieren.</span></div>}
       <div className="workspace-content">
-        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} productImageSource={uiSettings.productImageSource||'web'} onOpenImageProject={openGeneratedImageProject} onOpenFlyerProject={openGeneratedFlyerProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='website'&&featureAllowed('website')&&<WebsiteBuilder key={selectedProject?.id||'new-site'} project={selectedProject?.type==='website'?selectedProject:null} onSaved={saved} canSave={!guest} uiText={uiText}/>} 
         {view==='projects'&&featureAllowed('projects')&&!guest&&<Projects onOpen={openProject} refreshKey={refreshKey} uiText={uiText}/>} 
-        {view==='pixva'&&!guest&&<PixvaCenter user={activeUser} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject}/>}
+        {view==='pixva'&&!guest&&<PixvaCenter user={activeUser} onOpenImageProject={openGeneratedImageProject} onOpenFlyerProject={openGeneratedFlyerProject} onOpenVideoProject={openGeneratedVideoProject}/>}
         {view==='plans'&&<Subscriptions user={activeUser} isGuest={guest} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onRequireLogin={exit} uiText={uiText} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices} customPlans={uiSettings.customPlans} billingSettings={uiSettings}/>} 
         {view==='account'&&!guest&&<AccountSettings user={activeUser} onUserChanged={setUser} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onOpenPlans={()=>changeView('plans')} customPlans={uiSettings.customPlans} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices}/>} 
         {view==='admin'&&activeUser.role==='admin'&&<Admin user={activeUser} uiSettings={uiSettings} onSettingsChanged={setUiSettings} onOpenView={changeView}/>} 

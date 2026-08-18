@@ -54,7 +54,19 @@ const DEFAULT_UI_SETTINGS = {
   paymentProvider: 'paypal',
   paymentMerchantLabel: '',
   planPurchasable: { free:false, creator:true, studio:true },
-  paidAccessDays: 30
+  paidAccessDays: 30,
+  productImageSource:'web',
+  signupConfig:{industries:[{id:'supermarkt',label:'Supermarkt',enabled:true},{id:'werbetechnik',label:'Werbetechnik',enabled:true},{id:'elektriker',label:'Elektriker',enabled:true},{id:'programmierer',label:'Programmierer / Software & KI',enabled:true},{id:'friseur',label:'Friseur',enabled:true},{id:'sonstiges',label:'Sonstiges',enabled:true}],fields:[
+    {id:'username',label:'Benutzername',scope:'all',type:'text',enabled:true,required:true},{id:'password',label:'Passwort',scope:'all',type:'password',enabled:true,required:true},
+    {id:'firstName',label:'Vorname',scope:'all',type:'text',enabled:true,required:false},{id:'lastName',label:'Nachname',scope:'all',type:'text',enabled:true,required:false},
+    {id:'email',label:'Normale E-Mail',scope:'all',type:'email',enabled:true,required:false},{id:'phone',label:'Private Telefonnummer',scope:'all',type:'tel',enabled:true,required:false},
+    {id:'birthDate',label:'Geburtsdatum',scope:'all',type:'date',enabled:true,required:false},{id:'companyName',label:'Firmenname',scope:'company',type:'text',enabled:true,required:true},
+    {id:'companyType',label:'Branche',scope:'company',type:'industry',enabled:true,required:true},{id:'companyTypeOther',label:'Welche Branche?',scope:'company',type:'text',enabled:true,required:false,showWhen:{field:'companyType',equals:'sonstiges'}},
+    {id:'ownerName',label:'Firmeninhaber / Ansprechpartner',scope:'company',type:'text',enabled:true,required:false},{id:'companyEmail',label:'Firmen-E-Mail',scope:'company',type:'email',enabled:true,required:false},
+    {id:'companyPhone',label:'Firmen-Telefon',scope:'company',type:'tel',enabled:true,required:false},{id:'privatePhone',label:'Zusätzliche private Tel.',scope:'company',type:'tel',enabled:true,required:false},
+    {id:'website',label:'Bestehende Website',scope:'company',type:'url',enabled:true,required:false},{id:'instagram',label:'Instagram',scope:'company',type:'text',enabled:true,required:false},
+    {id:'address',label:'Adresse',scope:'company',type:'text',enabled:true,required:false},{id:'logoDataUrl',label:'Firmenlogo',scope:'company',type:'logo',enabled:true,required:true}
+  ]}
 };
 
 function normalizeSettings(value = {}) {
@@ -71,7 +83,12 @@ function normalizeSettings(value = {}) {
     betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(value.betaPlanPrices||{})},
     planPurchasable:{...DEFAULT_UI_SETTINGS.planPurchasable,...(value.planPurchasable||{})},
     costPromptOverrides:{...(value.costPromptOverrides||{})},
-    customPlans:Array.isArray(value.customPlans)?value.customPlans.map(normalizeCustomPlan):[]
+    customPlans:Array.isArray(value.customPlans)?value.customPlans.map(normalizeCustomPlan):[],
+    productImageSource:['web','database'].includes(value.productImageSource)?value.productImageSource:'web',
+    signupConfig:{
+      industries:Array.isArray(value.signupConfig?.industries)&&value.signupConfig.industries.length?value.signupConfig.industries:DEFAULT_UI_SETTINGS.signupConfig.industries,
+      fields:Array.isArray(value.signupConfig?.fields)&&value.signupConfig.fields.length?value.signupConfig.fields:DEFAULT_UI_SETTINGS.signupConfig.fields
+    }
   };
 }
 
@@ -179,6 +196,8 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   const [previewPage, setPreviewPage] = useState('chat');
   const [editingTextKey, setEditingTextKey] = useState('');
   const [newPlan, setNewPlan] = useState({ name:'', description:'', examplePrice:14.99, betaPrice:0, recommended:false, access:{ flyer:true, image:true, paidImages:true, video:false, paidVideos:false, website:false, projects:true } });
+  const [newIndustry,setNewIndustry]=useState('');
+  const [newSignupField,setNewSignupField]=useState({label:'',scope:'company',type:'text',required:false});
 
   async function loadCore() {
     try {
@@ -502,6 +521,27 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     return selectedVisualId.startsWith('nav-') ? selectedVisualId.slice(4) : '';
   }
 
+  function patchSignupConfig(patch){
+    patchSettings({signupConfig:{...(settingsDraft.signupConfig||{}),...patch}});
+  }
+  function addSignupIndustry(){
+    const label=String(newIndustry||'').trim();if(!label)return;
+    const id=label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48)||`branche-${Date.now()}`;
+    const list=[...(settingsDraft.signupConfig?.industries||[])];
+    if(list.some(x=>x.id===id||String(x.label).toLowerCase()===label.toLowerCase()))return setStatus('Diese Branche gibt es bereits.');
+    patchSignupConfig({industries:[...list,{id,label,enabled:true}]});setNewIndustry('');
+  }
+  function patchIndustry(id,patch){patchSignupConfig({industries:(settingsDraft.signupConfig?.industries||[]).map(x=>x.id===id?{...x,...patch}:x)});}
+  function removeIndustry(id){patchSignupConfig({industries:(settingsDraft.signupConfig?.industries||[]).filter(x=>x.id!==id)});}
+  function addSignupField(){
+    const label=String(newSignupField.label||'').trim();if(!label)return;
+    const id=`custom_${label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,36)||Date.now()}`;
+    const field={id,label,scope:newSignupField.scope||'company',type:newSignupField.type||'text',required:Boolean(newSignupField.required),enabled:true,custom:true};
+    patchSignupConfig({fields:[...(settingsDraft.signupConfig?.fields||[]),field]});setNewSignupField({label:'',scope:'company',type:'text',required:false});
+  }
+  function patchSignupField(id,patch){patchSignupConfig({fields:(settingsDraft.signupConfig?.fields||[]).map(x=>x.id===id?{...x,...patch}:x)});}
+  function removeSignupField(id){patchSignupConfig({fields:(settingsDraft.signupConfig?.fields||[]).filter(x=>x.id!==id)});}
+
   async function saveViewSettings() {
     try {
       const response = await api('/api/admin/ui-settings', {
@@ -535,6 +575,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
       <button className={tab === 'chats' ? 'active' : ''} onClick={() => setTab('chats')}><MessageSquareText size={16}/>Alle Chats</button>
       <button className={tab === 'subscriptions' ? 'active' : ''} onClick={() => setTab('subscriptions')}><BadgeEuro size={16}/>Abos</button>
       <button className={tab === 'view' ? 'active' : ''} onClick={() => setTab('view')}><Palette size={16}/>Ansicht</button>
+      <button className={tab === 'automation' ? 'active' : ''} onClick={() => setTab('automation')}><Cpu size={16}/>Anmeldung & Bilder</button>
       <button className={tab === 'system' ? 'active' : ''} onClick={() => setTab('system')}><Activity size={16}/>System</button>
     </div>
 
@@ -745,6 +786,51 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
         <label>Blau<input type="color" value={settingsDraft.theme.accentBlue} onChange={(event)=>patchTheme({accentBlue:event.target.value})}/></label>
         <label>Gelb<input type="color" value={settingsDraft.theme.accentYellow} onChange={(event)=>patchTheme({accentYellow:event.target.value})}/></label>
       </div>
+    </div>}
+
+    {tab === 'automation' && <div className="admin-grid admin-grid-two">
+      <article className="admin-card">
+        <h3><Image size={19}/> PIXVA Bildquelle</h3>
+        <p>Für Angebotsflyer sucht PIXVA zuerst ein vorhandenes Produktbild. Dabei wird keine kostenpflichtige Bildgenerierung gestartet.</p>
+        <label>Aktive Quelle<select value={settingsDraft.productImageSource||'web'} onChange={e=>patchSettings({productImageSource:e.target.value})}>
+          <option value="web">Kostenlose Websuche / Google wenn konfiguriert</option>
+          <option value="database">PIXVA Produktdatenbank</option>
+        </select></label>
+        <div className="info-box">Web-Modus: Google Programmable Search wird automatisch verwendet, wenn GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX in Vercel vorhanden sind. Ohne diese Keys nutzt PIXVA kostenlose Web-Fallbacks. Datenbank-Modus ist schon vorbereitet und verwendet später PIXVA_PRODUCT_DB_URL + PIXVA_PRODUCT_DB_API_KEY.</div>
+      </article>
+
+      <article className="admin-card">
+        <h3><UserRoundCog size={19}/> Branchen der Anmeldung</h3>
+        <div className="pixva-admin-list">{(settingsDraft.signupConfig?.industries||[]).map(item=><div className="service-row" key={item.id}>
+          <input value={item.label||''} onChange={e=>patchIndustry(item.id,{label:e.target.value})}/>
+          <label className="checkbox-row"><input type="checkbox" checked={item.enabled!==false} onChange={e=>patchIndustry(item.id,{enabled:e.target.checked})}/>anzeigen</label>
+          <button type="button" onClick={()=>removeIndustry(item.id)}><Trash2 size={14}/></button>
+        </div>)}</div>
+        <div className="admin-inline"><input value={newIndustry} onChange={e=>setNewIndustry(e.target.value)} placeholder="z. B. Polizei Agent, Restaurant, Friseur"/><button type="button" onClick={addSignupIndustry}><Plus size={15}/>Hinzufügen</button></div>
+      </article>
+
+      <article className="admin-card" style={{gridColumn:'1 / -1'}}>
+        <h3><LayoutDashboard size={19}/> Zusätzliche Anmeldefelder</h3>
+        <p>Neue Felder erscheinen nach dem Speichern direkt im Registrierungsfenster. Du kannst sie verpflichtend machen, ausblenden oder wieder löschen.</p>
+        {(settingsDraft.signupConfig?.fields||[]).length===0&&<div className="info-box">Die Standardfelder bleiben aktiv. Hier verwaltest du zusätzliche Felder.</div>}
+        <div className="pixva-admin-list">{(settingsDraft.signupConfig?.fields||[]).map(field=><div className="service-row" key={field.id}>
+          <input value={field.label||''} onChange={e=>patchSignupField(field.id,{label:e.target.value})}/>
+          <select value={field.scope||'company'} onChange={e=>patchSignupField(field.id,{scope:e.target.value})}><option value="all">Privat + Firma</option><option value="private">Nur Privat</option><option value="company">Nur Firma</option></select>
+          <select value={field.type||'text'} disabled={['username','password','companyType','logoDataUrl'].includes(field.id)} onChange={e=>patchSignupField(field.id,{type:e.target.value})}><option value="text">Text</option><option value="password">Passwort</option><option value="email">E-Mail</option><option value="tel">Telefon</option><option value="date">Datum</option><option value="url">URL</option><option value="industry">Branchenauswahl</option><option value="logo">Logo Upload</option></select>
+          <label className="checkbox-row"><input type="checkbox" checked={Boolean(field.required)} disabled={['username','password'].includes(field.id)} onChange={e=>patchSignupField(field.id,{required:e.target.checked})}/>Pflicht</label>
+          <label className="checkbox-row"><input type="checkbox" checked={field.enabled!==false} onChange={e=>patchSignupField(field.id,{enabled:e.target.checked})}/>anzeigen</label>
+          <button type="button" disabled={['username','password'].includes(field.id)} onClick={()=>removeSignupField(field.id)}><Trash2 size={14}/></button>
+        </div>)}</div>
+        <div className="admin-inline">
+          <input value={newSignupField.label} onChange={e=>setNewSignupField({...newSignupField,label:e.target.value})} placeholder="Neues Feld, z. B. Kundennummer"/>
+          <select value={newSignupField.scope} onChange={e=>setNewSignupField({...newSignupField,scope:e.target.value})}><option value="all">Privat + Firma</option><option value="private">Privat</option><option value="company">Firma</option></select>
+          <select value={newSignupField.type} onChange={e=>setNewSignupField({...newSignupField,type:e.target.value})}><option value="text">Text</option><option value="email">E-Mail</option><option value="tel">Telefon</option><option value="date">Datum</option><option value="url">URL</option></select>
+          <label className="checkbox-row"><input type="checkbox" checked={newSignupField.required} onChange={e=>setNewSignupField({...newSignupField,required:e.target.checked})}/>Pflicht</label>
+          <button type="button" onClick={addSignupField}><Plus size={15}/>Feld hinzufügen</button>
+        </div>
+      </article>
+
+      <article className="admin-card" style={{gridColumn:'1 / -1'}}><button className="primary-btn" onClick={saveViewSettings}><Save size={16}/>Anmeldung & Bildquelle sofort speichern</button></article>
     </div>}
 
     {tab === 'system' && <div className="admin-grid admin-grid-two">

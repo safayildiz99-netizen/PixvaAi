@@ -440,6 +440,38 @@ function pixvaBrainBrand(brain){
   };
 }
 
+async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
+  if(!canvas||!draft)return;
+  const objects=canvas.getObjects?.()||[];
+  const setText=(role,value)=>{
+    if(!value)return;
+    for(const object of objects){if(String(object.dataRole||'')===role&&'text' in object){object.set({text:String(value)});object.setCoords?.();}}
+  };
+  setText('headline',draft.headline||'ANGEBOT');
+  setText('product-title:1',draft.productName||'PRODUKT');
+  setText('price:1',draft.newPrice||'');
+  if(draft.oldPrice)setText('old-price',`STATT ${draft.oldPrice}`);
+  if(draft.badge)setText('badge',draft.badge);
+  const slot=objects.find(object=>String(object.dataRole||'')==='product-slot:1');
+  if(draft.imageDataUrl&&slot){
+    try{
+      const existing=canvas.getObjects().filter(object=>String(object.dataRole||'')==='product-image:1');
+      existing.forEach(object=>canvas.remove(object));
+      const label=canvas.getObjects().find(object=>String(object.dataRole||'')==='product-slot-label:1');
+      if(label)canvas.remove(label);
+      const img=await FabricImage.fromURL(draft.imageDataUrl,{crossOrigin:'anonymous'});
+      const targetW=Math.max(20,Number(slot.width||0)*Number(slot.scaleX||1)*.9);
+      const targetH=Math.max(20,Number(slot.height||0)*Number(slot.scaleY||1)*.9);
+      const factor=Math.min(targetW/Math.max(1,img.width),targetH/Math.max(1,img.height));
+      img.scale(factor);
+      const center=slot.getCenterPoint?.()||{x:Number(slot.left||0)+targetW/2,y:Number(slot.top||0)+targetH/2};
+      img.set({left:center.x,top:center.y,originX:'center',originY:'center',angle:0,dataRole:'product-image:1',displayName:draft.productName||'Produktbild'});
+      canvas.add(img);canvas.bringObjectToFront?.(img);
+    }catch{}
+  }
+  canvas.requestRenderAll?.();
+}
+
 export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave = true, subscription, userRole = 'user', onOpenPlans, uiText = {}, costPromptMode = 'all', customPlans = [] }) {
   const [companyBrand, setCompanyBrand] = useState(null);
   const [pixvaBrain, setPixvaBrain] = useState(null);
@@ -633,7 +665,25 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
         }
       }catch{}
 
-      if (project?.data?.canvas) {
+      if (project?.data?.offerDraft) {
+        try {
+          const brain=await api('/api/pixva?action=brain-context');
+          setPixvaBrain(brain);
+          const v12Id=recommendPixvaV12Template(brain,'flyer');
+          await applyPixvaV12Template(canvas,v12Id,format.canvas[0],format.canvas[1],brain);
+          currentTemplateRef.current=v12Id;
+          setV12TemplateId(v12Id);
+          await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
+          baseTemplateRef.current=canvas.toJSON(customProps);
+          setBackground(canvas.backgroundColor||'#ffffff');
+          canvas.discardActiveObject();syncSelected(null);refreshLayers();snapshot();
+          setV12Audit(auditPixvaV12Canvas(canvas));
+          setStatus(`PIXVA Angebot vorbereitet · ${project.data.offerDraft.productName||'Produkt'} · vollständig bearbeitbar.`);
+        } catch(error) {
+          setStatus(error.message||'Angebotsentwurf konnte nicht geladen werden.');
+          await applyPixvaFileTemplate(canvas,pixvaTemplateIdForBrand(brand||{},mode),format.canvas[0],format.canvas[1],brand||{});
+        }
+      } else if (project?.data?.canvas) {
         try {
           await canvas.loadFromJSON(project.data.canvas);
           canvas.renderAll();

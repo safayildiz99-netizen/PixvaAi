@@ -1,5 +1,5 @@
 /* PIXVA V12 LOGIN ACCOUNT TYPES */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Building2, KeyRound, LogIn, ShieldCheck, UserPlus, UserRound, X } from 'lucide-react';
 import { api, setToken } from '../api.js';
 
@@ -9,7 +9,27 @@ const emptyRegister={
   companyPhone:'',privatePhone:'',website:'',instagram:'',address:'',logoDataUrl:''
 };
 
-export default function Login({onLogin,onGuest,allowGuest=true}){
+const FALLBACK_INDUSTRIES=[
+  {id:'supermarkt',label:'Supermarkt',enabled:true},{id:'werbetechnik',label:'Werbetechnik',enabled:true},
+  {id:'elektriker',label:'Elektriker',enabled:true},{id:'programmierer',label:'Programmierer / Software & KI',enabled:true},
+  {id:'friseur',label:'Friseur',enabled:true},{id:'sonstiges',label:'Sonstiges',enabled:true}
+];
+const FALLBACK_FIELDS=[
+  ['username','Benutzername','all','text',true],['password','Passwort','all','password',true],['firstName','Vorname','all','text',false],
+  ['lastName','Nachname','all','text',false],['email','Normale E-Mail','all','email',false],['phone','Private Telefonnummer','all','tel',false],
+  ['birthDate','Geburtsdatum','all','date',false],['companyName','Firmenname','company','text',true],['companyType','Branche','company','industry',true],
+  ['companyTypeOther','Welche Branche?','company','text',false],['ownerName','Firmeninhaber / Ansprechpartner','company','text',false],
+  ['companyEmail','Firmen-E-Mail','company','email',false],['companyPhone','Firmen-Telefon','company','tel',false],['privatePhone','Zusätzliche private Tel.','company','tel',false],
+  ['website','Bestehende Website','company','url',false],['instagram','Instagram','company','text',false],['address','Adresse','company','text',false],['logoDataUrl','Firmenlogo','company','logo',true]
+].map(([id,label,scope,type,required])=>({id,label,scope,type,required,enabled:true}));
+function normalizeSignupConfig(value){
+  const industries=(Array.isArray(value?.industries)&&value.industries.length?value.industries:FALLBACK_INDUSTRIES).filter(x=>x?.enabled!==false&&x?.id&&x?.label);
+  const fields=(Array.isArray(value?.fields)&&value.fields.length?value.fields:FALLBACK_FIELDS).filter(x=>x?.enabled!==false&&x?.id);
+  return{industries:industries.length?industries:FALLBACK_INDUSTRIES,fields};
+}
+
+
+export default function Login({onLogin,onGuest,allowGuest=true,signupConfig}){
   const [username,setUsername]=useState('admin');
   const [password,setPassword]=useState('');
   const [totp,setTotp]=useState('');
@@ -19,6 +39,14 @@ export default function Login({onLogin,onGuest,allowGuest=true}){
   const [registerOpen,setRegisterOpen]=useState(false);
   const [register,setRegister]=useState(emptyRegister);
   const logoRef=useRef(null);
+  const registrationConfig=normalizeSignupConfig(signupConfig);
+  const customFieldValues=register.customFields||{};
+  useEffect(()=>{
+    if(!registrationConfig.industries.some(item=>item.id===register.companyType)){
+      const firstIndustry=registrationConfig.industries[0]?.id||'sonstiges';
+      setRegister(prev=>({...prev,companyType:firstIndustry}));
+    }
+  },[signupConfig]);
 
   async function submit(event){
     event.preventDefault();setLoading(true);setError('');
@@ -47,11 +75,17 @@ export default function Login({onLogin,onGuest,allowGuest=true}){
     event.preventDefault();setLoading(true);setError('');
     try{
       const isCompany=register.accountType==='company';
-      if(!register.username.trim())throw new Error('Benutzername fehlt.');
-      if(register.password.length<8)throw new Error('Passwort braucht mindestens 8 Zeichen.');
-      if(isCompany&&!register.companyName.trim())throw new Error('Firmenname fehlt.');
-      if(isCompany&&!register.logoDataUrl)throw new Error('Bitte ein Firmenlogo hochladen.');
-      if(isCompany&&register.companyType==='sonstiges'&&!register.companyTypeOther.trim())throw new Error('Bitte deine Branche genauer angeben.');
+      const visibleFields=registrationConfig.fields.filter(field=>field.scope==='all'||(field.scope==='company'&&isCompany)||(field.scope==='private'&&!isCompany)).filter(field=>{
+        if(!field.showWhen)return true;
+        return String(register[field.showWhen.field]??customFieldValues[field.showWhen.field]??'')===String(field.showWhen.equals??'');
+      });
+      for(const field of visibleFields){
+        if(!field.required)continue;
+        const value=field.id in register?register[field.id]:customFieldValues[field.id];
+        if(field.type==='logo'&&!register.logoDataUrl)throw new Error(`${field.label||'Logo'} fehlt.`);
+        if(field.type!=='logo'&&!String(value??'').trim())throw new Error(`${field.label||field.id} fehlt.`);
+      }
+      if(register.password&&register.password.length<8)throw new Error('Passwort braucht mindestens 8 Zeichen.');
 
       const result=await api('/api/pixva?action=register-public',{
         method:'POST',
@@ -76,34 +110,29 @@ export default function Login({onLogin,onGuest,allowGuest=true}){
 
       <form onSubmit={createAccount}>
         <div className="pixva-register-grid">
-          <label>Benutzername *<input value={register.username} onChange={e=>setRegister({...register,username:e.target.value})}/></label>
-          <label>Passwort *<input type="password" value={register.password} onChange={e=>setRegister({...register,password:e.target.value})} placeholder="mindestens 8 Zeichen"/></label>
-          <label>Vorname<input value={register.firstName} onChange={e=>setRegister({...register,firstName:e.target.value})}/></label>
-          <label>Nachname<input value={register.lastName} onChange={e=>setRegister({...register,lastName:e.target.value})}/></label>
-          <label>Normale E-Mail <small>optional</small><input type="email" value={register.email} onChange={e=>setRegister({...register,email:e.target.value})}/></label>
-          <label>Private Telefonnummer <small>optional</small><input type="tel" value={register.phone} onChange={e=>setRegister({...register,phone:e.target.value})}/></label>
-          <label>Geburtsdatum <small>optional</small><input type="date" value={register.birthDate} onChange={e=>setRegister({...register,birthDate:e.target.value})}/></label>
+          {registrationConfig.fields.filter(field=>field.scope==='all'||(field.scope==='private'&&!isCompany)).map(field=>{
+            if(field.showWhen&&String(register[field.showWhen.field]??customFieldValues[field.showWhen.field]??'')!==String(field.showWhen.equals??''))return null;
+            const value=field.id in register?register[field.id]:(customFieldValues[field.id]||'');
+            const setValue=(next)=>setRegister(prev=>field.id in prev?{...prev,[field.id]:next}:{...prev,customFields:{...(prev.customFields||{}),[field.id]:next}});
+            if(field.type==='logo'||field.type==='industry')return null;
+            return <label key={field.id}>{field.label||field.id}{field.required?' *':''}<input type={field.type||'text'} value={value} onChange={e=>setValue(e.target.value)} placeholder={field.placeholder||''}/></label>;
+          })}
         </div>
 
         {isCompany&&<>
           <div className="login-divider"><span>Firmenprofil</span></div>
           <div className="pixva-register-grid">
-            <label>Firmenname *<input value={register.companyName} onChange={e=>setRegister({...register,companyName:e.target.value})}/></label>
-            <label>Branche *<select value={register.companyType} onChange={e=>setRegister({...register,companyType:e.target.value})}>
-              <option value="programmierer">Programmierer / Software & KI</option><option value="supermarkt">Supermarkt</option><option value="werbetechnik">Werbetechnik</option><option value="elektriker">Elektriker</option><option value="sonstiges">Sonstiges</option>
-            </select></label>
-            {register.companyType==='sonstiges'&&<label>Welche Branche? *<input value={register.companyTypeOther} onChange={e=>setRegister({...register,companyTypeOther:e.target.value})} placeholder="z. B. Friseur, Restaurant, Dachdecker"/></label>}
-            <label>Firmeninhaber / Ansprechpartner<input value={register.ownerName} onChange={e=>setRegister({...register,ownerName:e.target.value})}/></label>
-            <label>Firmen-E-Mail<input type="email" value={register.companyEmail} onChange={e=>setRegister({...register,companyEmail:e.target.value})}/></label>
-            <label>Firmen-Telefon<input type="tel" value={register.companyPhone} onChange={e=>setRegister({...register,companyPhone:e.target.value})}/></label>
-            <label>Zusätzliche private Tel.<input type="tel" value={register.privatePhone} onChange={e=>setRegister({...register,privatePhone:e.target.value})}/></label>
-            <label>Bestehende Website<input value={register.website} onChange={e=>setRegister({...register,website:e.target.value})} placeholder="https://..."/></label>
-            <label>Instagram<input value={register.instagram} onChange={e=>setRegister({...register,instagram:e.target.value})} placeholder="@firma"/></label>
-            <label>Adresse<input value={register.address} onChange={e=>setRegister({...register,address:e.target.value})} placeholder="Straße, PLZ Ort"/></label>
+            {registrationConfig.fields.filter(field=>field.scope==='company').map(field=>{
+              if(field.showWhen&&String(register[field.showWhen.field]??customFieldValues[field.showWhen.field]??'')!==String(field.showWhen.equals??''))return null;
+              const value=field.id in register?register[field.id]:(customFieldValues[field.id]||'');
+              const setValue=(next)=>setRegister(prev=>field.id in prev?{...prev,[field.id]:next}:{...prev,customFields:{...(prev.customFields||{}),[field.id]:next}});
+              if(field.type==='industry')return <label key={field.id}>{field.label||'Branche'}{field.required?' *':''}<select value={register.companyType} onChange={e=>setRegister(prev=>({...prev,companyType:e.target.value}))}>{registrationConfig.industries.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>;
+              if(field.type==='logo')return <label key={field.id} className="pixva-login-logo-upload"><span>{field.label||'Firmenlogo'}{field.required?' *':''}</span><input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>readLogo(e.target.files?.[0])}/></label>;
+              return <label key={field.id}>{field.label||field.id}{field.required?' *':''}<input type={field.type||'text'} value={value} onChange={e=>setValue(e.target.value)} placeholder={field.placeholder||''}/></label>;
+            })}
           </div>
-          <label className="pixva-login-logo-upload"><span>Firmenlogo * <b>WICHTIG</b></span><input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>readLogo(e.target.files?.[0])}/></label>
           {register.logoDataUrl&&<div className="pixva-login-logo-preview"><img src={register.logoDataUrl} alt="Firmenlogo Vorschau"/><span>Logo wird als Firmenlogo gespeichert.</span></div>}
-          <div className="pixva-register-info">PIXVA erstellt automatisch dein Firmenprofil, Branchenregeln für Flyer/Bilder und eine Demo-Website im passenden Theme.</div>
+          <div className="pixva-register-info">Die Felder und Branchen dieser Anmeldung werden vom PIXVA-Admin zentral gesteuert.</div>
         </>}
 
         {error&&<div className="error-box">{error}</div>}
