@@ -476,8 +476,8 @@ function repairOfferDraftForEditor(draft={}){
     }
   }
 
-  const fixedLogo=getFixedStoreLogo(repaired.companyName||'');
-  if(fixedLogo){
+  const fixedLogo=getStoreLogoFallback(repaired.companyName||'');
+  if(!repaired.logoVerified&&fixedLogo){
     repaired={
       ...repaired,
       logoVerified:true,
@@ -838,7 +838,8 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           }
           setPixvaBrain(brain);
           const offerProducts=Array.isArray(offerDraft?.products)?offerDraft.products:[];
-          const defaultMarketTemplate=offerProducts.length>=9?'v12-supermarkt-9er':offerProducts.length>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
+          const requestedLayoutCount=Math.max(Number(offerDraft?.layoutCount||0),Number(offerDraft?.requestedCount||0),offerProducts.length);
+          const defaultMarketTemplate=requestedLayoutCount>=9?'v12-supermarkt-9er':requestedLayoutCount>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
           const requestedTemplate=String(offerDraft?.templateId||'');
           const v12Id=offerDraft?.companyType==='supermarkt'
             ? (offerProducts.length>=6?defaultMarketTemplate:(requestedTemplate.startsWith('v12-supermarkt-')?requestedTemplate:defaultMarketTemplate))
@@ -1451,7 +1452,8 @@ function addText() {
       const repairedDraft=project?.data?.offerDraft?repairOfferDraftForEditor(project.data.offerDraft):null;
       const brand=await resolvePixvaV12Brand();
       const productCount=Array.isArray(repairedDraft?.products)?repairedDraft.products.length:0;
-      const activeTemplate=productCount>=9?'v12-supermarkt-9er':productCount>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
+      const requestedCount=Math.max(Number(repairedDraft?.layoutCount||0),Number(repairedDraft?.requestedCount||0),productCount);
+      const activeTemplate=requestedCount>=9?'v12-supermarkt-9er':requestedCount>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
       setMarketStyleId(styleId);
       const source={...(pixvaBrain||{}),...(brand||{}),marketStyle:styleId,marketSeed:repairedDraft?.productName||repairedDraft?.products?.[0]?.productName||projectName};
       setStatus(`Supermarkt-Stil ${pixvaMarketStyles.find(s=>s.id===styleId)?.name||styleId} wird geladen …`);
@@ -1525,7 +1527,8 @@ function addText() {
           return;
         }
         const repairedProducts=Array.isArray(repairedDraft?.products)?repairedDraft.products:[];
-        const requiredMarketTemplate=repairedProducts.length>=9?'v12-supermarkt-9er':repairedProducts.length>=6?'v12-supermarkt-6er':repairedDraft?.companyType==='supermarkt'?'v12-supermarkt-einzel':'';
+        const requestedCount=Math.max(Number(repairedDraft?.layoutCount||0),Number(repairedDraft?.requestedCount||0),repairedProducts.length);
+        const requiredMarketTemplate=requestedCount>=9?'v12-supermarkt-9er':requestedCount>=6?'v12-supermarkt-6er':repairedDraft?.companyType==='supermarkt'?'v12-supermarkt-einzel':'';
         if(requiredMarketTemplate&&template.industry==='supermarkt'&&template.id!==requiredMarketTemplate){
           setStatus(`Dieses Angebot braucht die ${repairedProducts.length>=9?'9er':repairedProducts.length>=6?'6er':'Einzel'}-Supermarktvorlage. Ändere stattdessen links den Supermarkt-Stil.`);
           setV12TemplateFilter('supermarkt');
@@ -1894,7 +1897,8 @@ function addText() {
                 if(repairedDraft?.companyType==='supermarkt'){
                   if(template.industry!=='supermarkt')return false;
                   const count=Array.isArray(repairedDraft?.products)?repairedDraft.products.length:0;
-                  const required=count>=9?'v12-supermarkt-9er':count>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
+                  const requestedCount=Math.max(Number(repairedDraft?.layoutCount||0),Number(repairedDraft?.requestedCount||0),count);
+                  const required=requestedCount>=9?'v12-supermarkt-9er':requestedCount>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel';
                   if(template.id!==required)return false;
                 }
                 if (v12TemplateFilter === 'all') return true;

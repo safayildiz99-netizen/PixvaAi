@@ -5,7 +5,7 @@ import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy
 import { api, getToken } from '../api.js';
 import { canUseFeature, getPlan } from '../plans.js';
 import { extractOfferDraft, resolveOfferFlyerPrompt, normalizeOfferText } from '../pixva-offer.js';
-import {getFixedStoreLogo} from '../storeLogoResolver.js';
+import {getStoreLogoFallback,getStoreLogoSearchQueries} from '../storeLogoResolver.js';
 import { extractMultiOfferDraft, looksLikeMultiOfferPrompt } from '../pixva-multi-offer.js';
 import { isExactProductCandidate, productMatchStrength, productVariantMismatch } from '../pixva-product-match.js';
 
@@ -1619,29 +1619,13 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     const name=String(companyName||'').trim();
     if(!name)return{logoDataUrl:'',logoVerified:false};
 
-    // Vom Admin/Nutzer bereitgestellte echte Marktlogos haben IMMER Vorrang.
-    // Erst bei unbekannten Firmen darf die Web-/Google-Suche einspringen.
-    const fixedLogo=getFixedStoreLogo(name);
-    if(fixedLogo){
-      return{
-        logoDataUrl:'',
-        logoImageUrl:fixedLogo,
-        logoSourceUrl:fixedLogo,
-        logoTitle:`${name} Logo`,
-        logoVerified:true,
-        logoVerification:{exactMatch:true,confidence:1,reason:'Fest hinterlegtes, vom Nutzer bestätigtes Firmenlogo.'},
-        logoProvider:'fixed-local'
-      };
-    }
-
-    const queries=[
-      `"${name}" offizielles Logo PNG`,
-      `"${name}" Supermarkt Logo`,
-      `"${name}" Logo transparent`
-    ];
+    // Für JEDE im Flyer genannte Firma zuerst die exakte Online-Logo-Suche starten.
+    // api/ai/image-search nutzt Google Custom Search als erste Quelle, wenn die Google-Zugangsdaten vorhanden sind.
+    const queries=getStoreLogoSearchQueries(name);
     const candidates=[];
     const seen=new Set();
     let provider='web';
+    let verificationUnavailable=false;
 
     for(const query of queries){
       const data=await searchExistingImages(query,signal,{mode:'logo',source:'web'});
@@ -1649,18 +1633,20 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       for(const item of Array.isArray(data.results)?data.results:[]){
         const key=item?.imageUrl||item?.thumbnailUrl||'';
         if(!key||seen.has(key))continue;
-        seen.add(key);candidates.push(item);
+        seen.add(key);
+        candidates.push({...item,searchQuery:query});
       }
-      if(candidates.length>=4)break;
+      if(candidates.length>=8)break;
     }
 
-    for(const candidate of candidates.slice(0,4)){
+    for(const candidate of candidates.slice(0,8)){
       const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
       if(!remote)continue;
       try{
         const loaded=await fetchRemoteImageDataUrl(remote);
         if(!String(loaded||'').startsWith('data:image/'))continue;
         const verification=await verifyCompanyLogoVisually(name,candidate,loaded);
+        if(verification?.unavailable===true)verificationUnavailable=true;
         if(verification?.verified===true){
           return{
             logoDataUrl:loaded,
@@ -1669,12 +1655,30 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
             logoTitle:candidate.title||`${name} Logo`,
             logoVerified:true,
             logoVerification:verification.check||null,
-            logoProvider:provider
+            logoProvider:provider,
+            logoSearchQuery:candidate.searchQuery||queries[0]||''
           };
         }
       }catch{}
     }
-    return{logoDataUrl:'',logoVerified:false,logoProvider:provider};
+
+    // Sichere Rückfalllogos aus den vom Nutzer hochgeladenen Originalen.
+    // Diese werden erst benutzt, NACHDEM die Online-/Google-Suche versucht wurde.
+    const fallback=getStoreLogoFallback(name);
+    if(fallback){
+      return{
+        logoDataUrl:'',
+        logoImageUrl:fallback,
+        logoSourceUrl:fallback,
+        logoTitle:`${name} Logo`,
+        logoVerified:true,
+        logoVerification:{exactMatch:true,confidence:1,reason:'Vom Nutzer bereitgestelltes Original-Logo als Rückfall nach Online-Suche.'},
+        logoProvider:'user-fallback',
+        logoSearchQuery:queries[0]||''
+      };
+    }
+
+    return{logoDataUrl:'',logoVerified:false,logoProvider:provider,logoVerificationUnavailable:verificationUnavailable,logoSearchQuery:queries[0]||''};
   }
 
   async function mapWithConcurrency(items,limit,worker){
