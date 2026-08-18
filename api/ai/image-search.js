@@ -45,7 +45,7 @@ async function fetchJson(url, headers = {}) {
   return JSON.parse(raw);
 }
 
-async function searchGoogle(query) {
+async function searchGoogle(query, mode='product') {
   const key = String(process.env.GOOGLE_CSE_API_KEY || '').trim();
   const cx = String(process.env.GOOGLE_CSE_CX || '').trim();
   if (!key || !cx) throw new Error('Google Bildsuche ist noch nicht mit GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX verbunden.');
@@ -56,6 +56,9 @@ async function searchGoogle(query) {
   url.searchParams.set('searchType', 'image');
   url.searchParams.set('num', '8');
   url.searchParams.set('safe', 'active');
+  if(mode==='logo'){
+    url.searchParams.set('imgSize','medium');
+  }
   const data = await fetchJson(url.toString());
   return (Array.isArray(data?.items) ? data.items : []).map((item, index) => ({
     id: `google-${index}-${Date.now()}`,
@@ -264,6 +267,32 @@ export function rankProductResults(items=[], query='') {
     .map(entry=>({...entry.item,relevanceScore:entry.score}));
 }
 
+
+function rankLogoResults(items=[], companyName='') {
+  const wanted=normalizeSearchText(companyName);
+  const wantedTokens=wanted.split(' ').filter(token=>token.length>1&&!['supermarkt','markt','market'].includes(token));
+  return [...items]
+    .map((item,index)=>{
+      const title=normalizeSearchText(`${item?.title||''} ${item?.source||''}`);
+      let score=0;
+      for(const token of wantedTokens){
+        if(title.includes(token))score+=18;
+        else score-=8;
+      }
+      if(/\blogo\b/.test(title))score+=24;
+      if(/instagram|facebook|pinterest|tiktok/.test(title))score-=8;
+      if(String(item?.source||'').toLowerCase().includes('google'))score+=5;
+      const w=Number(item?.width||0),h=Number(item?.height||0);
+      if(w>0&&h>0){
+        const ratio=Math.max(w,h)/Math.max(1,Math.min(w,h));
+        if(ratio<=3.5)score+=4;
+      }
+      return {item,index,score};
+    })
+    .sort((a,b)=>b.score-a.score||a.index-b.index)
+    .map(entry=>({...entry.item,relevanceScore:entry.score}));
+}
+
 function dedupeResults(items=[]) {
   const seen = new Set();
   const out = [];
@@ -283,18 +312,19 @@ export default async function handler(req, res) {
     const input = req.method === 'GET' ? req.query : req.body || {};
     const query = cleanQuery(req.method === 'GET' ? req.query?.q : req.body?.query);
     const requestedSource = String(input?.source || 'web').toLowerCase() === 'database' ? 'database' : 'web';
+    const mode = String(input?.mode || 'product').toLowerCase() === 'logo' ? 'logo' : 'product';
     if (!query) return send(res, 400, { error: 'Bitte gib einen Suchbegriff ein.' });
 
     let results = [];
     const warnings = [];
     let provider = requestedSource;
 
-    if (requestedSource === 'database') {
+    if (requestedSource === 'database' && mode!=='logo') {
       try { results = await searchPixvaDatabase(query); provider = 'pixva-database'; }
       catch (error) { warnings.push(error.message); }
     } else {
       try {
-        const google = await searchGoogle(query);
+        const google = await searchGoogle(query, mode);
         results.push(...google);
         if (google.length) provider = 'google';
       } catch (error) { warnings.push(`Google: ${error.message}`); }
@@ -315,7 +345,7 @@ export default async function handler(req, res) {
         } catch (error) { warnings.push(`Bing: ${error.message}`); }
       }
 
-      if (results.length < 4) {
+      if (mode!=='logo' && results.length < 4) {
         try {
           const foods = await searchOpenFoodFacts(query);
           results.push(...foods);
@@ -331,12 +361,13 @@ export default async function handler(req, res) {
       }
     }
 
-    const finalResults = dedupeResults(rankProductResults(results, query));
+    const finalResults = dedupeResults(mode==='logo' ? rankLogoResults(results, query.replace(/\b(?:offizielles?|official|logo|png|transparent)\b/gi,' ').trim()) : rankProductResults(results, query));
 
     return send(res, 200, {
       query,
       free: true,
       requestedSource,
+      mode,
       provider,
       results: finalResults,
       searchLinks: {

@@ -5,6 +5,7 @@ import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy
 import { api, getToken } from '../api.js';
 import { canUseFeature, getPlan } from '../plans.js';
 import { extractOfferDraft, resolveOfferFlyerPrompt } from '../pixva-offer.js';
+import { extractMultiOfferDraft, looksLikeMultiOfferPrompt } from '../pixva-multi-offer.js';
 import { isExactProductCandidate } from '../pixva-product-match.js';
 
 const quickPrompts = [
@@ -159,6 +160,24 @@ async function verifyProductImageVisually(requestedProduct,candidate,imageDataUr
     return result||{verified:false};
   }catch(error){
     return{verified:false,unavailable:true,error:error?.message||'Visuelle Produktprüfung fehlgeschlagen.'};
+  }
+}
+
+
+async function verifyCompanyLogoVisually(companyName,candidate,imageDataUrl) {
+  try{
+    const compact=await compactProductImageForVerification(imageDataUrl);
+    const result=await api('/api/pixva?action=verify-company-logo',{
+      method:'POST',
+      body:JSON.stringify({
+        companyName,
+        candidateTitle:candidate?.title||'',
+        imageDataUrl:compact
+      })
+    });
+    return result||{verified:false};
+  }catch(error){
+    return{verified:false,unavailable:true,error:error?.message||'Visuelle Logo-Prüfung fehlgeschlagen.'};
   }
 }
 
@@ -1473,92 +1492,213 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
   }
 
 
-  async function generateOfferFlyerMessage(clean, signal, runId){
-    const draft=extractOfferDraft(clean);
-    const query=`${draft.productName} Produktbild Packung freigestellt`;
-    setGenerationStatus(runId,'PIXVA sucht kostenlos ein passendes Produktbild …');
-
-    let data={results:[],searchLinks:{}};
+  async function searchExistingImages(query, signal, {mode='product',source=productImageSource||'web'}={}){
     try{
-      const response=await fetch(`/api/ai/image-search?q=${encodeURIComponent(query)}&source=${encodeURIComponent(productImageSource||'web')}`,{signal});
-      data=await response.json().catch(()=>({results:[],searchLinks:{}}));
-      if(!response.ok)throw new Error(data?.error||'Produktbildsuche fehlgeschlagen.');
+      const response=await fetch(`/api/ai/image-search?q=${encodeURIComponent(query)}&source=${encodeURIComponent(source)}&mode=${encodeURIComponent(mode)}`,{signal});
+      const data=await response.json().catch(()=>({results:[],searchLinks:{}}));
+      if(!response.ok)throw new Error(data?.error||'Bildsuche fehlgeschlagen.');
+      return data;
     }catch(error){
       if(error?.name==='AbortError')throw error;
-      data={results:[],searchLinks:{googleImages:`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`},warning:error?.message||''};
+      return{results:[],searchLinks:{googleImages:`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`},warning:error?.message||''};
+    }
+  }
+
+  async function findVerifiedProductImage(productName, signal){
+    const queries=[
+      `${productName} Produktbild Packung freigestellt`,
+      `"${productName}" Original Packung`,
+      `${productName} Produktfoto kaufen`
+    ];
+    const raw=[];
+    let provider='web';
+    let searchLinks={};
+    const seen=new Set();
+
+    for(const query of queries){
+      const data=await searchExistingImages(query,signal,{mode:'product',source:productImageSource||'web'});
+      provider=data.provider||provider;
+      searchLinks=data.searchLinks||searchLinks;
+      for(const item of Array.isArray(data.results)?data.results:[]){
+        const key=item?.imageUrl||item?.thumbnailUrl||'';
+        if(!key||seen.has(key))continue;
+        seen.add(key);raw.push(item);
+      }
+      if(raw.filter(candidate=>isExactProductCandidate(candidate,productName,.56)).length>=2)break;
     }
 
-    let rawCandidates=(Array.isArray(data.results)?data.results:[]);
-    let exactCandidates=rawCandidates.filter(candidate=>isExactProductCandidate(candidate,draft.productName,.66));
-    if(!exactCandidates.length){
-      const retryQueries=[
-        `"${draft.productName}" Original Packung`,
-        `${draft.productName} Produktfoto kaufen`
-      ];
-      for(const retryQuery of retryQueries){
-        try{
-          const retryResponse=await fetch(`/api/ai/image-search?q=${encodeURIComponent(retryQuery)}&source=${encodeURIComponent(productImageSource||'web')}`,{signal});
-          const retryData=await retryResponse.json().catch(()=>({results:[]}));
-          if(retryResponse.ok&&Array.isArray(retryData.results)){
-            const seen=new Set(rawCandidates.map(item=>item?.imageUrl||item?.thumbnailUrl||''));
-            rawCandidates=[...rawCandidates,...retryData.results.filter(item=>!seen.has(item?.imageUrl||item?.thumbnailUrl||''))];
-            exactCandidates=rawCandidates.filter(candidate=>isExactProductCandidate(candidate,draft.productName,.66));
-            if(exactCandidates.length)break;
-          }
-        }catch{}
-      }
-    }
-    const candidates=exactCandidates.slice(0,6);
-    let first=null;
-    let imageDataUrl='';
-    let imageVerification=null;
+    const exact=raw.filter(candidate=>isExactProductCandidate(candidate,productName,.56)).slice(0,3);
     let verificationUnavailable=false;
-    for(const candidate of candidates){
+    for(const candidate of exact){
       const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
       if(!remote)continue;
       try{
         const loaded=await fetchRemoteImageDataUrl(remote);
         if(!String(loaded||'').startsWith('data:image/'))continue;
-        const verification=await verifyProductImageVisually(draft.productName,candidate,loaded);
+        const verification=await verifyProductImageVisually(productName,candidate,loaded);
         if(verification?.unavailable)verificationUnavailable=true;
         if(verification?.verified===true){
-          imageDataUrl=loaded;
-          imageVerification=verification.check||null;
-          first=candidate;
-          break;
+          return{
+            ...candidate,
+            imageDataUrl:loaded,
+            imageVerified:true,
+            imageVerification:verification.check||null,
+            provider,
+            searchLinks
+          };
         }
       }catch{}
     }
 
+    return{imageDataUrl:'',imageVerified:false,verificationUnavailable,provider,searchLinks};
+  }
+
+  async function findVerifiedCompanyLogo(companyName, signal){
+    const name=String(companyName||'').trim();
+    if(!name)return{logoDataUrl:'',logoVerified:false};
+    const queries=[
+      `"${name}" offizielles Logo PNG`,
+      `"${name}" Supermarkt Logo`,
+      `"${name}" Logo transparent`
+    ];
+    const candidates=[];
+    const seen=new Set();
+    let provider='web';
+
+    for(const query of queries){
+      const data=await searchExistingImages(query,signal,{mode:'logo',source:'web'});
+      provider=data.provider||provider;
+      for(const item of Array.isArray(data.results)?data.results:[]){
+        const key=item?.imageUrl||item?.thumbnailUrl||'';
+        if(!key||seen.has(key))continue;
+        seen.add(key);candidates.push(item);
+      }
+      if(candidates.length>=4)break;
+    }
+
+    for(const candidate of candidates.slice(0,4)){
+      const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
+      if(!remote)continue;
+      try{
+        const loaded=await fetchRemoteImageDataUrl(remote);
+        if(!String(loaded||'').startsWith('data:image/'))continue;
+        const verification=await verifyCompanyLogoVisually(name,candidate,loaded);
+        if(verification?.verified===true){
+          return{
+            logoDataUrl:loaded,
+            logoImageUrl:candidate.imageUrl||candidate.thumbnailUrl||'',
+            logoSourceUrl:candidate.sourceUrl||candidate.imageUrl||'',
+            logoTitle:candidate.title||`${name} Logo`,
+            logoVerified:true,
+            logoVerification:verification.check||null,
+            logoProvider:provider
+          };
+        }
+      }catch{}
+    }
+    return{logoDataUrl:'',logoVerified:false,logoProvider:provider};
+  }
+
+  async function mapWithConcurrency(items,limit,worker){
+    const output=new Array(items.length);
+    let next=0;
+    const runners=Array.from({length:Math.min(limit,items.length)},async()=>{
+      while(true){
+        const index=next++;
+        if(index>=items.length)return;
+        output[index]=await worker(items[index],index);
+      }
+    });
+    await Promise.all(runners);
+    return output;
+  }
+
+  async function generateMultiOfferFlyerMessage(clean, signal, runId, multiDraft){
+    const count=multiDraft.products.length;
+    setGenerationStatus(runId,`PIXVA sucht ${count} Produktbilder und das Supermarkt-Logo …`);
+
+    const logoPromise=findVerifiedCompanyLogo(multiDraft.companyName,signal);
+    const products=await mapWithConcurrency(multiDraft.products,3,async(product,index)=>{
+      setGenerationStatus(runId,`Produktbilder werden gesucht · ${index+1}/${count} · ${product.productName}`);
+      const found=await findVerifiedProductImage(product.productName,signal);
+      return{
+        ...product,
+        imageDataUrl:found.imageDataUrl||'',
+        imageUrl:found.imageUrl||'',
+        thumbnailUrl:found.thumbnailUrl||'',
+        sourceUrl:found.sourceUrl||'',
+        imageVerified:found.imageVerified===true,
+        imageVerification:found.imageVerification||null,
+        provider:found.provider||productImageSource||'web'
+      };
+    });
+    const logo=await logoPromise;
+    const readyDraft={...multiDraft,products,...logo};
+    const foundCount=products.filter(item=>item.imageVerified).length;
+
+    appendGenerationMessage(runId,{
+      id:crypto.randomUUID(),role:'assistant',createdAt:Date.now(),
+      content:`${multiDraft.layoutCount}er-Supermarktangebot vorbereitet · ${foundCount}/${count} Produktbilder visuell bestätigt${logo.logoVerified?` · Logo für ${multiDraft.companyName} automatisch gefunden`:multiDraft.companyName?' · kein Firmenlogo sicher bestätigt':''}. Alle Produktnamen, Preise, Bilder und das Logo bleiben im Editor bearbeitbar.`,
+      attachments:products.filter(item=>item.imageVerified).slice(0,4).map(item=>({
+        kind:'image-link',name:item.productName,title:item.productName,
+        previewUrl:item.thumbnailUrl?`/api/ai/image-proxy?url=${encodeURIComponent(item.thumbnailUrl)}`:item.imageDataUrl,
+        imageUrl:item.imageUrl||item.imageDataUrl,sourceUrl:item.sourceUrl||'',source:item.provider||''
+      }))
+    });
+
+    onOpenFlyerProject?.({
+      name:`${multiDraft.layoutCount}er Angebot · ${multiDraft.companyName||'Supermarkt'}`,
+      type:'flyer',
+      data:{format:'post',offerDraft:readyDraft,pixvaMultiOfferPrepared:true}
+    });
+    setGenerationStatus(runId,`${multiDraft.layoutCount}er-Angebotsflyer geöffnet.`);
+  }
+
+  async function generateOfferFlyerMessage(clean, signal, runId){
+    if(looksLikeMultiOfferPrompt(clean)){
+      const multiDraft=extractMultiOfferDraft(clean);
+      if(multiDraft?.products?.length>1){
+        return generateMultiOfferFlyerMessage(clean,signal,runId,multiDraft);
+      }
+    }
+
+    const draft=extractOfferDraft(clean);
+    setGenerationStatus(runId,'PIXVA sucht Produktbild und Supermarkt-Logo …');
+    const [found,logo]=await Promise.all([
+      findVerifiedProductImage(draft.productName,signal),
+      draft.companyType==='supermarkt'?findVerifiedCompanyLogo(draft.companyName,signal):Promise.resolve({logoDataUrl:'',logoVerified:false})
+    ]);
+
     const readyDraft={
       ...draft,
-      imageDataUrl,
-      imageUrl:first?.imageUrl||'',
-      thumbnailUrl:first?.thumbnailUrl||'',
-      sourceUrl:first?.sourceUrl||first?.imageUrl||'',
-      provider:data.provider||productImageSource||'web',
-      imageVerified:Boolean(imageDataUrl&&first),
-      imageVerification,
-      productImageKey:`${draft.productName}::${Date.now()}`
+      imageDataUrl:found.imageDataUrl||'',
+      imageUrl:found.imageUrl||'',
+      thumbnailUrl:found.thumbnailUrl||'',
+      sourceUrl:found.sourceUrl||'',
+      provider:found.provider||productImageSource||'web',
+      imageVerified:found.imageVerified===true,
+      imageVerification:found.imageVerification||null,
+      productImageKey:`${draft.productName}::${Date.now()}`,
+      ...logo
     };
 
     const resultAttachments=[];
-    if(first){
+    if(found.imageVerified){
       resultAttachments.push({
-        kind:'image-link',name:first.title||draft.productName,title:first.title||draft.productName,
-        previewUrl:`/api/ai/image-proxy?url=${encodeURIComponent(first.thumbnailUrl||first.imageUrl)}`,
-        imageUrl:first.imageUrl||first.thumbnailUrl,thumbnailUrl:first.thumbnailUrl||first.imageUrl,
-        sourceUrl:first.sourceUrl,source:first.source,searchQuery:query,flyerDraft:readyDraft
+        kind:'image-link',name:found.title||draft.productName,title:found.title||draft.productName,
+        previewUrl:found.thumbnailUrl?`/api/ai/image-proxy?url=${encodeURIComponent(found.thumbnailUrl)}`:found.imageDataUrl,
+        imageUrl:found.imageUrl||found.imageDataUrl,thumbnailUrl:found.thumbnailUrl||found.imageUrl,
+        sourceUrl:found.sourceUrl,source:found.source||found.provider,searchQuery:draft.productName,flyerDraft:readyDraft
       });
-    }else if(data.searchLinks?.googleImages){
-      resultAttachments.push({kind:'link',name:'Google Bilder öffnen',title:draft.productName,sourceUrl:data.searchLinks.googleImages});
+    }else if(found.searchLinks?.googleImages){
+      resultAttachments.push({kind:'link',name:'Google Bilder öffnen',title:draft.productName,sourceUrl:found.searchLinks.googleImages});
     }
 
     appendGenerationMessage(runId,{
       id:crypto.randomUUID(),role:'assistant',createdAt:Date.now(),
-      content:imageDataUrl
-        ? `Flyer wird jetzt geöffnet · 0,00 €. ${draft.productName}${draft.oldPrice?` · ${draft.oldPrice} → ${draft.newPrice}`:draft.newPrice?` · ${draft.newPrice}`:''}. Das Produktbild wurde zusätzlich VISUELL gegen die Verpackung geprüft. Bild, Name, Preis, Logo und Texte bleiben vollständig bearbeitbar.`
-        : `Flyer wird jetzt geöffnet · 0,00 €. PIXVA hat für „${draft.productName}“ kein Produktbild visuell sicher bestätigt${verificationUnavailable?' (die visuelle Prüfung war gerade nicht verfügbar)':''} und setzt deshalb bewusst KEIN altes oder ähnliches Produkt ein.`,
+      content:found.imageVerified
+        ? `Flyer wird geöffnet · ${draft.productName}${draft.oldPrice?` · ${draft.oldPrice} → ${draft.newPrice}`:draft.newPrice?` · ${draft.newPrice}`:''}. Produktbild wurde visuell geprüft${logo.logoVerified?` und das Logo von ${draft.companyName} automatisch gesucht und bestätigt`:''}.`
+        : `Flyer wird geöffnet. Für „${draft.productName}“ wurde kein Produktbild sicher bestätigt und deshalb bewusst kein falsches Bild eingesetzt${logo.logoVerified?`. Das Logo von ${draft.companyName} wurde trotzdem automatisch gefunden`:''}.`,
       attachments:resultAttachments
     });
 
@@ -1566,11 +1706,11 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       onOpenFlyerProject({
         name:`Angebot · ${draft.productName||'Produkt'}`,
         type:'flyer',
-        data:{format:'post',offerDraft:readyDraft,pixvaV142OfferPrepared:true}
+        data:{format:'post',offerDraft:readyDraft,pixvaV147OfferPrepared:true}
       });
-      setGenerationStatus(runId,'Angebotsflyer geöffnet · 0,00 €');
+      setGenerationStatus(runId,'Angebotsflyer geöffnet.');
     }else{
-      setGenerationStatus(runId,'Angebotsflyer vorbereitet · 0,00 €');
+      setGenerationStatus(runId,'Angebotsflyer vorbereitet.');
     }
   }
 

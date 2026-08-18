@@ -866,6 +866,45 @@ Antworte ausschließlich JSON:
       }
     }
 
+
+    if(action==='verify-company-logo'&&req.method==='POST'){
+      await enforceRate(client,req,'company-logo-verify',12,60);
+      const companyName=String(body.companyName||'').trim().slice(0,180);
+      const candidateTitle=String(body.candidateTitle||'').trim().slice(0,240);
+      const raw=String(body.imageDataUrl||'');
+      if(!companyName)return send(res,400,{error:'Firmenname fehlt.'});
+      const match=raw.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/i);
+      if(!match)return send(res,400,{error:'Logo fehlt oder hat ein nicht unterstütztes Format.'});
+      const buffer=Buffer.from(match[2],'base64');
+      if(!buffer.length||buffer.length>3*1024*1024)return send(res,400,{error:'Logo für die Prüfung ist zu groß.'});
+      try{
+        const result=await gemini({
+          json:true,
+          temperature:0,
+          inline:{buffer,mimeType:match[1].toLowerCase()},
+          prompt:`Prüfe ausschließlich, ob dieses Bild das Logo bzw. Markenlogo des genannten Supermarkts/Unternehmens zeigt. Erfinde nichts.
+
+GEWÜNSCHTE FIRMA: ${companyName}
+SUCHTREFFER-TITEL: ${candidateTitle||'(kein Titel)'}
+
+Regeln:
+- exactMatch=true nur wenn der sichtbare Firmen-/Markenname klar zur gewünschten Firma passt.
+- Kleine Unterschiede wie Groß-/Kleinschreibung sind egal.
+- exactMatch=false bei einem anderen Unternehmen, einer Produktmarke, einem Supermarktprodukt, einem Screenshot oder einem allgemeinen Symbol.
+- Bevorzuge ein echtes Logo ohne Werbetext und ohne fremde Marken.
+- confidence 0 bis 1.
+
+Antworte ausschließlich JSON:
+{"exactMatch":boolean,"detectedCompany":"","confidence":0,"reason":"kurz"}`
+        });
+        const check=parseJsonText(result.text,{exactMatch:false,detectedCompany:'',confidence:0,reason:'Logo konnte nicht sicher geprüft werden.'});
+        const exact=check?.exactMatch===true&&Number(check?.confidence||0)>=0.72;
+        return send(res,200,{verified:exact,check:{...check,exactMatch:exact},model:result.model||''});
+      }catch(error){
+        return send(res,200,{verified:false,unavailable:true,error:error?.message||'Visuelle Logo-Prüfung ist nicht verfügbar.'});
+      }
+    }
+
     if(action==='text-generate'&&req.method==='POST'){
       await enforceRate(client,req,'text-generate',30,60);
       const prompt=String(body.prompt||'').trim().slice(0,20000);

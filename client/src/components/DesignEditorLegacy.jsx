@@ -443,52 +443,128 @@ function pixvaBrainBrand(brain){
 
 async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
   if(!canvas||!draft)return;
-  const objects=canvas.getObjects?.()||[];
+
   const setText=(role,value)=>{
-    if(!value)return;
-    for(const object of objects){if(String(object.dataRole||'')===role&&'text' in object){object.set({text:String(value)});object.setCoords?.();}}
-  };
-  setText('headline',draft.headline||'ANGEBOT');
-  setText('company-name',draft.companyName||'');
-  setText('product-title:1',draft.productName||'PRODUKT');
-  setText('price:1',draft.newPrice||'');
-  if(draft.oldPrice)setText('old-price',`STATT ${draft.oldPrice}`);
-  if(draft.badge)setText('badge',draft.badge);
-  const slot=objects.find(object=>String(object.dataRole||'')==='product-slot:1');
-  const existing=canvas.getObjects().filter(object=>String(object.dataRole||'')==='product-image:1');
-  existing.forEach(object=>canvas.remove(object));
-  /* Alte/ungeprüfte automatische Produktbilder dürfen niemals aus einem früheren Entwurf hängen bleiben. */
-  const remoteProductUrl=draft.imageUrl||draft.thumbnailUrl||'';
-  const loadableProductSource=draft.imageVerified===true?(draft.imageDataUrl||remoteProductUrl):'';
-  if(loadableProductSource&&slot){
-    try{
-      const label=canvas.getObjects().find(object=>String(object.dataRole||'')==='product-slot-label:1');
-      if(label)canvas.remove(label);
-      let source=loadableProductSource;
-      if(!String(source).startsWith('data:image/')){
-        try{
-          const proxy=await fetch(`/api/ai/image-proxy?url=${encodeURIComponent(source)}`);
-          if(proxy.ok){
-            const blob=await proxy.blob();
-            source=await new Promise((resolve,reject)=>{
-              const reader=new FileReader();
-              reader.onload=()=>resolve(String(reader.result||''));
-              reader.onerror=()=>reject(new Error('Produktbild konnte nicht in den Editor geladen werden.'));
-              reader.readAsDataURL(blob);
-            });
-          }
-        }catch{}
+    if(value===undefined||value===null||String(value)==='')return;
+    for(const object of canvas.getObjects?.()||[]){
+      if(String(object.dataRole||'')===role&&'text' in object){
+        object.set({text:String(value),angle:0});
+        object.setCoords?.();
       }
-      const img=await FabricImage.fromURL(source,{crossOrigin:'anonymous'});
-      const targetW=Math.max(20,Number(slot.width||0)*Number(slot.scaleX||1)*.9);
-      const targetH=Math.max(20,Number(slot.height||0)*Number(slot.scaleY||1)*.9);
-      const factor=Math.min(targetW/Math.max(1,img.width),targetH/Math.max(1,img.height));
-      img.scale(factor);
-      const center=slot.getCenterPoint?.()||{x:Number(slot.left||0)+targetW/2,y:Number(slot.top||0)+targetH/2};
-      img.set({left:center.x,top:center.y,originX:'center',originY:'center',angle:0,dataRole:'product-image:1',displayName:draft.productName||'Produktbild'});
-      canvas.add(img);canvas.bringObjectToFront?.(img);
+    }
+  };
+
+  const loadSource=async(source)=>{
+    let resolved=String(source||'');
+    if(!resolved)return'';
+    if(!resolved.startsWith('data:image/')){
+      try{
+        const proxy=await fetch(`/api/ai/image-proxy?url=${encodeURIComponent(resolved)}`);
+        if(proxy.ok){
+          const blob=await proxy.blob();
+          resolved=await new Promise((resolve,reject)=>{
+            const reader=new FileReader();
+            reader.onload=()=>resolve(String(reader.result||''));
+            reader.onerror=()=>reject(new Error('Bild konnte nicht in den Editor geladen werden.'));
+            reader.readAsDataURL(blob);
+          });
+        }
+      }catch{}
+    }
+    return resolved;
+  };
+
+  const placeInSlot=async({slotRole,imageRole,labelRole,source,displayName,allowExistingBounds=false})=>{
+    if(!source)return false;
+    let slot=(canvas.getObjects?.()||[]).find(object=>String(object.dataRole||'')===slotRole);
+    const existing=(canvas.getObjects?.()||[]).filter(object=>String(object.dataRole||'')===imageRole);
+    let bounds=null;
+    if(slot){
+      const width=Number(slot.width||0)*Number(slot.scaleX||1);
+      const height=Number(slot.height||0)*Number(slot.scaleY||1);
+      const center=slot.getCenterPoint?.()||{x:Number(slot.left||0)+width/2,y:Number(slot.top||0)+height/2};
+      bounds={width,height,center};
+    }else if(allowExistingBounds&&existing[0]){
+      const current=existing[0];
+      const rect=current.getBoundingRect?.()||{};
+      bounds={
+        width:Number(rect.width||current.width||120),
+        height:Number(rect.height||current.height||70),
+        center:current.getCenterPoint?.()||{x:Number(current.left||0),y:Number(current.top||0)}
+      };
+    }
+    if(!bounds)return false;
+    existing.forEach(object=>canvas.remove(object));
+    const label=(canvas.getObjects?.()||[]).find(object=>String(object.dataRole||'')===labelRole);
+    if(label)canvas.remove(label);
+    const resolved=await loadSource(source);
+    if(!String(resolved||'').startsWith('data:image/'))return false;
+    const img=await FabricImage.fromURL(resolved,{crossOrigin:'anonymous'});
+    const targetW=Math.max(20,bounds.width*.90);
+    const targetH=Math.max(20,bounds.height*.90);
+    const factor=Math.min(targetW/Math.max(1,img.width),targetH/Math.max(1,img.height));
+    img.scale(factor);
+    img.set({
+      left:bounds.center.x,top:bounds.center.y,originX:'center',originY:'center',angle:0,
+      dataRole:imageRole,displayName:displayName||'Bild',lockRotation:true
+    });
+    canvas.add(img);
+    canvas.bringObjectToFront?.(img);
+    return true;
+  };
+
+  setText('headline',draft.headline||'WOCHENANGEBOT');
+  setText('company-name',draft.companyName||'');
+
+  const products=Array.isArray(draft.products)&&draft.products.length
+    ? draft.products
+    : [{
+        productName:draft.productName||'',newPrice:draft.newPrice||'',oldPrice:draft.oldPrice||'',badge:draft.badge||'',
+        imageDataUrl:draft.imageDataUrl||'',imageUrl:draft.imageUrl||'',thumbnailUrl:draft.thumbnailUrl||'',imageVerified:draft.imageVerified===true
+      }];
+
+  for(let index=0;index<products.length;index++){
+    const product=products[index]||{};
+    const slotIndex=index+1;
+    setText(`product-title:${slotIndex}`,product.productName||`PRODUKT ${slotIndex}`);
+    setText(`price:${slotIndex}`,product.newPrice||'');
+    if(slotIndex===1&&product.oldPrice)setText('old-price',`STATT ${product.oldPrice}`);
+    if(slotIndex===1&&(product.badge||draft.badge))setText('badge',product.badge||draft.badge);
+
+    // Alte automatische Produktbilder pro Slot immer entfernen, bevor der neue Entwurf angewendet wird.
+    (canvas.getObjects?.()||[])
+      .filter(object=>String(object.dataRole||'')===`product-image:${slotIndex}`)
+      .forEach(object=>canvas.remove(object));
+
+    const productSource=product.imageVerified===true
+      ? (product.imageDataUrl||product.imageUrl||product.thumbnailUrl||'')
+      : '';
+    if(productSource){
+      try{
+        await placeInSlot({
+          slotRole:`product-slot:${slotIndex}`,
+          imageRole:`product-image:${slotIndex}`,
+          labelRole:`product-slot-label:${slotIndex}`,
+          source:productSource,
+          displayName:product.productName||`Produktbild ${slotIndex}`
+        });
+      }catch{}
+    }
+  }
+
+  if(draft.logoVerified===true&&(draft.logoDataUrl||draft.logoImageUrl)){
+    try{
+      await placeInSlot({
+        slotRole:'logo-slot:1',
+        imageRole:'logo-image:1',
+        labelRole:'logo-slot-label:1',
+        source:draft.logoDataUrl||draft.logoImageUrl,
+        displayName:`Logo · ${draft.companyName||'Firma'}`,
+        allowExistingBounds:true
+      });
     }catch{}
   }
+
   canvas.requestRenderAll?.();
 }
 
@@ -703,18 +779,20 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
             brain={...(brain||{}),isCompany:true,company:{...(brain?.company||{}),...draftCompany}};
           }
           setPixvaBrain(brain);
-          const v12Id=project.data.offerDraft?.companyType==='supermarkt'
-            ? 'v12-supermarkt-einzel'
-            : recommendPixvaV12Template(brain,'flyer');
+          const offerProducts=Array.isArray(project.data.offerDraft?.products)?project.data.offerDraft.products:[];
+          const v12Id=project.data.offerDraft?.templateId
+            || (project.data.offerDraft?.companyType==='supermarkt'
+              ? (offerProducts.length>=9?'v12-supermarkt-9er':offerProducts.length>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel')
+              : recommendPixvaV12Template(brain,'flyer'));
           const resolvedMarketStyle=project.data.offerDraft?.companyType==='supermarkt'
-            ? resolvePixvaMarketStyle(project.data.offerDraft?.sourcePrompt||'',`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||''}`)
+            ? resolvePixvaMarketStyle(project.data.offerDraft?.sourcePrompt||'',`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||project.data.offerDraft?.products?.[0]?.productName||''}`)
             : marketStyleId;
           const selectedMarketStyle=project.data.offerDraft?.companyType==='supermarkt'
             ? (visibleMarketStyles.some(style=>style.id===resolvedMarketStyle)?resolvedMarketStyle:(visibleMarketStyles[0]?.id||'red-cream'))
             : marketStyleId;
           if(project.data.offerDraft?.companyType==='supermarkt')setMarketStyleId(selectedMarketStyle);
           const templateSource=project.data.offerDraft?.companyType==='supermarkt'
-            ? {...(brain||{}),marketStyle:selectedMarketStyle,marketSeed:`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||''}`}
+            ? {...(brain||{}),marketStyle:selectedMarketStyle,marketSeed:`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||project.data.offerDraft?.products?.[0]?.productName||''}`}
             : brain;
           await applyPixvaV12Template(canvas,v12Id,format.canvas[0],format.canvas[1],templateSource);
           currentTemplateRef.current=v12Id;
