@@ -198,6 +198,71 @@ async function searchPixvaDatabase(query) {
   return (Array.isArray(items) ? items : []).map((item,index)=>normalizeDatabaseItem(item,index,query)).filter(item=>item.imageUrl||item.thumbnailUrl).slice(0,8);
 }
 
+function normalizeSearchText(value='') {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const PRODUCT_SEARCH_STOPWORDS = new Set([
+  'produktbild','produkt','packung','freigestellt','bild','photo','foto','kaufen','shop','online'
+]);
+
+const PRODUCT_VARIANTS = [
+  ['vegan', /\b(vegan|veggie|vegetarisch|pflanzlich|plant based|plantbased)\b/],
+  ['light', /\b(light|leicht|fettreduziert|reduced fat)\b/],
+  ['scharf', /\b(scharf|pikant|hot|acili|acı|extra hot)\b/],
+  ['mild', /\b(mild|sanft)\b/],
+  ['bio', /\b(bio|organic|oekologisch|ökologisch)\b/],
+  ['gefluegel', /\b(gefluegel|geflügel|huhn|chicken|tavuk)\b/],
+  ['rind', /\b(rind|beef|dana)\b/]
+];
+
+export function scoreProductResult(item, query='') {
+  const q = normalizeSearchText(query);
+  const title = normalizeSearchText(`${item?.title || ''} ${item?.brand || ''} ${item?.weight || ''}`);
+  const queryTokens = q.split(' ').filter(token => token.length > 1 && !PRODUCT_SEARCH_STOPWORDS.has(token));
+  let score = 0;
+
+  for (const token of queryTokens) {
+    if (title.includes(token)) score += token.length >= 5 ? 12 : 7;
+    else score -= token.length >= 5 ? 5 : 2;
+  }
+
+  for (const [name, pattern] of PRODUCT_VARIANTS) {
+    const requested = pattern.test(q);
+    pattern.lastIndex = 0;
+    const present = pattern.test(title);
+    pattern.lastIndex = 0;
+    if (present && !requested) score -= 80;
+    if (present && requested) score += 28;
+  }
+
+  const variantRequested = PRODUCT_VARIANTS.some(([,pattern]) => {
+    pattern.lastIndex = 0;
+    const yes = pattern.test(q);
+    pattern.lastIndex = 0;
+    return yes;
+  });
+  if (!variantRequested && /\b(classic|klassik|original|originale|klasik)\b/.test(title)) score += 14;
+  if (item?.source === 'PIXVA Produktdatenbank') score += 20;
+  if (item?.source === 'Open Food Facts') score += 5;
+  if (Number(item?.width || 0) >= 500 || Number(item?.height || 0) >= 500) score += 3;
+  return score;
+}
+
+export function rankProductResults(items=[], query='') {
+  return [...items]
+    .map((item,index)=>({item,index,score:scoreProductResult(item,query)}))
+    .sort((a,b)=>b.score-a.score || a.index-b.index)
+    .map(entry=>({...entry.item,relevanceScore:entry.score}));
+}
+
 function dedupeResults(items=[]) {
   const seen = new Set();
   const out = [];
@@ -265,7 +330,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const finalResults = dedupeResults(results);
+    const finalResults = dedupeResults(rankProductResults(results, query));
 
     return send(res, 200, {
       query,

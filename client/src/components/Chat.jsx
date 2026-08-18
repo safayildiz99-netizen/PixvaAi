@@ -1433,6 +1433,19 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     setGenerationStatus(runId, 'Kostenlose Bildsuche abgeschlossen · 0,00 €');
   }
 
+  function productVariantMismatch(result, requestedText=''){
+    const requested=normalizeOfferText(requestedText);
+    const candidate=normalizeOfferText(`${result?.title||''} ${result?.brand||''}`);
+    const variants=[
+      /\b(vegan|veggie|vegetarisch|pflanzlich|plant based|plantbased)\b/,
+      /\b(light|leicht|fettreduziert|reduced fat)\b/,
+      /\b(scharf|pikant|hot|acili|aci|extra hot)\b/,
+      /\b(bio|organic|oekologisch)\b/,
+      /\b(gefluegel|huhn|chicken|tavuk)\b/
+    ];
+    return variants.some(pattern=>pattern.test(candidate)&&!pattern.test(requested));
+  }
+
   async function generateOfferFlyerMessage(clean, signal, runId){
     const draft=extractOfferDraft(clean);
     const query=`${draft.productName} Produktbild Packung freigestellt`;
@@ -1448,7 +1461,9 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       data={results:[],searchLinks:{googleImages:`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`},warning:error?.message||''};
     }
 
-    const candidates=(Array.isArray(data.results)?data.results:[]).slice(0,6);
+    const rawCandidates=(Array.isArray(data.results)?data.results:[]);
+    const exactCandidates=rawCandidates.filter(candidate=>!productVariantMismatch(candidate,draft.productName));
+    const candidates=(exactCandidates.length?exactCandidates:rawCandidates).slice(0,6);
     let first=candidates[0]||null;
     let imageDataUrl='';
     for(const candidate of candidates){
