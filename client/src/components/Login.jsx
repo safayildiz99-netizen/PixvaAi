@@ -144,7 +144,7 @@ export default function Login({onLogin,onGuest,allowGuest=true,signupConfig}){
 
   return <main className="login-page"><section className="login-card">
     <div className="brand-badge"><img src="/pixva-logo.png" alt="PIXVA"/></div>
-    <h1>Deine KI für alles.</h1><p>Chat, Wissen, Produkte, Designs, Agenten und Medien – sicher in PIXVA.</p>
+    <h1>Deine KI für alles.</h1><p>Chat, Wissen, Designs, Agenten und Medien – sicher in PIXVA.</p>
     {allowGuest&&!requires2fa&&<button className="guest-btn" type="button" onClick={onGuest}><UserRound size={18}/>Ohne Anmeldung starten</button>}
     {allowGuest&&!requires2fa&&<div className="login-divider"><span>oder mit Konto</span></div>}
     <form onSubmit={submit}>
