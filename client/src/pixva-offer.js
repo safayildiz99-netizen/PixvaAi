@@ -82,8 +82,8 @@ export function extractOfferDraft(text='') {
 
   let productName = '';
   const productPatterns = [
-    /(?:mit\s+(?:dem|dem\s+)?|das\s+)?prod(?:ukt|uft)\s+(.+?)(?=\s+(?:mit\s+(?:dem\s+)?preis\s+(?:von\s+)?|preis\s+(?:von\s+)?|von|statt|fur|für|zum|zu|zur)\s*\d|[,.;]|$)/i,
-    /(?:artikel|ware)\s+(.+?)(?=\s+(?:mit\s+(?:dem\s+)?preis\s+(?:von\s+)?|preis\s+(?:von\s+)?|von|statt|fur|für|zum|zu|zur)\s*\d|[,.;]|$)/i
+    /(?:mit\s+(?:dem\s+)?|das\s+)?prod(?:ukt|uft)\s*[:\-]?\s*(.+?)(?=\s+(?:mit\s+(?:dem\s+)?preis\s+(?:von\s+)?|preis\s+(?:von\s+)?|von|statt|fur|für|zum|zu|zur)\s*\d|[,.;]|$)/i,
+    /(?:artikel|ware)\s*[:\-]?\s*(.+?)(?=\s+(?:mit\s+(?:dem\s+)?preis\s+(?:von\s+)?|preis\s+(?:von\s+)?|von|statt|fur|für|zum|zu|zur)\s*\d|[,.;]|$)/i
   ];
 
   for (const pattern of productPatterns) {
@@ -96,7 +96,8 @@ export function extractOfferDraft(text='') {
     let beforePrice = original.slice(0, firstPriceIndex);
     beforePrice = beforePrice
       .replace(/\b(erstell\w*|mach\w*|generier\w*|bau\w*|design\w*|gestalt\w*)\b/gi,' ')
-      .replace(/\b(mir|einen|eine|ein|den|die|das|fur|für|meinen|mein|supermarkt|markt|firma|unternehmen|flyer|flayer|flyar|als|angebot|aktion|werbung|poster|prospekt|mit|dem|produkt|produft|artikel|ware)\b/gi,' ')
+      .replace(/\b(mir|einen|eine|ein|den|die|das|fur|für|meinen|mein|supermarkt|markt|firma|unternehmen|flyer|flayer|flyar|als|angebot|aktion|werbung|poster|prospekt|mit|dem|artikel|ware|preis|von|zur|zu|statt)\b/gi,' ')
+      .replace(/prod(?:ukt|uft)/gi,' ')
       .replace(companyName, ' ')
       .replace(/\s+/g,' ')
       .trim();

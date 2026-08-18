@@ -8,7 +8,8 @@ const PRODUCT_VARIANTS = [
   /\b(bio|organic|oekologisch|okologisch)\b/,
   /\b(gefluegel|huhn|chicken|tavuk)\b/,
   /\b(rind|beef|dana)\b/,
-  /\b(knoblauch|garlic|sarimsak)\b/
+  /\b(knoblauch|garlic|sarimsak)\b/,
+  /\b(egem)\b/
 ];
 
 export function productVariantMismatch(result, requestedText='') {

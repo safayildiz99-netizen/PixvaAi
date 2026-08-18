@@ -563,18 +563,28 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
   }
 
   async function saveTemplateConfig(nextConfig,message='Vorlagen gespeichert.'){
+    const previous=normalizeSettings(settingsDraft);
+    const localConfig=normalizedTemplateConfig(nextConfig);
+    const optimistic=normalizeSettings({...settingsDraft,templateConfig:localConfig});
+    setSettingsDraft(optimistic);
+    onSettingsChanged?.(optimistic);
     try{
       setTemplateBusy(true);
       const response=await api('/api/pixva?action=template-settings-save',{
-        method:'POST',body:JSON.stringify({config:normalizedTemplateConfig(nextConfig)})
+        method:'POST',body:JSON.stringify({config:localConfig})
       });
-      const config=response?.config||normalizedTemplateConfig(nextConfig);
-      const next=normalizeSettings({...settingsDraft,templateConfig:config});
+      const config=response?.config||localConfig;
+      const next=normalizeSettings({...optimistic,...(response?.settings||{}),templateConfig:config});
       setSettingsDraft(next);
       onSettingsChanged?.(next);
       setStatus(message);
       return config;
-    }catch(error){setStatus(error.message);return null}finally{setTemplateBusy(false)}
+    }catch(error){
+      setSettingsDraft(previous);
+      onSettingsChanged?.(previous);
+      setStatus(`Vorlage konnte nicht gespeichert werden: ${error.message}`);
+      return null;
+    }finally{setTemplateBusy(false)}
   }
 
   async function setBuiltInTemplateVisible(id,visible){

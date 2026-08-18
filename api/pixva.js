@@ -539,18 +539,42 @@ export default async function handler(req,res){
     }
 
     if(action==='template-settings'&&req.method==='GET'){
-      const {data:row,error}=await client.from('app_global_settings').select('settings').eq('id',1).maybeSingle();if(error)throw error;
-      const config=await signedTemplateConfig(client,row?.settings?.pixvaTemplateConfig||{});
-      return send(res,200,{config});
+      let rawConfig={};
+      try{
+        const {data:ui,error:uiError}=await client.rpc('app_get_ui_settings',{});
+        if(!uiError){
+          const uiSettings=ui?.settings||ui||{};
+          rawConfig=uiSettings?.templateConfig||uiSettings?.pixvaTemplateConfig||{};
+        }
+      }catch{}
+      if(!rawConfig?.hiddenBuiltInIds&&!rawConfig?.customTemplates){
+        try{
+          const {data:row}=await client.from('app_global_settings').select('settings').eq('id',1).maybeSingle();
+          rawConfig=row?.settings?.pixvaTemplateConfig||row?.settings?.templateConfig||{};
+        }catch{}
+      }
+      return send(res,200,{config:await signedTemplateConfig(client,rawConfig)});
     }
     if(action==='template-settings-save'&&req.method==='POST'){
       if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});
       const config=normalizeTemplateConfigServer(body?.config||{});
-      const {data:row,error}=await client.from('app_global_settings').select('settings').eq('id',1).maybeSingle();if(error)throw error;
-      const settings={...(row?.settings||{}),pixvaTemplateConfig:config};
-      const {error:saveError}=await client.from('app_global_settings').upsert({id:1,settings,updated_by:user.id,updated_at:new Date().toISOString()},{onConflict:'id'});if(saveError)throw saveError;
+      let uiSettings={};
+      try{
+        const {data:ui}=await client.rpc('app_get_ui_settings',{});
+        uiSettings=ui?.settings||ui||{};
+      }catch{}
+      const mergedSettings={...uiSettings,templateConfig:config,pixvaTemplateConfig:config};
+      const token=readToken(req);
+      const {data:saved,error:saveError}=await client.rpc('app_admin_save_ui_settings',{p_token:token,p_settings:mergedSettings});
+      if(saveError)throw saveError;
+      /* Best-effort Mirror für ältere PIXVA-Versionen; der funktionierende UI-Settings-RPC ist die Quelle der Wahrheit. */
+      try{
+        const {data:row}=await client.from('app_global_settings').select('settings').eq('id',1).maybeSingle();
+        const settings={...(row?.settings||{}),pixvaTemplateConfig:config,templateConfig:config};
+        await client.from('app_global_settings').upsert({id:1,settings},{onConflict:'id'});
+      }catch{}
       await audit(client,user,'template_settings_saved',null,{hidden:config.hiddenBuiltInIds.length,custom:config.customTemplates.length});
-      return send(res,200,{ok:true,config:await signedTemplateConfig(client,config)});
+      return send(res,200,{ok:true,settings:saved?.settings||saved||mergedSettings,config:await signedTemplateConfig(client,config)});
     }
     if(action==='template-analyze'&&req.method==='POST'){
       if(user.role!=='admin')return send(res,403,{error:'Nur für Admins.'});

@@ -1453,16 +1453,22 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     let rawCandidates=(Array.isArray(data.results)?data.results:[]);
     let exactCandidates=rawCandidates.filter(candidate=>isExactProductCandidate(candidate,draft.productName,.66));
     if(!exactCandidates.length){
-      try{
-        const retryQuery=`"${draft.productName}" Original Packung`;
-        const retryResponse=await fetch(`/api/ai/image-search?q=${encodeURIComponent(retryQuery)}&source=${encodeURIComponent(productImageSource||'web')}`,{signal});
-        const retryData=await retryResponse.json().catch(()=>({results:[]}));
-        if(retryResponse.ok&&Array.isArray(retryData.results)){
-          const seen=new Set(rawCandidates.map(item=>item?.imageUrl||item?.thumbnailUrl||''));
-          rawCandidates=[...rawCandidates,...retryData.results.filter(item=>!seen.has(item?.imageUrl||item?.thumbnailUrl||''))];
-          exactCandidates=rawCandidates.filter(candidate=>isExactProductCandidate(candidate,draft.productName,.66));
-        }
-      }catch{}
+      const retryQueries=[
+        `"${draft.productName}" Original Packung`,
+        `${draft.productName} Produktfoto kaufen`
+      ];
+      for(const retryQuery of retryQueries){
+        try{
+          const retryResponse=await fetch(`/api/ai/image-search?q=${encodeURIComponent(retryQuery)}&source=${encodeURIComponent(productImageSource||'web')}`,{signal});
+          const retryData=await retryResponse.json().catch(()=>({results:[]}));
+          if(retryResponse.ok&&Array.isArray(retryData.results)){
+            const seen=new Set(rawCandidates.map(item=>item?.imageUrl||item?.thumbnailUrl||''));
+            rawCandidates=[...rawCandidates,...retryData.results.filter(item=>!seen.has(item?.imageUrl||item?.thumbnailUrl||''))];
+            exactCandidates=rawCandidates.filter(candidate=>isExactProductCandidate(candidate,draft.productName,.66));
+            if(exactCandidates.length)break;
+          }
+        }catch{}
+      }
     }
     const candidates=exactCandidates.slice(0,6);
     let first=candidates[0]||null;

@@ -184,7 +184,15 @@ export default function App(){
     if(!user || guest)return()=>{cancelled=true};
     api('/api/pixva?action=template-settings').then((result)=>{
       if(cancelled)return;
-      setUiSettings((prev)=>({...prev,templateConfig:result?.config||{hiddenBuiltInIds:[],customTemplates:[]}}));
+      setUiSettings((prev)=>{
+        const current=prev?.templateConfig||{hiddenBuiltInIds:[],customTemplates:[]};
+        const incoming=result?.config;
+        if(!incoming)return prev;
+        return {...prev,templateConfig:{
+          hiddenBuiltInIds:Array.isArray(incoming.hiddenBuiltInIds)?incoming.hiddenBuiltInIds:current.hiddenBuiltInIds,
+          customTemplates:Array.isArray(incoming.customTemplates)?incoming.customTemplates:current.customTemplates
+        }};
+      });
     }).catch(()=>{});
     return()=>{cancelled=true};
   },[user?.id,guest]);
