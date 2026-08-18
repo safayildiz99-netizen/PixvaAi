@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Instagram, Menu, MessageSquarePlus, Mic, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, ShieldCheck, Square, Trash2, User, Video, Volume2, WandSparkles, X } from 'lucide-react';
 import { api, getToken } from '../api.js';
 import { canUseFeature, getPlan } from '../plans.js';
-import { extractOfferDraft, resolveOfferFlyerPrompt } from '../pixva-offer.js';
+import { extractOfferDraft, resolveOfferFlyerPrompt, normalizeOfferText } from '../pixva-offer.js';
 
 const quickPrompts = [
   'Erkläre mir ein schwieriges Thema ganz einfach.',

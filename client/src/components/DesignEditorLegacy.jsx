@@ -1338,9 +1338,10 @@ function addText() {
           ? {...(pixvaBrain||{}),...(brand||{}),marketStyle:marketStyleId,marketSeed:project?.data?.offerDraft?.productName||projectName}
           : (brand||{});
         await applyPixvaV12Template(canvas, template.id, canvas.width, canvas.height, templateSource);
-        if(template.industry==='supermarkt'&&project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
+        if(project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
         currentTemplateRef.current = template.id;
         setV12TemplateId(template.id);
+        if(template.industry==='supermarkt')setV12TemplateFilter('supermarkt');
         baseTemplateRef.current = canvas.toJSON(customProps);
         setBackground(canvas.backgroundColor || '#ffffff');
         canvas.discardActiveObject();

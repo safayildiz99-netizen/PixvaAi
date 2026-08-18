@@ -69,9 +69,12 @@ export function extractOfferDraft(text='') {
 
   let companyName = '';
   const companyPatterns = [
-    /(?:fur|für)\s+(?:(?:meinen|mein|den|die|das)\s+)?(?:supermarkt|markt|firma|unternehmen|geschaft|geschäft)\s+(.+?)(?=\s+(?:und|mit|das\s+prod(?:ukt|uft)|dem\s+prod(?:ukt|uft)|prod(?:ukt|uft)|angebot)\b|[,.;]|$)/i,
-    /(?:supermarkt|markt)\s+(.+?)(?=\s+(?:mit|und|prod(?:ukt|uft))\b|[,.;]|$)/i
+    /(?:fur|für)\s+(?:(?:meinen|mein|den|die|das)\s+)?(?:supermarkt|markt|market|firma|unternehmen|geschaft|geschäft)\s+(.+?)(?=\s+(?:und|mit|das\s+prod(?:ukt|uft)|dem\s+prod(?:ukt|uft)|prod(?:ukt|uft)|angebot)\b|[,.;]|$)/i,
+    /(?:supermarkt|markt|market)\s+(.+?)(?=\s+(?:mit|und|prod(?:ukt|uft))\b|[,.;]|$)/i,
+    /(?:fur|für)\s+(?:(?:meinen|mein|den|die|das)\s+)?(.+?\b(?:bazar|bazaar|center))(?=\s+(?:mit|und|das\s+prod(?:ukt|uft)|dem\s+prod(?:ukt|uft)|prod(?:ukt|uft)|angebot)\b|[,.;]|$)/i
   ];
+
+
   for (const pattern of companyPatterns) {
     const m = original.match(pattern);
     if (m?.[1]) { companyName = cleanCaptured(m[1]); break; }
@@ -79,9 +82,10 @@ export function extractOfferDraft(text='') {
 
   let productName = '';
   const productPatterns = [
-    /(?:mit\s+(?:dem|dem\s+)?|das\s+)?prod(?:ukt|uft)\s+(.+?)(?=\s+(?:von|statt|fur|für|zum|zu|zur)\s+\d|[,.;]|$)/i,
-    /(?:artikel|ware)\s+(.+?)(?=\s+(?:von|statt|fur|für|zum|zu|zur)\s+\d|[,.;]|$)/i
+    /(?:mit\s+(?:dem|dem\s+)?|das\s+)?prod(?:ukt|uft)\s+(.+?)(?=\s+(?:mit\s+(?:dem\s+)?preis\s+(?:von\s+)?|preis\s+(?:von\s+)?|von|statt|fur|für|zum|zu|zur)\s*\d|[,.;]|$)/i,
+    /(?:artikel|ware)\s+(.+?)(?=\s+(?:mit\s+(?:dem\s+)?preis\s+(?:von\s+)?|preis\s+(?:von\s+)?|von|statt|fur|für|zum|zu|zur)\s*\d|[,.;]|$)/i
   ];
+
   for (const pattern of productPatterns) {
     const m = original.match(pattern);
     if (m?.[1]) { productName = cleanCaptured(m[1]); break; }
@@ -104,7 +108,7 @@ export function extractOfferDraft(text='') {
   companyName = companyName.slice(0, 90);
 
   const normalized = normalizeOfferText(original);
-  const companyType = /\b(supermarkt|markt|market|lebensmittel|mega center)\b/.test(normalized) ? 'supermarkt' : '';
+  const companyType = /\b(supermarkt|markt|market|bazar|bazaar|lebensmittel|mega center|food market)\b/.test(normalized) ? 'supermarkt' : '';
   const toNumber = (value='') => Number(String(value).replace(/[^0-9,.-]/g,'').replace(',','.')) || 0;
   const oldNumber = toNumber(oldPrice);
   const newNumber = toNumber(newPrice);
