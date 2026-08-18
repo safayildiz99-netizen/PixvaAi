@@ -5,6 +5,7 @@ import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy
 import { api, getToken } from '../api.js';
 import { canUseFeature, getPlan } from '../plans.js';
 import { extractOfferDraft, resolveOfferFlyerPrompt } from '../pixva-offer.js';
+import {getFixedStoreLogo} from '../storeLogoResolver.js';
 import { extractMultiOfferDraft, looksLikeMultiOfferPrompt } from '../pixva-multi-offer.js';
 import { isExactProductCandidate } from '../pixva-product-match.js';
 
@@ -1556,6 +1557,22 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
   async function findVerifiedCompanyLogo(companyName, signal){
     const name=String(companyName||'').trim();
     if(!name)return{logoDataUrl:'',logoVerified:false};
+
+    // Vom Admin/Nutzer bereitgestellte echte Marktlogos haben IMMER Vorrang.
+    // Erst bei unbekannten Firmen darf die Web-/Google-Suche einspringen.
+    const fixedLogo=getFixedStoreLogo(name);
+    if(fixedLogo){
+      return{
+        logoDataUrl:'',
+        logoImageUrl:fixedLogo,
+        logoSourceUrl:fixedLogo,
+        logoTitle:`${name} Logo`,
+        logoVerified:true,
+        logoVerification:{exactMatch:true,confidence:1,reason:'Fest hinterlegtes, vom Nutzer bestätigtes Firmenlogo.'},
+        logoProvider:'fixed-local'
+      };
+    }
+
     const queries=[
       `"${name}" offizielles Logo PNG`,
       `"${name}" Supermarkt Logo`,
