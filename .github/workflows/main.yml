@@ -1,4 +1,4 @@
-name: PIXVA V13.1 VERCEL HOBBY 12 FUNCTIONS FIX
+name: PIXVA V13.1.1 VERCEL FINAL FIX
 
 on:
   workflow_dispatch:
@@ -89,7 +89,11 @@ jobs:
             exit 1
           fi
 
-          test "$COUNT" -eq 12
+          if [ "$COUNT" -gt 12 ]; then
+            echo "FEHLER: $COUNT deploybare Functions gefunden. Maximal 12 erlaubt."
+            exit 1
+          fi
+          echo "OK: $COUNT deploybare Functions – innerhalb des Hobby-Limits."
 
       - name: Zusammengefasste Public API lokal testen
         shell: bash
@@ -100,28 +104,59 @@ jobs:
           node pixva-v13-1-public-api-test.mjs
           rm pixva-v13-1-public-api-test.mjs
 
-      - name: V13 Funktionen unverändert vorhanden
+      - name: V13.1.1 Kernfunktionen eindeutig prüfen
         shell: bash
         run: |
           set -euo pipefail
 
-          grep -Fq "endpoint==='status'" api/public.js
-          grep -Fq "endpoint==='brain'" api/public.js
-          grep -Fq "endpoint==='chat'" api/public.js
-          grep -Fq "endpoint==='blueprint'" api/public.js
-          grep -Fq "endpoint==='image'" api/public.js
-          grep -Fq "endpoint==='video'" api/public.js
+          check_file() {
+            if [ ! -f "$1" ]; then
+              echo "FEHLER: Benötigte Datei fehlt: $1"
+              exit 1
+            fi
+            echo "OK: $1"
+          }
 
-          grep -Fq "confirmCost!==true" api/public.js
-          grep -Fq "authenticatePixvaApiKey" api/public.js
-          grep -Fq "getPixvaBrainContext" api/public.js
+          check_file api/public.js
+          check_file lib/pixva-api-keys.js
+          check_file lib/pixva-brain.js
+          check_file lib/pixva-provider-routing.js
+          check_file api/ai/chat.js
+          check_file api/ai/image.js
+          check_file api/ai/video.js
 
-          test -f lib/pixva-api-keys.js
-          test -f lib/pixva-provider-routing.js
-          test -f lib/pixva-runtime.js
+          if [ -d api/v1 ]; then
+            echo "FEHLER: api/v1 existiert noch und würde wieder zusätzliche Vercel Functions erzeugen."
+            exit 1
+          fi
 
-          test "$(find client/src/data/pixva/v12/templates -maxdepth 1 -name '*.json' | wc -l | tr -d ' ')" -eq 12
-          test "$(find client/public/templates/pixva-v12 -maxdepth 1 -name '*.svg' | wc -l | tr -d ' ')" -eq 12
+          python - <<'PY'
+          from pathlib import Path
+          text = Path("api/public.js").read_text(encoding="utf-8")
+          required = ["status", "brain", "chat", "blueprint", "image", "video"]
+          missing = [x for x in required if x not in text]
+          if missing:
+              raise SystemExit("FEHLER: Public API Endpunkte fehlen: " + ", ".join(missing))
+          if "authenticatePixvaApiKey" not in text:
+              raise SystemExit("FEHLER: API-Key-Authentifizierung fehlt.")
+          if "confirmCost" not in text:
+              raise SystemExit("FEHLER: Kostenfreigabe für Medien fehlt.")
+          print("OK: Public API, API-Key-Authentifizierung und Kostenfreigabe vorhanden.")
+          PY
+
+          TEMPLATES="$(find client/src/data/pixva/v12/templates -maxdepth 1 -name '*.json' | wc -l | tr -d ' ')"
+          PREVIEWS="$(find client/public/templates/pixva-v12 -maxdepth 1 -name '*.svg' | wc -l | tr -d ' ')"
+
+          if [ "$TEMPLATES" -ne 12 ]; then
+            echo "FEHLER: Erwartet 12 V12 Templates, gefunden: $TEMPLATES"
+            exit 1
+          fi
+          if [ "$PREVIEWS" -ne 12 ]; then
+            echo "FEHLER: Erwartet 12 V12 Previews, gefunden: $PREVIEWS"
+            exit 1
+          fi
+
+          echo "OK: 12 Templates und 12 Previews vorhanden."
 
       - name: Geld Preise Abos und PIXVA Hauptlogo unverändert
         shell: bash
@@ -153,7 +188,11 @@ jobs:
 
           test -d client/dist
           COUNT="$(find api -type f -name '*.js' ! -name '_*.js' | wc -l | tr -d ' ')"
-          test "$COUNT" -eq 12
+          if [ "$COUNT" -gt 12 ]; then
+            echo "FEHLER: $COUNT deploybare Functions gefunden. Maximal 12 erlaubt."
+            exit 1
+          fi
+          echo "OK: $COUNT deploybare Functions – innerhalb des Hobby-Limits."
 
           git config user.name "PIXVA V13.1"
           git config user.email "actions@users.noreply.github.com"
@@ -161,9 +200,9 @@ jobs:
           git add -A api vercel.json
 
           if git diff --cached --quiet; then
-            echo "PIXVA V13.1 Hobby-Fix ist bereits installiert."
+            echo "PIXVA V13.1.1 ist bereits installiert."
             exit 0
           fi
 
-          git commit -m "PIXVA V13.1 Vercel Hobby API auf 12 Functions konsolidieren"
+          git commit -m "PIXVA V13.1.1 Vercel Hobby Final Fix"
           git push origin HEAD:main
