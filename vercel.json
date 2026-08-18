@@ -7,7 +7,16 @@
     }
   },
   "routes": [
-    { "handle": "filesystem" },
-    { "src": "/.*", "dest": "/index.html" }
+    {
+      "src": "/api/v1/(status|brain|chat|blueprint|image|video)",
+      "dest": "/api/public?endpoint=$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
   ]
 }
