@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api.js';
 import { applyPixvaV12Template, pixvaV12Templates, recommendPixvaV12Template, auditPixvaV12Canvas } from '../data/pixva/v12/templateEngineV12.js';
+import { pixvaMarketStyles, resolvePixvaMarketStyle } from '../data/pixva/v12/marketStyles.js';
 import { applyPixvaFileTemplate, pixvaTemplateIdForBrand, pixvaTemplateList } from '../data/pixva/flyerTemplateEngine.js';
 import { canUseFeature } from '../plans.js';
 
@@ -374,7 +375,7 @@ function sourceElementToBlob(imageObject) {
 
 function pixvaTheme(brand={}){
   const type=brand.company_type||'sonstiges';
-  if(type==='supermarkt')return{bg:'#f8f0df',dark:'#0a563c',accent:'#e72828',headline:'FRISCHE ANGEBOTE',title:'OBST & GEMÜSE',offer:'3,49 €',unit:'AKTIONSPREIS',prompt:'Professionelles Supermarkt-Werbemotiv mit frischem Obst oder Gemüse, appetitliche Produktfotografie, Angebotsästhetik'};
+  if(type==='supermarkt')return{bg:'#f8f0df',dark:'#0a563c',accent:'#e72828',headline:'FRISCHE ANGEBOTE',title:'OBST & GEMÜSE',offer:'3,49 €',unit:'AKTIONSPREIS',prompt:'Fotorealistisches freigestelltes Supermarkt-Produktfoto, frontal und sauber fotografiert, neutrales Licht, keine eingebettete Schrift, keine Preise, keine Logos, keine schrägen Elemente; das PIXVA-Layout setzt Text und Preis separat gerade und lesbar'};
   if(type==='werbetechnik')return{bg:'#f4f4f1',dark:'#111111',accent:'#f7c948',headline:'ANGEBOT',title:'BEDRUCKTE DIBOND PLATTE',offer:'44,99 €',unit:'STATT 59,99 €',prompt:'Professionelles Werbetechnik-Motiv mit hochwertiger bedruckter Dibond-Platte, moderne Werkstatt oder Montage, realistische Produktfotografie'};
   if(type==='elektriker')return{bg:'#eef6fb',dark:'#082139',accent:'#ffd42a',headline:'ELEKTRO AKTION',title:'ELEKTRO-CHECK',offer:'-20%',unit:'JETZT RABATT SICHERN',prompt:'Professionelles Elektriker-Werbemotiv, moderne Elektroinstallation, Sicherungskasten und saubere technische Arbeit, vertrauenswürdig und hochwertig'};
   return{bg:'#f3f5f7',dark:brand.primary_color||'#1b2735',accent:brand.secondary_color||'#39d6d0',headline:'ANGEBOT',title:(brand.company_type_other||'UNSERE LEISTUNG').toUpperCase(),offer:'AKTION',unit:'JETZT ANFRAGEN',prompt:`Professionelles Werbemotiv für ${brand.company_type_other||'ein Unternehmen'}, hochwertig, modern, realistische Fotografie`};
@@ -509,6 +510,7 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
   /* PIXVA V12 ALL IN ONE EDITOR */
   const [v12TemplateId,setV12TemplateId]=useState('');
   const [v12TemplateFilter,setV12TemplateFilter]=useState('recommended');
+  const [marketStyleId,setMarketStyleId]=useState('red-cream');
   const [v12Audit,setV12Audit]=useState(null);
   const [externalExportMode, setExternalExportMode] = useState('edited');
   const [rasterText, setRasterText] = useState({
@@ -683,7 +685,14 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
           const v12Id=project.data.offerDraft?.companyType==='supermarkt'
             ? 'v12-supermarkt-einzel'
             : recommendPixvaV12Template(brain,'flyer');
-          await applyPixvaV12Template(canvas,v12Id,format.canvas[0],format.canvas[1],brain);
+          const selectedMarketStyle=project.data.offerDraft?.companyType==='supermarkt'
+            ? resolvePixvaMarketStyle(project.data.offerDraft?.sourcePrompt||'',`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||''}`)
+            : marketStyleId;
+          if(project.data.offerDraft?.companyType==='supermarkt')setMarketStyleId(selectedMarketStyle);
+          const templateSource=project.data.offerDraft?.companyType==='supermarkt'
+            ? {...(brain||{}),marketStyle:selectedMarketStyle,marketSeed:`${project.data.offerDraft?.companyName||''} ${project.data.offerDraft?.productName||''}`}
+            : brain;
+          await applyPixvaV12Template(canvas,v12Id,format.canvas[0],format.canvas[1],templateSource);
           currentTemplateRef.current=v12Id;
           setV12TemplateId(v12Id);
           await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
@@ -1274,6 +1283,32 @@ function addText() {
     }
   }
 
+  async function applyMarketStyle(styleId) {
+    const canvas=fabricRef.current;
+    if(!canvas)return;
+    try{
+      const brand=await resolvePixvaV12Brand();
+      const activeTemplate=['v12-supermarkt-6er','v12-supermarkt-9er'].includes(v12TemplateId)?v12TemplateId:'v12-supermarkt-einzel';
+      setMarketStyleId(styleId);
+      const source={...(pixvaBrain||{}),...(brand||{}),marketStyle:styleId,marketSeed:project?.data?.offerDraft?.productName||projectName};
+      setStatus(`Supermarkt-Stil ${pixvaMarketStyles.find(s=>s.id===styleId)?.name||styleId} wird geladen …`);
+      await applyPixvaV12Template(canvas,activeTemplate,canvas.width,canvas.height,source);
+      if(project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
+      currentTemplateRef.current=activeTemplate;
+      setV12TemplateId(activeTemplate);
+      baseTemplateRef.current=canvas.toJSON(customProps);
+      setBackground(canvas.backgroundColor||'#ffffff');
+      canvas.discardActiveObject();
+      syncSelected(null);
+      refreshLayers();
+      snapshot();
+      setV12Audit(auditPixvaV12Canvas(canvas));
+      setStatus(`Supermarkt-Stil ${pixvaMarketStyles.find(s=>s.id===styleId)?.name||styleId} geladen · gerade, lesbar und postfertig.`);
+    }catch(error){
+      setStatus(error.message||'Supermarkt-Stil konnte nicht geladen werden.');
+    }
+  }
+
   async function applyTemplate(type) {
     const canvas = fabricRef.current;
     if (!canvas) { setStatus('Arbeitsfläche ist noch nicht bereit.'); return; }
@@ -1282,7 +1317,11 @@ function addText() {
       if (template) {
         const brand = await resolvePixvaV12Brand();
         setStatus(`${template.name} wird geladen …`);
-        await applyPixvaV12Template(canvas, template.id, canvas.width, canvas.height, brand || {});
+        const templateSource=template.industry==='supermarkt'
+          ? {...(pixvaBrain||{}),...(brand||{}),marketStyle:marketStyleId,marketSeed:project?.data?.offerDraft?.productName||projectName}
+          : (brand||{});
+        await applyPixvaV12Template(canvas, template.id, canvas.width, canvas.height, templateSource);
+        if(template.industry==='supermarkt'&&project?.data?.offerDraft)await applyPixvaOfferDraftToCanvas(canvas,project.data.offerDraft);
         currentTemplateRef.current = template.id;
         setV12TemplateId(template.id);
         baseTemplateRef.current = canvas.toJSON(customProps);
@@ -1352,6 +1391,45 @@ function addText() {
     return false;
   }
 
+  function preparePostReadyCanvas(canvas) {
+    const state=[];
+    if(!canvas)return()=>{};
+    const marketTemplate=String(v12TemplateId||'').startsWith('v12-supermarkt');
+    for(const object of canvas.getObjects?.()||[]){
+      const role=String(object.dataRole||'');
+      state.push({
+        object,
+        visible:object.visible,
+        stroke:object.stroke,
+        strokeWidth:object.strokeWidth,
+        strokeDashArray:Array.isArray(object.strokeDashArray)?[...object.strokeDashArray]:object.strokeDashArray,
+        angle:object.angle,
+        fontStyle:object.fontStyle
+      });
+      if(/slot-label|text-replace-mask|editor-guide|editor-grid/.test(role))object.visible=false;
+      if(/^(product|logo|hero)-slot:/.test(role)){
+        object.stroke='transparent';
+        object.strokeWidth=0;
+        object.strokeDashArray=null;
+      }
+      if(marketTemplate){
+        object.angle=0;
+        if('fontStyle' in object)object.fontStyle='normal';
+      }
+      object.setCoords?.();
+    }
+    canvas.discardActiveObject?.();
+    canvas.requestRenderAll?.();
+    return()=>{
+      for(const item of state){
+        const {object,...props}=item;
+        object.set?.(props);
+        object.setCoords?.();
+      }
+      canvas.requestRenderAll?.();
+    };
+  }
+
   async function renderJsonData(json) {
     if (!json) return currentPngData();
     const temporaryElement = document.createElement('canvas');
@@ -1360,8 +1438,10 @@ function addText() {
     });
     await temporaryCanvas.loadFromJSON(json);
     temporaryCanvas.requestRenderAll();
+    const restore=preparePostReadyCanvas(temporaryCanvas);
     const multiplier = format.export[0] / format.canvas[0];
     const data = temporaryCanvas.toDataURL({ format: 'png', multiplier, quality: 1 });
+    restore();
     temporaryCanvas.dispose();
     return data;
   }
@@ -1407,10 +1487,11 @@ function addText() {
 
   function currentPngData() {
     const canvas = fabricRef.current;
-    canvas.discardActiveObject();
-    canvas.renderAll();
+    const restore=preparePostReadyCanvas(canvas);
     const multiplier = format.export[0] / canvas.width;
-    return canvas.toDataURL({ format: 'png', multiplier, quality: 1 });
+    const data=canvas.toDataURL({ format: 'png', multiplier, quality: 1 });
+    restore();
+    return data;
   }
 
   async function exportPng() {
@@ -1578,6 +1659,16 @@ function addText() {
                 <button type="button" key={key} className={v12TemplateFilter===key?'active':''} onClick={() => setV12TemplateFilter(key)}>{label}</button>
               ))}
             </div>
+            {(v12TemplateFilter==='supermarkt'||(v12TemplateFilter==='recommended'&&((pixvaBrain?.company?.companyType||companyBrand?.company_type||companyBrand?.companyType)==='supermarkt'))) && (
+              <div className="template-gallery pixva-v12-gallery market-style-gallery">
+                {pixvaMarketStyles.map((style)=>(
+                  <button type="button" key={style.id} className={marketStyleId===style.id?'active':''} onClick={()=>applyMarketStyle(style.id)}>
+                    <img src={style.preview} alt={`Supermarkt ${style.name}`}/>
+                    <span>{style.name}</span><small>Einzel · 4:5</small>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="template-gallery pixva-v12-gallery">
               {pixvaV12Templates.filter((template) => {
                 const companyKind = pixvaBrain?.company?.companyType || companyBrand?.company_type || companyBrand?.companyType || 'sonstiges';

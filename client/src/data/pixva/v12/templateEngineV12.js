@@ -1,6 +1,7 @@
 /* PIXVA V12 REAL TEMPLATE ENGINE */
 import { FabricImage, IText, Rect, Textbox, Circle } from 'fabric';
 import { pixvaV12Templates } from './catalog.js';
+import { getPixvaMarketStyle, resolvePixvaMarketStyle } from './marketStyles.js';
 
 export { pixvaV12Templates };
 
@@ -36,7 +37,9 @@ export function normalizePixvaV12Brand(source={}){
     openingHours:first(c,['opening_hours','openingHours'],''),
     logo:first(c,['logo_data_url','logoDataUrl','logo_url','logoUrl','logo','logo_path','logoPath'],''),
     primary:first(c,['primary_color','primaryColor'],''),
-    secondary:first(c,['secondary_color','secondaryColor'],'')
+    secondary:first(c,['secondary_color','secondaryColor'],''),
+    marketStyle:first(source,['marketStyle','market_style'],first(c,['marketStyle','market_style'],'')),
+    marketSeed:first(source,['marketSeed','market_seed'],first(c,['company_name','companyName','name'],'pixva-supermarkt'))
   };
 }
 
@@ -155,26 +158,69 @@ async function techFlow(canvas,t,w,h,b){
   canvas.add(rect({left:X(145),top:Y(330),width:X(100),height:Y(5),fill:c.text}),rect({left:X(355),top:Y(330),width:X(100),height:Y(5),fill:c.text}));
   await addLogo(canvas,b,X(32),Y(530),X(150),Y(65),c,S);addPrice(canvas,t,c,X(360),Y(515),X(205),Y(130),S);addFooter(canvas,b,c,X,Y,S);
 }
-async function marketSingle(canvas,t,w,h,b){
-  const{X,Y,S}=scaler(w,h),c=colors(t,b);clearCanvas(canvas,c.background);
+
+function marketPalette(t,b){
+  const picked=getPixvaMarketStyle(b.marketStyle||resolvePixvaMarketStyle('',b.marketSeed||b.companyName));
+  return{
+    ...t.style,
+    ...picked,
+    primary:b.primary||picked.primary,
+    secondary:b.secondary||picked.secondary,
+    background:picked.background,
+    text:picked.text,
+    surface:picked.surface,
+    styleId:picked.id,
+    styleName:picked.name
+  };
+}
+function addMarketHeader(canvas,t,b,c,X,Y,S,compact=false){
   canvas.add(
-    rect({left:0,top:0,width:w,height:Y(118),fill:c.primary}),
-    rect({left:0,top:Y(118),width:w,height:Y(15),fill:c.secondary}),
-    text(t.content.eyebrow,{left:X(28),top:Y(23),fontSize:S(10),fill:'#ffffff',charSpacing:45}),
-    box(t.content.headline,{left:X(28),top:Y(52),width:X(385),fontSize:S(28),fill:'#ffffff',fontWeight:900}),
-    box('PRODUKTNAME',{left:X(34),top:Y(150),width:X(530),fontSize:S(22),lineHeight:1.02,fill:c.text,fontWeight:900,dataRole:'product-title:1',displayName:'Produktname'})
+    rect({left:0,top:0,width:X(600),height:Y(compact?112:128),fill:c.primary,dataRole:'market-bg'}),
+    rect({left:0,top:Y(compact?112:128),width:X(600),height:Y(13),fill:c.secondary,dataRole:'market-bg'}),
+    box(t.content.eyebrow||'ANGEBOT DER WOCHE',{left:X(210),top:Y(compact?22:24),width:X(350),fontSize:S(compact?11:12),fill:'#ffffff',fontWeight:900,charSpacing:40,dataRole:'eyebrow',displayName:'Angebotszeile'}),
+    box(t.content.headline||'ANGEBOT DER WOCHE',{left:X(210),top:Y(compact?54:61),width:X(350),fontSize:S(compact?21:25),fill:'#ffffff',fontWeight:900,lineHeight:1,dataRole:'headline',displayName:'Überschrift'})
   );
-  await addLogo(canvas,b,X(450),Y(24),X(115),Y(62),c,S);
-  addSlot(canvas,X(34),Y(200),X(332),Y(300),'PRODUKTBILD',c,S);
-  addPrice(canvas,t,c,X(390),Y(215),X(175),Y(235),S);
-  canvas.add(box(t.content.subtitle,{left:X(34),top:Y(525),width:X(530),fontSize:S(13),fill:c.text,opacity:.72}));
-  addFooter(canvas,b,c,X,Y,S);
+  return addLogo(canvas,b,X(28),Y(22),X(150),Y(compact?70:82),c,S);
+}
+function addMarketFooter(canvas,b,c,X,Y,S){
+  canvas.add(
+    rect({left:0,top:Y(650),width:X(600),height:Y(100),fill:c.primary,dataRole:'market-bg'}),
+    rect({left:0,top:Y(650),width:X(600),height:Y(10),fill:c.secondary,dataRole:'market-bg'}),
+    box(b.companyName||'DEIN MARKT',{left:X(28),top:Y(678),width:X(280),fontSize:S(18),fontWeight:900,fill:'#ffffff',dataRole:'company-name',displayName:'Firmenname'}),
+    box(contactText(b),{left:X(28),top:Y(710),width:X(530),fontSize:S(8.5),fill:'#ffffff',opacity:.92,dataRole:'company-contact',displayName:'Firmenkontakt'}),
+    box(b.address,{left:X(330),top:Y(680),width:X(240),fontSize:S(8.5),fill:'#ffffff',opacity:.90,textAlign:'right',dataRole:'address',displayName:'Adresse'})
+  );
+}
+
+async function marketSingle(canvas,t,w,h,b){
+  const{X,Y,S}=scaler(w,h),c=marketPalette(t,b);clearCanvas(canvas,c.background);
+  await addMarketHeader(canvas,t,b,c,X,Y,S,false);
+  canvas.add(
+    box('PRODUKTNAME',{left:X(34),top:Y(164),width:X(530),fontSize:S(24),lineHeight:1.02,fill:c.dark||c.text,fontWeight:900,dataRole:'product-title:1',displayName:'Produktname',lockRotation:true}),
+    rect({left:X(32),top:Y(213),width:X(340),height:Y(318),rx:S(20),ry:S(20),fill:c.surface,dataRole:'product-card:1',displayName:'Produktfläche'})
+  );
+  addSlot(canvas,X(50),Y(231),X(304),Y(282),'PRODUKTBILD',c,S,1);
+  canvas.add(
+    rect({left:X(392),top:Y(230),width:X(174),height:Y(230),rx:S(22),ry:S(22),fill:c.primary,dataRole:'price-panel'}),
+    text(t.content.oldPrice?`STATT ${t.content.oldPrice}`:'',{left:X(479),top:Y(266),originX:'center',fontSize:S(11),fill:'#ffffff',opacity:.85,linethrough:true,dataRole:'old-price',lockRotation:true}),
+    box(t.content.newPrice,{left:X(404),top:Y(313),width:X(150),fontSize:S(31),fontWeight:900,fill:'#ffffff',textAlign:'center',dataRole:'price:1',lockRotation:true}),
+    rect({left:X(414),top:Y(390),width:X(130),height:Y(38),rx:S(19),ry:S(19),fill:c.secondary,dataRole:'badge-bg'}),
+    text(t.content.badge||'ANGEBOT',{left:X(479),top:Y(409),originX:'center',originY:'center',fontSize:S(10),fontWeight:900,fill:c.secondary==='#FFFFFF'?c.primary:'#ffffff',dataRole:'badge',lockRotation:true}),
+    box(t.content.subtitle||'Nur solange der Vorrat reicht.',{left:X(392),top:Y(485),width:X(174),fontSize:S(10),fill:c.dark||c.text,fontWeight:700,lineHeight:1.15,dataRole:'market-note',displayName:'Hinweis',lockRotation:true})
+  );
+  addMarketFooter(canvas,b,c,X,Y,S);
 }
 async function marketGrid6(canvas,t,w,h,b){
-  const{X,Y,S}=scaler(w,h),c=colors(t,b);clearCanvas(canvas,c.background);canvas.add(rect({left:0,top:0,width:w,height:Y(92),fill:c.primary}),box(t.content.headline,{left:X(26),top:Y(32),width:X(390),fontSize:S(23),fill:'#ffffff',fontWeight:900}));await addLogo(canvas,b,X(470),Y(18),X(95),Y(55),c,S);gridCards(canvas,t,c,X,Y,S,2,3);addFooter(canvas,b,c,X,Y,S);
+  const{X,Y,S}=scaler(w,h),c=marketPalette(t,b);clearCanvas(canvas,c.background);
+  await addMarketHeader(canvas,t,b,c,X,Y,S,true);
+  gridCards(canvas,t,c,X,Y,S,2,3,145,635);
+  addMarketFooter(canvas,b,c,X,Y,S);
 }
 async function marketGrid9(canvas,t,w,h,b){
-  const{X,Y,S}=scaler(w,h),c=colors(t,b);clearCanvas(canvas,c.background);canvas.add(rect({left:0,top:0,width:w,height:Y(92),fill:c.primary}),box(t.content.headline,{left:X(26),top:Y(32),width:X(390),fontSize:S(23),fill:'#ffffff',fontWeight:900}));await addLogo(canvas,b,X(470),Y(18),X(95),Y(55),c,S);gridCards(canvas,t,c,X,Y,S,3,3);addFooter(canvas,b,c,X,Y,S);
+  const{X,Y,S}=scaler(w,h),c=marketPalette(t,b);clearCanvas(canvas,c.background);
+  await addMarketHeader(canvas,t,b,c,X,Y,S,true);
+  gridCards(canvas,t,c,X,Y,S,3,3,145,635);
+  addMarketFooter(canvas,b,c,X,Y,S);
 }
 async function signageDibond(canvas,t,w,h,b){
   const{X,Y,S}=scaler(w,h),c=colors(t,b);clearCanvas(canvas,c.background);canvas.add(rect({left:0,top:0,width:w,height:Y(88),fill:c.primary}),text(t.content.eyebrow,{left:X(28),top:Y(32),fontSize:S(10),fill:'#111111'}),box(t.content.headline,{left:X(28),top:Y(130),width:X(310),fontSize:S(36),lineHeight:.94,fill:c.text,fontWeight:900}),box(t.content.subtitle,{left:X(28),top:Y(250),width:X(300),fontSize:S(12),fill:c.text,opacity:.7}));addSlot(canvas,X(350),Y(125),X(215),Y(300),'DIBOND / PRODUKTFOTO',c,S);addPrice(canvas,t,c,X(28),Y(365),X(270),Y(180),S);await addLogo(canvas,b,X(375),Y(470),X(170),Y(75),c,S);addFooter(canvas,b,c,X,Y,S);
@@ -212,7 +258,14 @@ export async function applyPixvaV12Template(canvas,templateId,width,height,sourc
   await render(canvas,template,width,height,brand);
   try{canvas.setViewportTransform([1,0,0,1,0,0])}catch{}
   canvas.discardActiveObject();
-  canvas.getObjects().forEach(object=>{object.angle=0;object.setCoords?.()});
+  canvas.getObjects().forEach(object=>{
+    object.angle=0;
+    if(template.industry==='supermarkt'){
+      object.lockRotation=true;
+      if('fontStyle' in object)object.fontStyle='normal';
+    }
+    object.setCoords?.();
+  });
   canvas.requestRenderAll();
   return{template,brand};
 }
