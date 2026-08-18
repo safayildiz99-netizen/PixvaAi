@@ -448,6 +448,7 @@ async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
     for(const object of objects){if(String(object.dataRole||'')===role&&'text' in object){object.set({text:String(value)});object.setCoords?.();}}
   };
   setText('headline',draft.headline||'ANGEBOT');
+  setText('company-name',draft.companyName||'');
   setText('product-title:1',draft.productName||'PRODUKT');
   setText('price:1',draft.newPrice||'');
   if(draft.oldPrice)setText('old-price',`STATT ${draft.oldPrice}`);
@@ -667,7 +668,10 @@ export default function DesignEditor({ mode = 'flyer', project, onSaved, canSave
 
       if (project?.data?.offerDraft) {
         try {
-          const brain=await api('/api/pixva?action=brain-context');
+          let brain=await api('/api/pixva?action=brain-context');
+          if(project.data.offerDraft?.companyName){
+            brain={...(brain||{}),isCompany:true,company:{...(brain?.company||{}),companyName:project.data.offerDraft.companyName}};
+          }
           setPixvaBrain(brain);
           const v12Id=recommendPixvaV12Template(brain,'flyer');
           await applyPixvaV12Template(canvas,v12Id,format.canvas[0],format.canvas[1],brain);

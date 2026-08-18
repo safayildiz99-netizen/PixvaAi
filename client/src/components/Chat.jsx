@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 import { ArrowUp, Bot, Camera, Check, ChevronDown, ChevronUp, Cloud, Coins, Copy, Download, Edit3, ExternalLink, FileDown, FileText, ImagePlus, Images, Instagram, Menu, MessageSquarePlus, Mic, Paperclip, Pin, PinOff, RotateCcw, Search, Settings2, ShieldCheck, Square, Trash2, User, Video, Volume2, WandSparkles, X } from 'lucide-react';
 import { api, getToken } from '../api.js';
 import { canUseFeature, getPlan } from '../plans.js';
+import { extractOfferDraft, resolveOfferFlyerPrompt } from '../pixva-offer.js';
 
 const quickPrompts = [
   'Erkläre mir ein schwieriges Thema ganz einfach.',
@@ -72,26 +73,6 @@ function looksLikeFreeImageSearchPrompt(text) {
   const asksForImage = /(bild|foto|produkt|packung|verpackung|logo)/.test(value);
   const asksToGenerate = /(erstell|erstelle|generier|generiere|zeichne|male|entwirf|design|werbebild|poster|flyer)/.test(value);
   return asksForExisting && asksForImage && !asksToGenerate;
-}
-
-function looksLikeOfferFlyerPrompt(text){
-  const value=String(text||'').toLowerCase();
-  return /(flyer|angebot|aktion|wochenangebot|werbung|poster)/.test(value)
-    && /(erstell|erstelle|mach|generier|baue|design)/.test(value)
-    && /(produkt|preis|€|euro|angebot|aktion)/.test(value);
-}
-function extractOfferDraft(text){
-  const clean=String(text||'').replace(/\s+/g,' ').trim();
-  const prices=[...clean.matchAll(/(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|euro)/gi)].map(m=>m[1].replace(',', '.')+' €');
-  const newPrice=prices.at(-1)||'';
-  const oldPrice=prices.length>1?prices[0]:'';
-  let product=clean
-    .replace(/\b(erstell|erstelle|mach|mache|generier|generiere|baue|design)\w*\b/gi,' ')
-    .replace(/\b(mir|einen|eine|ein|für|flyer|als|angebot|aktion|werbung|poster|mit|preis|von|zum|zu)\b/gi,' ')
-    .replace(/\d{1,4}(?:[.,]\d{1,2})?\s*(?:€|euro)/gi,' ')
-    .replace(/\s+/g,' ').trim();
-  if(product.length<2) product='Produkt';
-  return{productName:product.slice(0,80),newPrice,oldPrice,headline:'ANGEBOT',badge:'JETZT'};
 }
 
 function extractImageSearchQuery(text) {
@@ -1456,24 +1437,61 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     const draft=extractOfferDraft(clean);
     const query=`${draft.productName} Produktbild`;
     setGenerationStatus(runId,'PIXVA sucht kostenlos ein passendes Produktbild …');
-    const response=await fetch(`/api/ai/image-search?q=${encodeURIComponent(query)}&source=${encodeURIComponent(productImageSource||'web')}`,{signal});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data?.error||'Produktbildsuche fehlgeschlagen.');
-    const first=(Array.isArray(data.results)?data.results:[])[0];
-    if(!first){
-      appendGenerationMessage(runId,{id:crypto.randomUUID(),role:'assistant',createdAt:Date.now(),content:`Ich habe für „${draft.productName}“ noch kein direkt verwendbares Produktbild gefunden. Öffne die Google-Suche und wähle ein Bild mit passenden Nutzungsrechten.`,attachments:[{kind:'link',name:'Google Bilder öffnen',title:draft.productName,sourceUrl:data.searchLinks?.googleImages}]});
-      setGenerationStatus(runId,'Keine direkte Bilddatei gefunden · 0,00 €');
-      return;
+
+    let data={results:[],searchLinks:{}};
+    try{
+      const response=await fetch(`/api/ai/image-search?q=${encodeURIComponent(query)}&source=${encodeURIComponent(productImageSource||'web')}`,{signal});
+      data=await response.json().catch(()=>({results:[],searchLinks:{}}));
+      if(!response.ok)throw new Error(data?.error||'Produktbildsuche fehlgeschlagen.');
+    }catch(error){
+      if(error?.name==='AbortError')throw error;
+      data={results:[],searchLinks:{googleImages:`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`},warning:error?.message||''};
     }
-    const item={
-      kind:'image-link',name:first.title||draft.productName,title:first.title||draft.productName,
-      previewUrl:`/api/ai/image-proxy?url=${encodeURIComponent(first.thumbnailUrl||first.imageUrl)}`,
-      imageUrl:first.imageUrl||first.thumbnailUrl,thumbnailUrl:first.thumbnailUrl||first.imageUrl,
-      sourceUrl:first.sourceUrl,source:first.source,searchQuery:query,
-      flyerDraft:{...draft,sourcePrompt:clean,provider:data.provider||productImageSource||'web'}
+
+    const first=(Array.isArray(data.results)?data.results:[])[0]||null;
+    let imageDataUrl='';
+    if(first){
+      const remote=first.imageUrl||first.thumbnailUrl||'';
+      try{ if(remote) imageDataUrl=await fetchRemoteImageDataUrl(remote); }catch{}
+    }
+
+    const readyDraft={
+      ...draft,
+      imageDataUrl,
+      sourceUrl:first?.sourceUrl||first?.imageUrl||'',
+      provider:data.provider||productImageSource||'web'
     };
-    appendGenerationMessage(runId,{id:crypto.randomUUID(),role:'assistant',createdAt:Date.now(),content:`Angebotsentwurf vorbereitet · Bildsuche 0,00 €. Öffne „Als Flyer bearbeiten“, dann kannst du Bild, Produktname, Preis, Logo, Texte und alle Elemente direkt ändern.`,attachments:[item]});
-    setGenerationStatus(runId,'Angebotsflyer vorbereitet · 0,00 €');
+
+    const resultAttachments=[];
+    if(first){
+      resultAttachments.push({
+        kind:'image-link',name:first.title||draft.productName,title:first.title||draft.productName,
+        previewUrl:`/api/ai/image-proxy?url=${encodeURIComponent(first.thumbnailUrl||first.imageUrl)}`,
+        imageUrl:first.imageUrl||first.thumbnailUrl,thumbnailUrl:first.thumbnailUrl||first.imageUrl,
+        sourceUrl:first.sourceUrl,source:first.source,searchQuery:query,flyerDraft:readyDraft
+      });
+    }else if(data.searchLinks?.googleImages){
+      resultAttachments.push({kind:'link',name:'Google Bilder öffnen',title:draft.productName,sourceUrl:data.searchLinks.googleImages});
+    }
+
+    appendGenerationMessage(runId,{
+      id:crypto.randomUUID(),role:'assistant',createdAt:Date.now(),
+      content:imageDataUrl
+        ? `Flyer wird jetzt geöffnet · 0,00 €. ${draft.productName}${draft.oldPrice?` · ${draft.oldPrice} → ${draft.newPrice}`:draft.newPrice?` · ${draft.newPrice}`:''}. Bild, Name, Preis, Logo und Texte bleiben vollständig bearbeitbar.`
+        : `Flyer wird jetzt geöffnet · 0,00 €. Für „${draft.productName}“ wurde noch kein direkt ladbares Produktbild gefunden; der Flyer wird trotzdem erstellt und du kannst das Bild im Editor ersetzen.`,
+      attachments:resultAttachments
+    });
+
+    if(onOpenFlyerProject){
+      onOpenFlyerProject({
+        name:`Angebot · ${draft.productName||'Produkt'}`,
+        type:'flyer',
+        data:{format:'post',offerDraft:readyDraft,pixvaV142OfferPrepared:true}
+      });
+      setGenerationStatus(runId,'Angebotsflyer geöffnet · 0,00 €');
+    }else{
+      setGenerationStatus(runId,'Angebotsflyer vorbereitet · 0,00 €');
+    }
   }
 
   async function openSearchImageAsFlyer(item){
@@ -1545,7 +1563,8 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     }
 
     const videoAction = creationMode === 'video' || (creationMode === 'auto' && clean && looksLikeVideoPrompt(clean));
-    const offerFlyerAction = !videoAction && clean && looksLikeOfferFlyerPrompt(clean);
+    const resolvedOfferPrompt = !videoAction && clean ? resolveOfferFlyerPrompt(clean, messages) : '';
+    const offerFlyerAction = Boolean(resolvedOfferPrompt);
     const imageSearchAction = !videoAction && !offerFlyerAction && clean && looksLikeFreeImageSearchPrompt(clean);
     const imageAction = !videoAction && !offerFlyerAction && !imageSearchAction && (creationMode === 'image' || (creationMode === 'auto' && clean && looksLikeImagePrompt(clean)));
     let paidChoice = '';
@@ -1602,7 +1621,7 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
 
     try {
       if (offerFlyerAction) {
-        await generateOfferFlyerMessage(clean, controller.signal, runId);
+        await generateOfferFlyerMessage(resolvedOfferPrompt || clean, controller.signal, runId);
       } else if (imageSearchAction) {
         await generateFreeImageSearchMessage(clean, controller.signal, runId);
       } else if (videoAction && paidChoice === 'free') {

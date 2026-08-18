@@ -834,7 +834,7 @@ export default function Admin({ user, uiSettings = DEFAULT_UI_SETTINGS, onSettin
     </div>}
 
     {tab === 'system' && <div className="admin-grid admin-grid-two">
-      <article className="admin-card"><h3><Activity size={19}/> Systemstatus</h3>
+      <article className="admin-card"><h3><Activity size={19}/> Systemstatus</h3><div className="info-box">Build: PIXVA V14.2 HARD SWITCH · Flyerbefehle laufen vor dem normalen Chat.</div>
         {healthLoading && <div className="service-row warning"><RefreshCw className="spin"/>Konfiguration wird kostenlos geprüft …</div>}
         {!healthLoading && ['supabase','gemini','openai','sora'].map((key) => {
           const service = health?.services?.[key];
