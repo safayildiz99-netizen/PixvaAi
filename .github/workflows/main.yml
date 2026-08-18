@@ -1,4 +1,4 @@
-name: PIXVA V14.7 9ER ANGEBOT UND SUPERMARKT LOGO
+name: PIXVA V14.7.1 SLOTINDEX CHECK FIX
 
 on:
   workflow_dispatch:
@@ -102,9 +102,9 @@ jobs:
           grep -Fq "mapWithConcurrency(multiDraft.products,3" client/src/components/Chat.jsx
           grep -Fq "findVerifiedProductImage(product.productName" client/src/components/Chat.jsx
           grep -Fq 'offerProducts.length>=9' client/src/components/DesignEditorLegacy.jsx
-          grep -Fq "product-title:${slotIndex}" client/src/components/DesignEditorLegacy.jsx
-          grep -Fq "product-slot:${slotIndex}" client/src/components/DesignEditorLegacy.jsx
-          grep -Fq "product-image:${slotIndex}" client/src/components/DesignEditorLegacy.jsx
+          grep -Fq 'product-title:${slotIndex}' client/src/components/DesignEditorLegacy.jsx
+          grep -Fq 'product-slot:${slotIndex}' client/src/components/DesignEditorLegacy.jsx
+          grep -Fq 'product-image:${slotIndex}' client/src/components/DesignEditorLegacy.jsx
           echo "OK: 9er Auftrag nutzt 9 getrennte Karten und Bildslots."
 
       - name: Automatische Supermarkt Logo Suche prüfen
@@ -191,7 +191,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "PIXVA V14.7"
+          git config user.name "PIXVA V14.7.1"
           git config user.email "actions@users.noreply.github.com"
           git add -- \
             api/pixva.js \
@@ -201,8 +201,8 @@ jobs:
             client/src/pixva-multi-offer.js
 
           if git diff --cached --quiet; then
-            echo "PIXVA V14.7 ist bereits installiert."
+            echo "PIXVA V14.7.1 ist bereits installiert."
             exit 0
           fi
-          git commit -m "PIXVA V14.7 9er Angebote und Supermarkt Logos automatisch"
+          git commit -m "PIXVA V14.7.1 9er und Logo Check Fix"
           git push origin HEAD:main
