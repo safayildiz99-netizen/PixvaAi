@@ -827,6 +827,45 @@ export default async function handler(req,res){
       return send(res,200,{translation:result.text});
     }
 
+    if(action==='verify-product-image'&&req.method==='POST'){
+      await enforceRate(client,req,'product-image-verify',18,60);
+      const requestedProduct=String(body.requestedProduct||'').trim().slice(0,180);
+      const candidateTitle=String(body.candidateTitle||'').trim().slice(0,240);
+      const raw=String(body.imageDataUrl||'');
+      if(!requestedProduct)return send(res,400,{error:'Gewünschtes Produkt fehlt.'});
+      const match=raw.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/i);
+      if(!match)return send(res,400,{error:'Produktbild fehlt oder hat ein nicht unterstütztes Format.'});
+      const buffer=Buffer.from(match[2],'base64');
+      if(!buffer.length||buffer.length>3*1024*1024)return send(res,400,{error:'Produktbild für die Prüfung ist zu groß.'});
+      try{
+        const result=await gemini({
+          json:true,
+          temperature:0,
+          inline:{buffer,mimeType:match[1].toLowerCase()},
+          prompt:`Du prüfst ausschließlich, ob auf diesem Produktfoto EXAKT das angefragte Handelsprodukt zu sehen ist. Erfinde nichts.
+
+GEWÜNSCHTES PRODUKT: ${requestedProduct}
+SUCHTREFFER-TITEL: ${candidateTitle||'(kein Titel)'}
+
+Regeln:
+- Prüfe sichtbare Marke, Produktlinie/Untermarke und Variante auf der Verpackung.
+- Wortreihenfolge darf abweichen, z.B. "Sucuk Dilim" und "Dilim Sucuk".
+- exactMatch=false bei anderer Produktlinie oder anderer Variante, z.B. EGEM statt normalem Egetürk Sucuk Dilim, Vegan, Veggie, Knoblauch/Garlic, Light, Bio, Geflügel, scharf usw., wenn diese Variante nicht ausdrücklich verlangt wurde.
+- exactMatch=false, wenn Produkt/Verpackung nicht sicher erkennbar ist.
+- Ein ähnliches Produkt derselben Marke reicht NICHT.
+- confidence 0 bis 1.
+
+Antworte ausschließlich JSON:
+{"exactMatch":boolean,"brand":"","detectedProduct":"","variant":"","confidence":0,"reason":"kurz"}`
+        });
+        const check=parseJsonText(result.text,{exactMatch:false,brand:'',detectedProduct:'',variant:'',confidence:0,reason:'Produkt konnte nicht sicher geprüft werden.'});
+        const exact=check?.exactMatch===true&&Number(check?.confidence||0)>=0.72;
+        return send(res,200,{verified:exact,check:{...check,exactMatch:exact},model:result.model||''});
+      }catch(error){
+        return send(res,200,{verified:false,unavailable:true,error:error?.message||'Visuelle Produktprüfung ist nicht verfügbar.'});
+      }
+    }
+
     if(action==='text-generate'&&req.method==='POST'){
       await enforceRate(client,req,'text-generate',30,60);
       const prompt=String(body.prompt||'').trim().slice(0,20000);

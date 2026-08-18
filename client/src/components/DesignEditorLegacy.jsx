@@ -455,12 +455,13 @@ async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
   if(draft.oldPrice)setText('old-price',`STATT ${draft.oldPrice}`);
   if(draft.badge)setText('badge',draft.badge);
   const slot=objects.find(object=>String(object.dataRole||'')==='product-slot:1');
+  const existing=canvas.getObjects().filter(object=>String(object.dataRole||'')==='product-image:1');
+  existing.forEach(object=>canvas.remove(object));
+  /* Alte/ungeprüfte automatische Produktbilder dürfen niemals aus einem früheren Entwurf hängen bleiben. */
   const remoteProductUrl=draft.imageUrl||draft.thumbnailUrl||'';
-  const loadableProductSource=draft.imageDataUrl||remoteProductUrl;
+  const loadableProductSource=draft.imageVerified===true?(draft.imageDataUrl||remoteProductUrl):'';
   if(loadableProductSource&&slot){
     try{
-      const existing=canvas.getObjects().filter(object=>String(object.dataRole||'')==='product-image:1');
-      existing.forEach(object=>canvas.remove(object));
       const label=canvas.getObjects().find(object=>String(object.dataRole||'')==='product-slot-label:1');
       if(label)canvas.remove(label);
       let source=loadableProductSource;

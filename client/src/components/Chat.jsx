@@ -124,6 +124,44 @@ async function fetchRemoteImageDataUrl(url) {
   return blobToDataUrl(await response.blob());
 }
 
+async function compactProductImageForVerification(dataUrl) {
+  const source=String(dataUrl||'');
+  if(!source.startsWith('data:image/'))return source;
+  const image=await new Promise((resolve,reject)=>{
+    const element=new Image();
+    element.onload=()=>resolve(element);
+    element.onerror=()=>reject(new Error('Produktbild konnte nicht für die Prüfung gelesen werden.'));
+    element.src=source;
+  });
+  const max=900;
+  const scale=Math.min(1,max/Math.max(image.naturalWidth||image.width,image.naturalHeight||image.height));
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round((image.naturalWidth||image.width)*scale));
+  canvas.height=Math.max(1,Math.round((image.naturalHeight||image.height)*scale));
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(image,0,0,canvas.width,canvas.height);
+  return canvas.toDataURL('image/jpeg',0.82);
+}
+
+async function verifyProductImageVisually(requestedProduct,candidate,imageDataUrl) {
+  try{
+    const compact=await compactProductImageForVerification(imageDataUrl);
+    const result=await api('/api/pixva?action=verify-product-image',{
+      method:'POST',
+      body:JSON.stringify({
+        requestedProduct,
+        candidateTitle:candidate?.title||'',
+        imageDataUrl:compact
+      })
+    });
+    return result||{verified:false};
+  }catch(error){
+    return{verified:false,unavailable:true,error:error?.message||'Visuelle Produktprüfung fehlgeschlagen.'};
+  }
+}
+
 async function normalizeImageDataUrlForPdf(dataUrl) {
   const image = await new Promise((resolve, reject) => {
     const element = new Image();
@@ -1471,15 +1509,21 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       }
     }
     const candidates=exactCandidates.slice(0,6);
-    let first=candidates[0]||null;
+    let first=null;
     let imageDataUrl='';
+    let imageVerification=null;
+    let verificationUnavailable=false;
     for(const candidate of candidates){
       const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
       if(!remote)continue;
       try{
         const loaded=await fetchRemoteImageDataUrl(remote);
-        if(String(loaded||'').startsWith('data:image/')){
+        if(!String(loaded||'').startsWith('data:image/'))continue;
+        const verification=await verifyProductImageVisually(draft.productName,candidate,loaded);
+        if(verification?.unavailable)verificationUnavailable=true;
+        if(verification?.verified===true){
           imageDataUrl=loaded;
+          imageVerification=verification.check||null;
           first=candidate;
           break;
         }
@@ -1492,7 +1536,10 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       imageUrl:first?.imageUrl||'',
       thumbnailUrl:first?.thumbnailUrl||'',
       sourceUrl:first?.sourceUrl||first?.imageUrl||'',
-      provider:data.provider||productImageSource||'web'
+      provider:data.provider||productImageSource||'web',
+      imageVerified:Boolean(imageDataUrl&&first),
+      imageVerification,
+      productImageKey:`${draft.productName}::${Date.now()}`
     };
 
     const resultAttachments=[];
@@ -1510,8 +1557,8 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     appendGenerationMessage(runId,{
       id:crypto.randomUUID(),role:'assistant',createdAt:Date.now(),
       content:imageDataUrl
-        ? `Flyer wird jetzt geöffnet · 0,00 €. ${draft.productName}${draft.oldPrice?` · ${draft.oldPrice} → ${draft.newPrice}`:draft.newPrice?` · ${draft.newPrice}`:''}. Bild, Name, Preis, Logo und Texte bleiben vollständig bearbeitbar.`
-        : `Flyer wird jetzt geöffnet · 0,00 €. PIXVA hat für „${draft.productName}“ keinen ausreichend exakten Produktbild-Treffer bestätigt und setzt deshalb bewusst KEIN falsches Produkt ein. Du kannst das Bild im Editor ersetzen oder die Suche erneut starten.`,
+        ? `Flyer wird jetzt geöffnet · 0,00 €. ${draft.productName}${draft.oldPrice?` · ${draft.oldPrice} → ${draft.newPrice}`:draft.newPrice?` · ${draft.newPrice}`:''}. Das Produktbild wurde zusätzlich VISUELL gegen die Verpackung geprüft. Bild, Name, Preis, Logo und Texte bleiben vollständig bearbeitbar.`
+        : `Flyer wird jetzt geöffnet · 0,00 €. PIXVA hat für „${draft.productName}“ kein Produktbild visuell sicher bestätigt${verificationUnavailable?' (die visuelle Prüfung war gerade nicht verfügbar)':''} und setzt deshalb bewusst KEIN altes oder ähnliches Produkt ein.`,
       attachments:resultAttachments
     });
 
