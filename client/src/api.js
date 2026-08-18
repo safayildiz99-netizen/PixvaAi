@@ -17,9 +17,19 @@ function parseBody(options) {
   return options.body;
 }
 
+function withTimeout(promise, timeoutMs = 12000, label = 'Anfrage') {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} dauert zu lange. Bitte erneut versuchen.`)), timeoutMs);
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
 async function rpc(name, args = {}) {
   if (!supabase) throw new Error('Supabase ist noch nicht verbunden. Prüfe die Vercel Environment Variables.');
-  const { data, error } = await supabase.rpc(name, args);
+  const { data, error } = await withTimeout(supabase.rpc(name, args), 12000, `Datenbankfunktion ${name}`);
   if (error) throw new Error(error.message || 'Datenbankfehler.');
   if (data?.error) throw new Error(data.error);
   return data;

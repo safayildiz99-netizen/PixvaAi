@@ -1,0 +1,15 @@
+/* PIXVA V14.10 STABILITAET: sichtbare Lade- und Fehlerzustaende statt schwarzer/leerer Seite */
+.workspace-content{position:relative;min-height:calc(100vh - 66px)}
+.workspace-loader{min-height:calc(100vh - 66px);display:grid;place-items:center;align-content:center;gap:10px;color:#d8edf8;background:#071018;text-align:center;padding:32px}
+.workspace-loader svg{animation:pixva-spin 1.2s linear infinite;color:#43cfcb}
+.workspace-loader span{color:#7898aa;font-size:.82rem}
+.view-transition-indicator{position:fixed;right:18px;top:78px;z-index:80;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:#0b2230;border:1px solid #2c718f;color:#dff7ff;box-shadow:0 10px 35px rgba(0,0,0,.28);font-size:.76rem;pointer-events:none}
+.view-transition-indicator svg{animation:pixva-spin 1.2s linear infinite}
+.workspace-error-boundary{min-height:calc(100vh - 66px);display:grid;place-items:center;align-content:center;gap:12px;padding:36px;text-align:center;background:#071018;color:#e9f7ff}
+.workspace-error-boundary>svg{color:#ffca55}
+.workspace-error-boundary h2{margin:0;max-width:680px}
+.workspace-error-boundary p{margin:0;color:#8cabbc}
+.workspace-error-boundary code{max-width:760px;white-space:pre-wrap;word-break:break-word;background:#10202b;border:1px solid #25475b;border-radius:10px;padding:10px 12px;color:#ffdbdb}
+.workspace-error-boundary>div{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.workspace-error-boundary button{display:flex;align-items:center;gap:7px;border:1px solid #2f718e;background:#102b3a;color:#fff;border-radius:10px;padding:10px 13px}
+@keyframes pixva-spin{to{transform:rotate(360deg)}}

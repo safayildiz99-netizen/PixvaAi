@@ -1,19 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, startTransition, useEffect, useMemo, useState } from 'react';
 import {
   BadgeEuro, Bot, BrainCircuit, FileImage, Film, FolderOpen, Globe2, LayoutTemplate, LockKeyhole, LogIn, LogOut,
   KeyRound, Menu, PanelLeftClose, PanelLeftOpen, Settings, Sparkles
 } from 'lucide-react';
 import { api, getToken, setToken } from './api.js';
 import Login from './components/Login.jsx';
-import Chat from './components/Chat.jsx';
-import DesignEditor from './components/DesignEditor.jsx';
-import VideoStudio from './components/VideoStudio.jsx';
-import WebsiteBuilder from './components/WebsiteBuilder.jsx';
-import Projects from './components/Projects.jsx';
-import Admin from './components/Admin.jsx';
-import AccountSettings from './components/AccountSettings.jsx';
-import Subscriptions from './components/Subscriptions.jsx';
-import PixvaCenter from './components/PixvaCenter.jsx';
+import AppErrorBoundary from './components/AppErrorBoundary.jsx';
+
+// Große PIXVA-Bereiche werden erst geladen, wenn sie wirklich geöffnet werden.
+// Das reduziert den Start-Bundle und verhindert lange schwarze/leere Frames.
+const Chat = lazy(()=>import('./components/Chat.jsx'));
+const DesignEditor = lazy(()=>import('./components/DesignEditor.jsx'));
+const VideoStudio = lazy(()=>import('./components/VideoStudio.jsx'));
+const WebsiteBuilder = lazy(()=>import('./components/WebsiteBuilder.jsx'));
+const Projects = lazy(()=>import('./components/Projects.jsx'));
+const Admin = lazy(()=>import('./components/Admin.jsx'));
+const AccountSettings = lazy(()=>import('./components/AccountSettings.jsx'));
+const Subscriptions = lazy(()=>import('./components/Subscriptions.jsx'));
+const PixvaCenter = lazy(()=>import('./components/PixvaCenter.jsx'));
 import { DEFAULT_SUBSCRIPTION, canUseFeature, getPlan, normalizeSubscription } from './plans.js';
 
 const NAV_DEFINITIONS = {
@@ -28,38 +32,6 @@ const NAV_DEFINITIONS = {
 };
 
 const DEFAULT_NAV_ITEMS = Object.values(NAV_DEFINITIONS).map(({id,label})=>({id,label,visible:true}));
-
-const PIXVA_DEFAULT_SIGNUP_CONFIG = {
-  industries:[
-    {id:'supermarkt',label:'Supermarkt',enabled:true},
-    {id:'werbetechnik',label:'Werbetechnik',enabled:true},
-    {id:'elektriker',label:'Elektriker',enabled:true},
-    {id:'programmierer',label:'Programmierer / Software & KI',enabled:true},
-    {id:'friseur',label:'Friseur',enabled:true},
-    {id:'sonstiges',label:'Sonstiges',enabled:true}
-  ],
-  fields:[
-    {id:'username',label:'Benutzername',scope:'all',type:'text',enabled:true,required:true},
-    {id:'password',label:'Passwort',scope:'all',type:'password',enabled:true,required:true},
-    {id:'firstName',label:'Vorname',scope:'all',type:'text',enabled:true,required:false},
-    {id:'lastName',label:'Nachname',scope:'all',type:'text',enabled:true,required:false},
-    {id:'email',label:'Normale E-Mail',scope:'all',type:'email',enabled:true,required:false},
-    {id:'phone',label:'Private Telefonnummer',scope:'all',type:'tel',enabled:true,required:false},
-    {id:'birthDate',label:'Geburtsdatum',scope:'all',type:'date',enabled:true,required:false},
-    {id:'companyName',label:'Firmenname',scope:'company',type:'text',enabled:true,required:true},
-    {id:'companyType',label:'Branche',scope:'company',type:'industry',enabled:true,required:true},
-    {id:'companyTypeOther',label:'Welche Branche?',scope:'company',type:'text',enabled:true,required:false,showWhen:{field:'companyType',equals:'sonstiges'}},
-    {id:'ownerName',label:'Firmeninhaber / Ansprechpartner',scope:'company',type:'text',enabled:true,required:false},
-    {id:'companyEmail',label:'Firmen-E-Mail',scope:'company',type:'email',enabled:true,required:false},
-    {id:'companyPhone',label:'Firmen-Telefon',scope:'company',type:'tel',enabled:true,required:false},
-    {id:'privatePhone',label:'Zusätzliche private Tel.',scope:'company',type:'tel',enabled:true,required:false},
-    {id:'website',label:'Bestehende Website',scope:'company',type:'url',enabled:true,required:false},
-    {id:'instagram',label:'Instagram',scope:'company',type:'text',enabled:true,required:false},
-    {id:'address',label:'Adresse',scope:'company',type:'text',enabled:true,required:false},
-    {id:'logoDataUrl',label:'Firmenlogo',scope:'company',type:'logo',enabled:true,required:true}
-  ]
-};
-
 
 const titles = {
   chat:'PIXVA Chat', flyer:'Angebote & Flyer', image:'Motive & Editor',
@@ -103,10 +75,7 @@ const DEFAULT_UI_SETTINGS = {
   paymentProvider: 'paypal',
   paymentMerchantLabel: '',
   planPurchasable: { free:false, creator:true, studio:true },
-  paidAccessDays: 30,
-  productImageSource:'web',
-  templateConfig:{hiddenBuiltInIds:[],customTemplates:[]},
-  signupConfig:PIXVA_DEFAULT_SIGNUP_CONFIG
+  paidAccessDays: 30
 };
 
 const guestUser = { id:'guest', username:'Gast', role:'guest', active:true, mustChangePassword:false };
@@ -143,6 +112,8 @@ export default function App(){
   const [uiSettings,setUiSettings]=useState(DEFAULT_UI_SETTINGS);
   const [subscription,setSubscription]=useState(DEFAULT_SUBSCRIPTION);
   const [requestedView,setRequestedView]=useState('');
+  const [viewPending,setViewPending]=useState(false);
+  const [viewRetryKey,setViewRetryKey]=useState(0);
 
   useEffect(()=>{
     let cancelled=false;
@@ -173,29 +144,6 @@ export default function App(){
     api('/api/me').then((r)=>{setUser(r.user);setGuest(false);localStorage.removeItem('yildiz_ai_guest')})
       .catch(()=>setToken('')).finally(()=>setLoading(false));
   },[]);
-
-  useEffect(()=>{
-    if(!user || guest) return;
-    api('/api/pixva?action=snapshot-auto',{method:'POST',body:JSON.stringify({source:'login'})}).catch(()=>{});
-  },[user?.id,guest]);
-
-  useEffect(()=>{
-    let cancelled=false;
-    if(!user || guest)return()=>{cancelled=true};
-    api('/api/pixva?action=template-settings').then((result)=>{
-      if(cancelled)return;
-      setUiSettings((prev)=>{
-        const current=prev?.templateConfig||{hiddenBuiltInIds:[],customTemplates:[]};
-        const incoming=result?.config;
-        if(!incoming)return prev;
-        return {...prev,templateConfig:{
-          hiddenBuiltInIds:Array.isArray(incoming.hiddenBuiltInIds)?incoming.hiddenBuiltInIds:current.hiddenBuiltInIds,
-          customTemplates:Array.isArray(incoming.customTemplates)?incoming.customTemplates:current.customTemplates
-        }};
-      });
-    }).catch(()=>{});
-    return()=>{cancelled=true};
-  },[user?.id,guest]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -236,16 +184,25 @@ export default function App(){
     const feature=VIEW_FEATURES[id];
     return !feature||canUseFeature(subscription,feature,activeUser?.role,uiSettings.customPlans);
   }
+  function navigateTo(id){
+    setViewPending(true);
+    startTransition(()=>setView(id));
+  }
+  useEffect(()=>{
+    if(!viewPending) return;
+    const timer=window.setTimeout(()=>setViewPending(false),120);
+    return()=>window.clearTimeout(timer);
+  },[view,viewPending]);
   function changeView(id){
     setSelectedProject(null);
     if(id==='pixva'&&guest){exit();return;}
-    if(id!=='admin'&&id!=='account'&&!enabledBySettings(id,uiSettings)) return setView('chat');
+    if(id!=='admin'&&id!=='account'&&!enabledBySettings(id,uiSettings)) return navigateTo('chat');
     if(!featureAllowed(id)){
       setRequestedView(id);
-      setView('plans');
+      navigateTo('plans');
     }else{
       setRequestedView('');
-      setView(id);
+      navigateTo(id);
     }
     if(isMobile)setSidebar(false);
   }
@@ -253,38 +210,31 @@ export default function App(){
     const normalized=normalizeSubscription(next,uiSettings.customPlans);
     setSubscription(normalized);
     if(requestedView&&canUseFeature(normalized,VIEW_FEATURES[requestedView],activeUser?.role,uiSettings.customPlans)){
-      setView(requestedView);setRequestedView('');
+      navigateTo(requestedView);setRequestedView('');
     }
   }
   function openProject(project){
     const feature=VIEW_FEATURES[project.type];
-    if(feature&&!canUseFeature(subscription,feature,activeUser?.role,uiSettings.customPlans)){setRequestedView(project.type);setView('plans');return}
-    setSelectedProject(project);setView(project.type);
+    if(feature&&!canUseFeature(subscription,feature,activeUser?.role,uiSettings.customPlans)){setRequestedView(project.type);navigateTo('plans');return}
+    setSelectedProject(project);navigateTo(project.type);
   }
   function saved(){setRefreshKey((n)=>n+1)}
   function openGeneratedImageProject(imageProject){
     if(!imageProject?.data?.initialImage) return;
-    if(!canUseFeature(subscription,'image',activeUser?.role,uiSettings.customPlans)){setRequestedView('image');setView('plans');return}
+    if(!canUseFeature(subscription,'image',activeUser?.role,uiSettings.customPlans)){setRequestedView('image');navigateTo('plans');return}
     setSelectedProject({id:`generated-image-${Date.now()}`,type:'image',name:imageProject.name||'KI-Bild bearbeiten',data:imageProject.data});
-    setView('image');
-  }
-
-  function openGeneratedFlyerProject(flyerProject){
-    if(!flyerProject?.data) return;
-    if(!canUseFeature(subscription,'flyer',activeUser?.role,uiSettings.customPlans)){setRequestedView('flyer');setView('plans');return}
-    setSelectedProject({id:`generated-flyer-${Date.now()}`,type:'flyer',name:flyerProject.name||'PIXVA Angebotsflyer',data:flyerProject.data});
-    setView('flyer');
+    navigateTo('image');
   }
 
   function openGeneratedVideoProject(videoProject){
     if(!videoProject?.data?.scenes?.length) return;
-    if(!canUseFeature(subscription,'video',activeUser?.role,uiSettings.customPlans)){setRequestedView('video');setView('plans');return}
+    if(!canUseFeature(subscription,'video',activeUser?.role,uiSettings.customPlans)){setRequestedView('video');navigateTo('plans');return}
     setSelectedProject({id:`generated-${Date.now()}`,type:'video',name:videoProject.name||'Generiertes Video',data:videoProject.data});
-    setView('video');
+    navigateTo('video');
   }
 
   if(loading) return <div className="app-loader"><Sparkles/>PIXVA Studio lädt …</div>;
-  if(!activeUser) return <Login onLogin={loggedIn} onGuest={enterGuest} allowGuest={uiSettings.allowGuest!==false} signupConfig={uiSettings.signupConfig||PIXVA_DEFAULT_SIGNUP_CONFIG}/>;
+  if(!activeUser) return <Login onLogin={loggedIn} onGuest={enterGuest} allowGuest={uiSettings.allowGuest!==false}/>;
 
   const uiText={...DEFAULT_UI_SETTINGS.texts,...(uiSettings.texts||{})};
   const uiTheme={...DEFAULT_UI_SETTINGS.theme,...(uiSettings.theme||{})};
@@ -300,7 +250,7 @@ export default function App(){
       <div className="sidebar-bottom">
         {!guest&&<button className={view==='account'?'active':''} onClick={()=>changeView('account')}><KeyRound size={19}/><span>Mein Konto</span></button>}
         {activeUser.role==='admin'&&<button className={view==='admin'?'active':''} onClick={()=>changeView('admin')}><Settings size={19}/><span>Admin</span></button>}
-        <div className="user-box"><div className="user-avatar">{activeUser.username.slice(0,2).toUpperCase()}</div><div><b>{activeUser.username}</b><span>{guest?'Free · Gast':`${currentPlan.name}${activeUser.role==='admin'?' · Admin':''}`}</span></div><button onClick={exit} title={guest?'Anmelden':'Abmelden'}>{guest?<LogIn size={17}/>:<LogOut size={17}/>}</button></div>
+        <div className="user-box"><div className="user-avatar">{String(activeUser?.username||'PX').slice(0,2).toUpperCase()}</div><div><b>{activeUser?.username||'PIXVA Nutzer'}</b><span>{guest?'Free · Gast':`${currentPlan.name}${activeUser.role==='admin'?' · Admin':''}`}</span></div><button onClick={exit} title={guest?'Anmelden':'Abmelden'}>{guest?<LogIn size={17}/>:<LogOut size={17}/>}</button></div>
       </div>
     </aside>
     {sidebar&&isMobile&&<button className="sidebar-backdrop" aria-label="Menü schließen" onClick={()=>setSidebar(false)}/>} 
@@ -313,16 +263,25 @@ export default function App(){
       {activeUser.mustChangePassword&&!guest&&<div className="warning-banner">Das Startpasswort ist noch aktiv. Öffne links „Mein Konto“ und lege dein eigenes Passwort fest.</div>}
       {requestedView&&view==='plans'&&<div className="plan-unlock-banner"><LockKeyhole size={17}/><span>Der Bereich „{titles[requestedView]||requestedView}“ ist in deinem aktuellen Zugang nicht enthalten. Während der Beta kannst du den passenden Zugang kostenlos aktivieren.</span></div>}
       <div className="workspace-content">
-        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} productImageSource={uiSettings.productImageSource||'web'} onOpenImageProject={openGeneratedImageProject} onOpenFlyerProject={openGeneratedFlyerProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans} templateConfig={uiSettings.templateConfig}/>} 
-        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans} templateConfig={uiSettings.templateConfig}/>} 
-        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans} templateConfig={uiSettings.templateConfig}/>} 
+        {viewPending&&<div className="view-transition-indicator"><Sparkles size={16}/> Bereich wird geladen …</div>}
+        <AppErrorBoundary
+          resetKey={`${view}-${selectedProject?.id||'none'}-${viewRetryKey}`}
+          onRetry={()=>setViewRetryKey((n)=>n+1)}
+          onBackToChat={()=>{setSelectedProject(null);setRequestedView('');navigateTo('chat')}}
+        >
+          <Suspense fallback={<div className="workspace-loader"><Sparkles/><b>{titles[view]||'PIXVA'} wird geladen …</b><span>Die Oberfläche bleibt aktiv.</span></div>}>
+        {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='website'&&featureAllowed('website')&&<WebsiteBuilder key={selectedProject?.id||'new-site'} project={selectedProject?.type==='website'?selectedProject:null} onSaved={saved} canSave={!guest} uiText={uiText}/>} 
         {view==='projects'&&featureAllowed('projects')&&!guest&&<Projects onOpen={openProject} refreshKey={refreshKey} uiText={uiText}/>} 
-        {view==='pixva'&&!guest&&<PixvaCenter user={activeUser} onOpenImageProject={openGeneratedImageProject} onOpenFlyerProject={openGeneratedFlyerProject} onOpenVideoProject={openGeneratedVideoProject}/>}
+        {view==='pixva'&&!guest&&<PixvaCenter user={activeUser} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject}/>}
         {view==='plans'&&<Subscriptions user={activeUser} isGuest={guest} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onRequireLogin={exit} uiText={uiText} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices} customPlans={uiSettings.customPlans} billingSettings={uiSettings}/>} 
         {view==='account'&&!guest&&<AccountSettings user={activeUser} onUserChanged={setUser} subscription={subscription} onSubscriptionChanged={handleSubscriptionChanged} onOpenPlans={()=>changeView('plans')} customPlans={uiSettings.customPlans} planPrices={uiSettings.planPrices} betaPlanPrices={uiSettings.betaPlanPrices}/>} 
         {view==='admin'&&activeUser.role==='admin'&&<Admin user={activeUser} uiSettings={uiSettings} onSettingsChanged={setUiSettings} onOpenView={changeView}/>} 
+          </Suspense>
+        </AppErrorBoundary>
       </div>
     </main>
   </div>;

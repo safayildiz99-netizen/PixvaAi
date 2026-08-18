@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './styles.css';
+import './stability.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -50,10 +51,29 @@ if (typeof window !== 'undefined') {
   const run = () => applyPixvaBranding(document.body);
   queueMicrotask(run);
   window.addEventListener('load',run,{once:true});
+
+  // React erzeugt beim Seitenwechsel sehr viele DOM-Mutationen auf einmal.
+  // Die alte Version hat für JEDE Mutation sofort einen kompletten Text-Scan gestartet.
+  // Jetzt werden Änderungen gesammelt und höchstens einmal pro Frame verarbeitet.
+  const pending = new Set();
+  let frame = 0;
+  const schedule = (node) => {
+    const target = node?.nodeType === 3 ? node.parentElement : node;
+    if (!target) return;
+    pending.add(target);
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const roots = [...pending];
+      pending.clear();
+      for (const root of roots) applyPixvaBranding(root);
+    });
+  };
+
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      if (mutation.type === 'characterData') applyPixvaBranding(mutation.target);
-      for (const node of mutation.addedNodes || []) applyPixvaBranding(node);
+      if (mutation.type === 'characterData') schedule(mutation.target);
+      for (const node of mutation.addedNodes || []) schedule(node);
     }
   });
   const start = () => observer.observe(document.body,{subtree:true,childList:true,characterData:true});
