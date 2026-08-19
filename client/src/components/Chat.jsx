@@ -1528,72 +1528,85 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
 
   async function findVerifiedProductImage(productName, signal){
     const queries=productSearchQueries(productName);
-    const raw=[];
+    const fresh=isFreshUnbrandedOfferProduct(productName);
+    const maxSearches=fresh?1:(/egeturk/i.test(normalizeOfferText(productName))?3:2);
+    const seen=new Set();
+    const allExact=[];
     let provider='web';
     let searchLinks={};
-    const seen=new Set();
+    let verificationUnavailable=false;
+    let verifyAttempts=0;
 
-    for(const query of queries){
+    for(const query of queries.slice(0,maxSearches)){
       const data=await searchExistingImages(query,signal,{mode:'product',source:productImageSource||'web'});
       provider=data.provider||provider;
       searchLinks=data.searchLinks||searchLinks;
+
+      const batch=[];
       for(const item of Array.isArray(data.results)?data.results:[]){
         const key=item?.imageUrl||item?.thumbnailUrl||'';
         if(!key||seen.has(key))continue;
-        seen.add(key);raw.push(item);
+        seen.add(key);
+        batch.push(item);
       }
-      if(raw.filter(candidate=>isExactProductCandidate(candidate,productName,.56)).length>=2)break;
-    }
 
-    const exact=raw.filter(candidate=>isExactProductCandidate(candidate,productName,.56)).slice(0,3);
-    let verificationUnavailable=false;
-    for(const candidate of exact){
-      const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
-      if(!remote)continue;
-      try{
-        const loaded=await fetchRemoteImageDataUrl(remote);
-        if(!String(loaded||'').startsWith('data:image/'))continue;
-        const verification=await verifyProductImageVisually(productName,candidate,loaded);
-        if(verification?.unavailable)verificationUnavailable=true;
-        if(verification?.verified===true){
-          return{
-            ...candidate,
-            imageDataUrl:loaded,
-            imageVerified:true,
-            imageVerification:verification.check||null,
-            provider,
-            searchLinks
-          };
+      // Frische, unmarkierte Fleischartikel brauchen keine langsame Verpackungs-Vision.
+      // Ein sauberer Variantenfilter + bestes Suchresultat reicht hier.
+      if(fresh){
+        const candidate=batch.find(item=>!productVariantMismatch(item,productName));
+        if(candidate){
+          const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
+          try{
+            const loaded=await fetchRemoteImageDataUrl(remote);
+            if(String(loaded||'').startsWith('data:image/')){
+              return{
+                ...candidate,
+                imageDataUrl:loaded,
+                imageVerified:true,
+                imageVerification:{exactMatch:true,confidence:.80,reason:'Frischer unmarkierter Artikel: schnellster passender Produktfoto-Treffer.'},
+                provider,
+                searchLinks
+              };
+            }
+          }catch{}
         }
-      }catch{}
-    }
+        continue;
+      }
 
-    // Frische, unmarkierte Fleischartikel besitzen oft keine Verpackung.
-    // Hier reicht ein gut passendes Produktfoto, solange keine fremde Marke/Variante im Treffer steckt.
-    if(isFreshUnbrandedOfferProduct(productName)){
-      const freshCandidates=raw.filter(candidate=>!productVariantMismatch(candidate,productName)).slice(0,4);
-      for(const candidate of freshCandidates){
+      const exact=batch.filter(candidate=>isExactProductCandidate(candidate,productName,.56)).slice(0,2);
+      allExact.push(...exact);
+
+      for(const candidate of exact){
+        if(verifyAttempts>=2)break;
+        verifyAttempts+=1;
         const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
         if(!remote)continue;
         try{
           const loaded=await fetchRemoteImageDataUrl(remote);
           if(!String(loaded||'').startsWith('data:image/'))continue;
-          return{
-            ...candidate,
-            imageDataUrl:loaded,
-            imageVerified:true,
-            imageVerification:{exactMatch:true,confidence:.78,reason:'Frischer unmarkierter Artikel: passendstes Produktfoto aus der exakten Suche.'},
-            provider,
-            searchLinks
-          };
+          const verification=await verifyProductImageVisually(productName,candidate,loaded);
+          if(verification?.unavailable)verificationUnavailable=true;
+          if(verification?.verified===true){
+            return{
+              ...candidate,
+              imageDataUrl:loaded,
+              imageVerified:true,
+              imageVerification:verification.check||null,
+              provider,
+              searchLinks
+            };
+          }
         }catch{}
       }
+
+      // Zwei echte visuelle Versuche reichen. Danach lieber leer statt minutenlang warten.
+      if(verifyAttempts>=2)break;
     }
 
-    // Falls Gemini/Vision technisch nicht verfügbar ist, darf bei einem sehr starken
-    // Metadaten-Treffer ein sicherer Fallback verwendet werden. Variantenfilter bleibt aktiv.
+    // Falls Gemini/Vision technisch nicht verfügbar ist, darf nur ein sehr starker
+    // Metadaten-Treffer verwendet werden. Variantenfilter bleibt aktiv.
     if(verificationUnavailable){
-      const safeFallback=exact.find(candidate=>!productVariantMismatch(candidate,productName)&&productMatchStrength(candidate,productName)>=.90);
+      const safeFallback=allExact.find(candidate=>!productVariantMismatch(candidate,productName)&&productMatchStrength(candidate,productName)>=.90);
       if(safeFallback){
         const remote=safeFallback?.imageUrl||safeFallback?.thumbnailUrl||'';
         try{
@@ -1619,15 +1632,17 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     const name=String(companyName||'').trim();
     if(!name)return{logoDataUrl:'',logoVerified:false};
 
-    // Für JEDE im Flyer genannte Firma zuerst die exakte Online-Logo-Suche starten.
-    // api/ai/image-search nutzt Google Custom Search als erste Quelle, wenn die Google-Zugangsdaten vorhanden sind.
+    // Online bleibt Priorität 1. Bei bekannten Märkten reicht aber ein kurzer
+    // Online-Versuch, danach wird sofort das vom Nutzer hinterlegte Original genutzt.
+    const fallback=getStoreLogoFallback(name);
     const queries=getStoreLogoSearchQueries(name);
+    const maxQueries=fallback?1:2;
     const candidates=[];
     const seen=new Set();
     let provider='web';
     let verificationUnavailable=false;
 
-    for(const query of queries){
+    for(const query of queries.slice(0,maxQueries)){
       const data=await searchExistingImages(query,signal,{mode:'logo',source:'web'});
       provider=data.provider||provider;
       for(const item of Array.isArray(data.results)?data.results:[]){
@@ -1636,10 +1651,11 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
         seen.add(key);
         candidates.push({...item,searchQuery:query});
       }
-      if(candidates.length>=8)break;
+      if(candidates.length>=4)break;
     }
 
-    for(const candidate of candidates.slice(0,8)){
+    const verifyLimit=fallback?2:3;
+    for(const candidate of candidates.slice(0,verifyLimit)){
       const remote=candidate?.imageUrl||candidate?.thumbnailUrl||'';
       if(!remote)continue;
       try{
@@ -1662,9 +1678,6 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       }catch{}
     }
 
-    // Sichere Rückfalllogos aus den vom Nutzer hochgeladenen Originalen.
-    // Diese werden erst benutzt, NACHDEM die Online-/Google-Suche versucht wurde.
-    const fallback=getStoreLogoFallback(name);
     if(fallback){
       return{
         logoDataUrl:'',
@@ -1672,7 +1685,7 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
         logoSourceUrl:fallback,
         logoTitle:`${name} Logo`,
         logoVerified:true,
-        logoVerification:{exactMatch:true,confidence:1,reason:'Vom Nutzer bereitgestelltes Original-Logo als Rückfall nach Online-Suche.'},
+        logoVerification:{exactMatch:true,confidence:1,reason:'Vom Nutzer bereitgestelltes Original-Logo als schneller Rückfall nach Online-Suche.'},
         logoProvider:'user-fallback',
         logoSearchQuery:queries[0]||''
       };
@@ -1718,7 +1731,7 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     setGenerationStatus(runId,`PIXVA sucht ${count} Produktbilder und das Supermarkt-Logo …`);
 
     const logoPromise=findVerifiedCompanyLogo(effectiveDraft.companyName,signal);
-    const products=await mapWithConcurrency(sourceProducts,3,async(product,index)=>{
+    const products=await mapWithConcurrency(sourceProducts,4,async(product,index)=>{
       setGenerationStatus(runId,`Produktbilder werden gesucht · ${index+1}/${count} · ${product.productName}`);
       const found=await findVerifiedProductImage(product.productName,signal);
       return{

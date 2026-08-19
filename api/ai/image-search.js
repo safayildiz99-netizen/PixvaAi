@@ -27,7 +27,7 @@ function decodeHtml(value='') {
 
 async function fetchText(url, headers = {}) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 14000);
+  const timer = setTimeout(() => controller.abort(), 6500);
   try {
     const response = await fetch(url, {
       signal: controller.signal,
@@ -43,6 +43,14 @@ async function fetchText(url, headers = {}) {
 async function fetchJson(url, headers = {}) {
   const raw = await fetchText(url, { Accept: 'application/json', ...headers });
   return JSON.parse(raw);
+}
+
+function withProviderDeadline(promise, ms = 6000, label = 'Bildquelle') {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} Zeitlimit erreicht.`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 async function searchGoogle(query, mode='product') {
@@ -324,38 +332,45 @@ export default async function handler(req, res) {
       catch (error) { warnings.push(error.message); }
     } else {
       try {
-        const google = await searchGoogle(query, mode);
+        const google = await withProviderDeadline(searchGoogle(query, mode), 6000, 'Google');
         results.push(...google);
         if (google.length) provider = 'google';
       } catch (error) { warnings.push(`Google: ${error.message}`); }
 
+      // Kostenlose Fallbacks parallel statt nacheinander.
+      // So blockiert ein langsamer Provider nicht jeden einzelnen Produkt-Suchlauf.
       if (results.length < 4) {
-        try {
-          const ddg = await searchDuckDuckGo(query);
-          results.push(...ddg);
-          if (ddg.length && provider === 'web') provider = 'duckduckgo';
-        } catch (error) { warnings.push(`DuckDuckGo: ${error.message}`); }
+        const jobs = mode==='logo'
+          ? [
+              ['Bing', () => searchBing(query), 'bing'],
+              ['DuckDuckGo', () => searchDuckDuckGo(query), 'duckduckgo']
+            ]
+          : [
+              ['Bing', () => searchBing(query), 'bing'],
+              ['OpenFoodFacts', () => searchOpenFoodFacts(query), 'openfoodfacts'],
+              ['DuckDuckGo', () => searchDuckDuckGo(query), 'duckduckgo']
+            ];
+
+        const settled = await Promise.allSettled(
+          jobs.map(([label, run]) => withProviderDeadline(Promise.resolve().then(run), 6000, label))
+        );
+
+        settled.forEach((entry, index) => {
+          const [label, , providerName] = jobs[index];
+          if (entry.status === 'fulfilled') {
+            const found = Array.isArray(entry.value) ? entry.value : [];
+            results.push(...found);
+            if (found.length && provider === 'web') provider = providerName;
+          } else {
+            warnings.push(`${label}: ${entry.reason?.message || 'fehlgeschlagen'}`);
+          }
+        });
       }
 
-      if (results.length < 4) {
+      // Nur wenn wirklich gar nichts da ist, noch einen kurzen Commons-Notfall versuchen.
+      if (!results.length) {
         try {
-          const bing = await searchBing(query);
-          results.push(...bing);
-          if (bing.length && provider === 'web') provider = 'bing';
-        } catch (error) { warnings.push(`Bing: ${error.message}`); }
-      }
-
-      if (mode!=='logo' && results.length < 4) {
-        try {
-          const foods = await searchOpenFoodFacts(query);
-          results.push(...foods);
-          if (foods.length && provider === 'web') provider = 'openfoodfacts';
-        } catch (error) { warnings.push(`OpenFoodFacts: ${error.message}`); }
-      }
-
-      if (results.length < 3) {
-        try {
-          const commons = await searchWikimedia(query);
+          const commons = await withProviderDeadline(searchWikimedia(query), 3500, 'Wikimedia');
           results.push(...commons);
         } catch (error) { warnings.push(`Wikimedia: ${error.message}`); }
       }

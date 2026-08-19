@@ -53,6 +53,55 @@ function splitItems(section='') {
     .filter(Boolean);
 }
 
+function parseItemsByPrices(section='') {
+  const source=String(section||'');
+  const priceMatches=[...source.matchAll(/(\d{1,4}(?:[.,]\d{1,2})?)\s*€/gi)];
+  if(!priceMatches.length)return [];
+
+  const items=[];
+  let cursor=0;
+
+  for(const match of priceMatches){
+    const start=match.index??0;
+    const end=start+String(match[0]||'').length;
+    let productName=clean(source.slice(cursor,start))
+      .replace(/^(?:en|produkt|artikel)\s*:\s*/i,'')
+      .trim();
+
+    let priceSuffix='';
+    let consumed=end;
+    const tail=source.slice(end);
+    const suffixMatch=tail.match(/^\s*(?:(?:pro\s+)?kg\b|\/\s*kg\b|(?:pro\s+)?100\s*g\b)/i);
+    if(suffixMatch){
+      const suffixText=String(suffixMatch[0]||'');
+      priceSuffix=/100\s*g/i.test(suffixText)?' / 100 g':' / kg';
+      consumed=end+suffixText.length;
+    }
+
+    // Der nächste Produktname beginnt erst nach optionalen Trennern.
+    const separator=source.slice(consumed).match(/^\s*[,;|]\s*(?:und\s+)?/i);
+    if(separator)consumed+=separator[0].length;
+    else{
+      const spaces=source.slice(consumed).match(/^\s+/);
+      if(spaces)consumed+=spaces[0].length;
+    }
+
+    if(productName){
+      const price=money(match[1]);
+      items.push({
+        index:items.length+1,
+        productName:productName.slice(0,100),
+        newPrice:`${price}${priceSuffix}`,
+        rawPrice:price,
+        priceSuffix,
+        sourceSegment:clean(source.slice(cursor,consumed))
+      });
+    }
+    cursor=consumed;
+  }
+  return items;
+}
+
 function parseItem(segment='',index=0) {
   const text=clean(segment);
   const priceMatch=text.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i);
@@ -103,7 +152,11 @@ export function extractMultiOfferDraft(text='') {
   if(requestedCount<2)return null;
   const section=extractProductSection(original);
   if(!section)return null;
-  const items=splitItems(section).map(parseItem).filter(Boolean);
+  const commaItems=splitItems(section).map(parseItem).filter(Boolean);
+  const priceItems=parseItemsByPrices(section);
+  // Preisgrenzen sind robuster als Kommas: auch fehlende/uneinheitliche Kommas
+  // dürfen ein ausdrücklich verlangtes 9er-Angebot nicht auf 8 Produkte reduzieren.
+  const items=priceItems.length>=commaItems.length?priceItems:commaItems;
   const products=items.slice(0,requestedCount);
   const companyName=extractCompanyName(original);
 
