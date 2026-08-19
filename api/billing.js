@@ -73,11 +73,25 @@ async function serviceFetch(path, options = {}) {
   return data;
 }
 
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('PayPal hat zu lange nicht geantwortet.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function paypalAccessToken() {
   const clientId = String(process.env.PAYPAL_CLIENT_ID || '');
   const secret = String(process.env.PAYPAL_CLIENT_SECRET || '');
   if (!clientId || !secret) throw new Error('PayPal ist noch nicht verbunden. PAYPAL_CLIENT_ID oder PAYPAL_CLIENT_SECRET fehlt.');
-  const response = await fetch(`${paypalBase()}/v1/oauth2/token`, {
+  const response = await fetchWithTimeout(`${paypalBase()}/v1/oauth2/token`, {
     method:'POST',
     headers:{
       Authorization:`Basic ${Buffer.from(`${clientId}:${secret}`).toString('base64')}`,
@@ -85,7 +99,7 @@ async function paypalAccessToken() {
       Accept:'application/json'
     },
     body:'grant_type=client_credentials'
-  });
+  }, 10000);
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data?.access_token) throw new Error(safeMessage(data, 'PayPal-Anmeldung fehlgeschlagen.'));
   return data.access_token;
@@ -93,7 +107,7 @@ async function paypalAccessToken() {
 
 async function paypalRequest(path, options = {}) {
   const accessToken = await paypalAccessToken();
-  const response = await fetch(`${paypalBase()}${path}`, {
+  const response = await fetchWithTimeout(`${paypalBase()}${path}`, {
     ...options,
     headers:{
       Authorization:`Bearer ${accessToken}`,
@@ -101,7 +115,7 @@ async function paypalRequest(path, options = {}) {
       Accept:'application/json',
       ...(options.headers || {})
     }
-  });
+  }, 12000);
   const data = await response.json().catch(() => ({}));
   return { response, data };
 }
@@ -229,7 +243,7 @@ async function createOrder(req, res) {
   if (previousOrder?.provider_order_id && previousOrder.status === 'completed') {
     return send(res, 200, { ok:true, alreadyCompleted:true, orderId:previousOrder.provider_order_id });
   }
-  const invoiceId = `yildiz-${user.id.slice(0, 8)}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const invoiceId = `pixva-${user.id.slice(0, 8)}-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const baseUrl = appUrl(req);
   if (!baseUrl) return send(res, 500, { error:'APP_URL fehlt in Vercel.' });
 
@@ -242,13 +256,13 @@ async function createOrder(req, res) {
         reference_id:requestId,
         custom_id:user.id,
         invoice_id:invoiceId,
-        description:`Yildiz AI ${plan.name} – ${days} Tage`,
+        description:`PIXVA ${plan.name} – ${days} Tage`,
         amount:{ currency_code:'EUR', value:(cents / 100).toFixed(2) }
       }],
       payment_source:{
         paypal:{
           experience_context:{
-            brand_name:'Yildiz AI',
+            brand_name:'PIXVA',
             locale:'de-DE',
             landing_page:'LOGIN',
             user_action:'PAY_NOW',
@@ -464,15 +478,64 @@ async function webhook(req, res) {
   return send(res, 200, { ok:true });
 }
 
+async function paymentDatabaseHealth() {
+  const key = serviceKey();
+  if (!key) return { ready:false, error:'SUPABASE_SERVICE_ROLE_KEY fehlt.' };
+
+  try {
+    await serviceFetch('app_payment_orders?select=id&limit=1', { method:'GET' });
+    await serviceFetch('app_subscriptions?select=user_id,paid_until,provider,provider_reference&limit=1', { method:'GET' });
+    return { ready:true, error:'' };
+  } catch (error) {
+    return {
+      ready:false,
+      error:String(error?.message || 'Zahlungstabellen fehlen oder sind nicht erreichbar.').slice(0, 240)
+    };
+  }
+}
+
 async function config(req, res) {
   const settings = await getUiSettings();
+  const environment = String(process.env.PAYPAL_ENV || 'sandbox').toLowerCase() === 'live' ? 'live' : 'sandbox';
+  const credentialsPresent = Boolean(
+    process.env.PAYPAL_CLIENT_ID &&
+    process.env.PAYPAL_CLIENT_SECRET &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+  const webhookConfigured = Boolean(process.env.PAYPAL_WEBHOOK_ID);
+
+  let paypalConnected = false;
+  let paypalError = '';
+  if (credentialsPresent) {
+    try {
+      await paypalAccessToken();
+      paypalConnected = true;
+    } catch (error) {
+      paypalError = String(error?.message || 'PayPal-Verbindung fehlgeschlagen.').slice(0, 240);
+    }
+  } else {
+    paypalError = 'PayPal- oder Supabase-Zugangsdaten fehlen in Vercel.';
+  }
+
+  const database = await paymentDatabaseHealth();
+  const checkoutReady = credentialsPresent && paypalConnected && database.ready;
+  const liveReady = checkoutReady && (environment !== 'live' || webhookConfigured);
+
   return send(res, 200, {
     provider:String(settings?.paymentProvider || 'paypal'),
     paymentsEnabled:settings?.paymentsEnabled === true,
-    configured:Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY),
-    environment:String(process.env.PAYPAL_ENV || 'sandbox').toLowerCase() === 'live' ? 'live' : 'sandbox',
+    configured:environment === 'live' ? liveReady : checkoutReady,
+    checkoutReady,
+    liveReady,
+    paypalConnected,
+    paypalError,
+    databaseReady:database.ready,
+    databaseError:database.error,
+    webhookConfigured,
+    environment,
     merchantLabel:String(settings?.paymentMerchantLabel || process.env.PAYPAL_MERCHANT_LABEL || ''),
-    accessDays:Math.max(1, Number(settings?.paidAccessDays || 30))
+    accessDays:Math.max(1, Number(settings?.paidAccessDays || 30)),
+    appUrl:String(process.env.APP_URL || '')
   });
 }
 
