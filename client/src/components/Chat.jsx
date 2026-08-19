@@ -1696,11 +1696,29 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
   }
 
   async function generateMultiOfferFlyerMessage(clean, signal, runId, multiDraft){
-    const count=multiDraft.products.length;
+    // Immer den ursprünglichen Nutzertext noch einmal frisch parsen.
+    // So können alte/stale Chat-Drafts einen 9er-Auftrag nicht auf 8 Produkte reduzieren.
+    const reparsed=extractMultiOfferDraft(multiDraft?.sourcePrompt||clean);
+    const requestedCount=Math.max(2,Number(reparsed?.requestedCount||multiDraft?.requestedCount||multiDraft?.layoutCount||multiDraft?.products?.length||0));
+    const sourceProducts=(reparsed?.products?.length?reparsed.products:multiDraft?.products||[]).slice(0,requestedCount);
+    const effectiveDraft={
+      ...multiDraft,
+      ...(reparsed||{}),
+      requestedCount,
+      layoutCount:requestedCount>=9?9:requestedCount>=6?6:requestedCount,
+      templateId:requestedCount>=9?'v12-supermarkt-9er':requestedCount>=6?'v12-supermarkt-6er':'v12-supermarkt-einzel',
+      products:sourceProducts
+    };
+
+    const count=requestedCount;
+    if(sourceProducts.length!==requestedCount){
+      throw new Error(`PIXVA hat ${sourceProducts.length} von ${requestedCount} Produkten erkannt. Der Flyer wird nicht mit einer falschen Produktanzahl geöffnet.`);
+    }
+
     setGenerationStatus(runId,`PIXVA sucht ${count} Produktbilder und das Supermarkt-Logo …`);
 
-    const logoPromise=findVerifiedCompanyLogo(multiDraft.companyName,signal);
-    const products=await mapWithConcurrency(multiDraft.products,3,async(product,index)=>{
+    const logoPromise=findVerifiedCompanyLogo(effectiveDraft.companyName,signal);
+    const products=await mapWithConcurrency(sourceProducts,3,async(product,index)=>{
       setGenerationStatus(runId,`Produktbilder werden gesucht · ${index+1}/${count} · ${product.productName}`);
       const found=await findVerifiedProductImage(product.productName,signal);
       return{
@@ -1715,13 +1733,13 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
       };
     });
     const logo=await logoPromise;
-    const readyDraft={...multiDraft,products,...logo};
+    const readyDraft={...effectiveDraft,products,...logo};
     const foundCount=products.filter(item=>item.imageVerified).length;
 
     appendGenerationMessage(runId,{
       id:crypto.randomUUID(),role:'assistant',createdAt:Date.now(),
-      content:`${multiDraft.layoutCount}er-Supermarktangebot vorbereitet · ${foundCount}/${count} Produktbilder visuell bestätigt${logo.logoVerified?` · Logo für ${multiDraft.companyName} automatisch gefunden`:multiDraft.companyName?' · kein Firmenlogo sicher bestätigt':''}. Alle Produktnamen, Preise, Bilder und das Logo bleiben im Editor bearbeitbar.`,
-      attachments:products.filter(item=>item.imageVerified).slice(0,4).map(item=>({
+      content:`${effectiveDraft.layoutCount}er-Supermarktangebot vorbereitet · ${products.length}/${count} Produkte übernommen · ${foundCount}/${count} Produktbilder visuell bestätigt${logo.logoVerified?` · Logo für ${effectiveDraft.companyName} automatisch gefunden`:effectiveDraft.companyName?' · kein Firmenlogo sicher bestätigt':''}. Alle Produktnamen, Preise, Bilder und das Logo bleiben im Editor bearbeitbar.`,
+      attachments:products.filter(item=>item.imageVerified).slice(0,9).map(item=>({
         kind:'image-link',name:item.productName,title:item.productName,
         previewUrl:item.thumbnailUrl?`/api/ai/image-proxy?url=${encodeURIComponent(item.thumbnailUrl)}`:item.imageDataUrl,
         imageUrl:item.imageUrl||item.imageDataUrl,sourceUrl:item.sourceUrl||'',source:item.provider||''
@@ -1729,11 +1747,11 @@ export default function Chat({ onOpenImageProject, onOpenFlyerProject, onOpenVid
     });
 
     onOpenFlyerProject?.({
-      name:`${multiDraft.layoutCount}er Angebot · ${multiDraft.companyName||'Supermarkt'}`,
+      name:`${effectiveDraft.layoutCount}er Angebot · ${effectiveDraft.companyName||'Supermarkt'}`,
       type:'flyer',
       data:{format:'post',offerDraft:readyDraft,pixvaMultiOfferPrepared:true}
     });
-    setGenerationStatus(runId,`${multiDraft.layoutCount}er-Angebotsflyer geöffnet.`);
+    setGenerationStatus(runId,`${effectiveDraft.layoutCount}er-Angebotsflyer geöffnet.`);
   }
 
   async function generateOfferFlyerMessage(clean, signal, runId){
