@@ -55,6 +55,7 @@ const DEFAULT_UI_SETTINGS = {
   costPromptMode: 'all',
   costPromptOverrides: {},
   customPlans: [],
+  templateConfig: { hiddenBuiltInIds: [], customTemplates: [] },
   navItems: DEFAULT_NAV_ITEMS,
   texts: {
     appTitle:'PIXVA Chat', newDesign:'Neues Design', chatTab:'Chat', workTab:'Work',
@@ -128,6 +129,10 @@ export default function App(){
         betaPlanPrices:{...DEFAULT_UI_SETTINGS.betaPlanPrices,...(result?.settings?.betaPlanPrices||{})},
         costPromptOverrides:{...(result?.settings?.costPromptOverrides||{})},
         customPlans:Array.isArray(result?.settings?.customPlans)?result.settings.customPlans:[],
+        templateConfig:{
+          hiddenBuiltInIds:Array.isArray((result?.settings?.templateConfig||result?.settings?.pixvaTemplateConfig)?.hiddenBuiltInIds)?(result.settings.templateConfig||result.settings.pixvaTemplateConfig).hiddenBuiltInIds:[],
+          customTemplates:Array.isArray((result?.settings?.templateConfig||result?.settings?.pixvaTemplateConfig)?.customTemplates)?(result.settings.templateConfig||result.settings.pixvaTemplateConfig).customTemplates:[]
+        },
         planPurchasable:{...DEFAULT_UI_SETTINGS.planPurchasable,...(result?.settings?.planPurchasable||{})}
       });
     }).catch(()=>{});
@@ -138,6 +143,23 @@ export default function App(){
     const updateMobile=()=>{const mobile=window.innerWidth<=760;setIsMobile(mobile);if(mobile)setSidebar(false)};
     updateMobile();window.addEventListener('resize',updateMobile);return()=>window.removeEventListener('resize',updateMobile);
   },[]);
+
+  // Vorlagen-Sichtbarkeit separat laden, damit Admin-Ausblendungen auch nach Reload sicher im Editor ankommen.
+  useEffect(()=>{
+    let cancelled=false;
+    if(!user||guest)return()=>{cancelled=true};
+    api('/api/pixva?action=template-settings').then((result)=>{
+      if(cancelled||!result?.config)return;
+      setUiSettings((old)=>({
+        ...old,
+        templateConfig:{
+          hiddenBuiltInIds:Array.isArray(result.config.hiddenBuiltInIds)?result.config.hiddenBuiltInIds:[],
+          customTemplates:Array.isArray(result.config.customTemplates)?result.config.customTemplates:[]
+        }
+      }));
+    }).catch(()=>{});
+    return()=>{cancelled=true};
+  },[user?.id,guest]);
 
   useEffect(()=>{
     if(!getToken()){setLoading(false);return}
@@ -271,8 +293,8 @@ export default function App(){
         >
           <Suspense fallback={<div className="workspace-loader"><Sparkles/><b>{titles[view]||'PIXVA'} wird geladen …</b><span>Die Oberfläche bleibt aktiv.</span></div>}>
         {view==='chat'&&<Chat key={`chat-${activeUser.id || activeUser.username}`} accountId={activeUser.id || activeUser.username} isGuest={guest} onOpenImageProject={openGeneratedImageProject} onOpenVideoProject={openGeneratedVideoProject} uiText={uiText} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
-        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
-        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
+        {view==='flyer'&&featureAllowed('flyer')&&<DesignEditor key={selectedProject?.id||'new-flyer'} mode="flyer" project={selectedProject?.type==='flyer'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans} templateConfig={uiSettings.templateConfig}/>} 
+        {view==='image'&&featureAllowed('image')&&<DesignEditor key={selectedProject?.id||'new-image'} mode="image" project={selectedProject?.type==='image'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans} templateConfig={uiSettings.templateConfig}/>} 
         {view==='video'&&featureAllowed('video')&&<VideoStudio key={selectedProject?.id||'new-video'} project={selectedProject?.type==='video'?selectedProject:null} onSaved={saved} canSave={!guest} subscription={subscription} userRole={activeUser.role} onOpenPlans={()=>changeView('plans')} uiText={uiText} costPromptMode={accountCostPromptMode} customPlans={uiSettings.customPlans}/>} 
         {view==='website'&&featureAllowed('website')&&<WebsiteBuilder key={selectedProject?.id||'new-site'} project={selectedProject?.type==='website'?selectedProject:null} onSaved={saved} canSave={!guest} uiText={uiText}/>} 
         {view==='projects'&&featureAllowed('projects')&&!guest&&<Projects onOpen={openProject} refreshKey={refreshKey} uiText={uiText}/>} 

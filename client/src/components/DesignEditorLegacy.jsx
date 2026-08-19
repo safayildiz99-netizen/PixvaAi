@@ -440,7 +440,7 @@ function pixvaBrainBrand(brain){
   return{
     company_name:example.name,company_type:type,company_type_other:c.companyTypeOther||example.other,owner_name:'Max Mustermann',
     company_email:example.email,company_phone:example.phone,private_phone:'',website:example.website,instagram:example.instagram,address:example.address,
-    logo_data_url:example_logo,logo_path:'',primary_color:c.primaryColor||'#7258ff',secondary_color:c.secondaryColor||'#39d6d0',pixva_example_mode:true
+    logo_data_url:'',logo_path:'',primary_color:c.primaryColor||'#7258ff',secondary_color:c.secondaryColor||'#39d6d0',pixva_example_mode:true
   };
 }
 
