@@ -6,6 +6,7 @@ import {
 import { api, getToken, setToken } from './api.js';
 import Login from './components/Login.jsx';
 import AppErrorBoundary from './components/AppErrorBoundary.jsx';
+import './mobile-admin-fix.css';
 
 // Große PIXVA-Bereiche werden erst geladen, wenn sie wirklich geöffnet werden.
 // Das reduziert den Start-Bundle und verhindert lange schwarze/leere Frames.
@@ -268,7 +269,10 @@ export default function App(){
     <aside className="sidebar">
       <div className="sidebar-brand"><img className="sidebar-logo" src="/pixva-logo.png" alt="PIXVA"/><span className="sr-only">PIXVA</span><button onClick={()=>setSidebar(false)}><PanelLeftClose size={18}/></button></div>
       {uiSettings.showFlyer!==false&&<button className="new-project" onClick={()=>changeView('flyer')}><LayoutTemplate size={18}/>{uiText.newDesign}{!featureAllowed('flyer')&&<LockKeyhole className="nav-lock" size={14}/>}</button>}
-      <nav>{nav.map((item)=>{const Icon=item.icon;const locked=!featureAllowed(item.id);return <button key={item.id} className={`${view===item.id?'active':''} ${locked?'locked':''}`} onClick={()=>changeView(item.id)}><Icon size={19}/><span>{item.label}</span>{locked&&<LockKeyhole className="nav-lock" size={14}/>}</button>})}</nav>
+      <nav className="sidebar-main-nav">
+        {nav.map((item)=>{const Icon=item.icon;const locked=!featureAllowed(item.id);return <button key={item.id} className={`${view===item.id?'active':''} ${locked?'locked':''}`} onClick={()=>changeView(item.id)}><Icon size={19}/><span>{item.label}</span>{locked&&<LockKeyhole className="nav-lock" size={14}/>}</button>})}
+        {isMobile&&activeUser.role==='admin'&&<button className={`mobile-admin-shortcut ${view==='admin'?'active':''}`} onClick={()=>changeView('admin')}><Settings size={19}/><span>Admin</span></button>}
+      </nav>
       <div className="sidebar-bottom">
         {!guest&&<button className={view==='account'?'active':''} onClick={()=>changeView('account')}><KeyRound size={19}/><span>Mein Konto</span></button>}
         {activeUser.role==='admin'&&<button className={view==='admin'?'active':''} onClick={()=>changeView('admin')}><Settings size={19}/><span>Admin</span></button>}

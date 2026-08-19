@@ -1,0 +1,55 @@
+/* PIXVA V14.10.4 – mobile admin/navigation fix */
+@media (max-width: 760px) {
+  .sidebar {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .sidebar-brand,
+  .new-project,
+  .sidebar-bottom {
+    flex: 0 0 auto !important;
+  }
+
+  .sidebar-main-nav,
+  .sidebar nav {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 10px !important;
+  }
+
+  .sidebar-bottom {
+    margin-top: 0 !important;
+    padding-top: 8px !important;
+    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    background: linear-gradient(180deg, rgba(7,21,31,.88), #051019 26%) !important;
+    border-top: 1px solid rgba(61,155,184,.18) !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  .mobile-admin-shortcut {
+    display: flex !important;
+    margin-top: 8px !important;
+    border: 1px solid rgba(67,201,191,.35) !important;
+    background: linear-gradient(90deg, rgba(116,80,184,.20), rgba(33,169,197,.16)) !important;
+    color: #f4fbff !important;
+  }
+
+  .mobile-admin-shortcut.active {
+    background: linear-gradient(135deg,#7450B8 0%,#397BB5 48%,#43C9BF 100%) !important;
+    color: #fff !important;
+  }
+}
+
+@media (min-width: 761px) {
+  .mobile-admin-shortcut {
+    display: none !important;
+  }
+}
