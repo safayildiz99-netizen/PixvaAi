@@ -15,7 +15,7 @@ import { applyPixvaV12Template, pixvaV12Templates, recommendPixvaV12Template, au
 import { pixvaMarketStyles, resolvePixvaMarketStyle } from '../data/pixva/v12/marketStyles.js';
 import { applyPixvaFileTemplate, pixvaTemplateIdForBrand, pixvaTemplateList } from '../data/pixva/flyerTemplateEngine.js';
 import { canUseFeature } from '../plans.js';
-import { getFixedStoreLogo } from '../storeLogoResolver.js';
+import { getFixedStoreLogo, getStoreLogoFallback } from '../storeLogoResolver.js';
 import { extractMultiOfferDraft } from '../pixva-multi-offer.js';
 import { extractOfferDraft, normalizeOfferText } from '../pixva-offer.js';
 
