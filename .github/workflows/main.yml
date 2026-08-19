@@ -1,4 +1,4 @@
-name: PIXVA V14.10.4 VORLAGEN UND MOBILE ADMIN FIX
+name: PIXVA V14.10.5 DATEIPRUEFUNG FIX
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
 
           echo "OK: Basis und geschützte Dateien vorhanden."
 
-      - name: Getestetes V14.10.4 Paket vorbereiten
+      - name: Getestetes V14.10.5 Paket vorbereiten
         shell: bash
         run: |
           set -euo pipefail
@@ -53,7 +53,7 @@ jobs:
 
           echo "OK: V14.10.4 Payload vollständig."
 
-      - name: V14.10.4 einsetzen
+      - name: V14.10.5 einsetzen
         shell: bash
         run: |
           set -euo pipefail
@@ -125,19 +125,30 @@ jobs:
         run: |
           set -euo pipefail
 
-          CHANGED="$(git diff --name-only | sort)"
-          echo "$CHANGED"
+          # Bereits getrackte Änderungen + neue untracked Dateien gemeinsam prüfen.
+          CHANGED="$(
+            {
+              git diff --name-only
+              git ls-files --others --exclude-standard
+            } | sed '/^$/d' | sort -u
+          )"
 
-          EXPECTED="$(printf '%s\n' \
-            'client/src/App.jsx' \
-            'client/src/mobile-admin-fix.css' | sort)"
+          echo "Gefundene Änderungen:"
+          printf '%s\n' "$CHANGED"
+
+          EXPECTED="$(
+            printf '%s\n'               'client/src/App.jsx'               'client/src/mobile-admin-fix.css' | sort
+          )"
 
           if [ "$CHANGED" != "$EXPECTED" ]; then
-            echo "FEHLER: Es wurden andere Dateien als App.jsx und mobile-admin-fix.css geändert."
+            echo "FEHLER: Erwartet wurden genau diese zwei Dateien:"
+            printf '%s\n' "$EXPECTED"
+            echo "Tatsächlich gefunden:"
+            printf '%s\n' "$CHANGED"
             exit 1
           fi
 
-          echo "OK: Nur die zwei vorgesehenen Dateien sind geändert."
+          echo "OK: Genau App.jsx und mobile-admin-fix.css wurden geändert/neu angelegt."
 
       - name: Geld Preise Abos und PIXVA Hauptlogo unverändert
         shell: bash
@@ -198,7 +209,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          git config user.name "PIXVA V14.10.4"
+          git config user.name "PIXVA V14.10.5"
           git config user.email "actions@users.noreply.github.com"
 
           git add -- \
@@ -206,9 +217,9 @@ jobs:
             client/src/mobile-admin-fix.css
 
           if git diff --cached --quiet; then
-            echo "PIXVA V14.10.4 ist bereits installiert."
+            echo "PIXVA V14.10.5 ist bereits installiert."
             exit 0
           fi
 
-          git commit -m "PIXVA V14.10.4 Vorlagen und Mobile Admin Fix"
+          git commit -m "PIXVA V14.10.5 Vorlagen und Mobile Admin Fix"
           git push origin HEAD:main
