@@ -9,7 +9,14 @@ const PRODUCT_VARIANTS = [
   /\b(gefluegel|huhn|chicken|tavuk)\b/,
   /\b(rind|beef|dana)\b/,
   /\b(knoblauch|garlic|sarimsak)\b/,
-  /\b(egem)\b/
+  /\b(egem)\b/,
+  /\b(findikli|fındıklı|hazelnut|haselnuss)\b/,
+  /\b(vanilya|vanilla|vanille)\b/,
+  /\b(fistikli|fıstıklı|pistachio|pistazie)\b/,
+  /\b(kokos|coconut|hindistan cevizi)\b/,
+  /\b(cilekli|çilekli|strawberry|erdbeer)\b/,
+  /\b(deluxe)\b/,
+  /\b(beyaz|white|weiss)\b/
 ];
 
 export function productVariantMismatch(result, requestedText='') {
