@@ -1,4 +1,4 @@
-name: PIXVA V14.10.5.1 IDEMPOTENTE DATEIPRUEFUNG
+name: PIXVA V14.11 FLYER OEFFNET WIRKLICH UND PRODUKTVARIANTEN FIX
 
 on:
   workflow_dispatch:
@@ -16,14 +16,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Aktuellen PIXVA Stand prüfen
+      - name: Aktuellen PIXVA Stand und Schutzdateien pruefen
         shell: bash
         run: |
           set -euo pipefail
 
           test -f client/src/App.jsx
-          test -f client/src/components/DesignEditorLegacy.jsx
-          test -f api/pixva.js
+          test -f client/src/components/Chat.jsx
+          test -f client/src/pixva-product-match.js
+          test -f client/src/pixva-offer.js
 
           test -f api/billing.js
           test -f client/src/components/Subscriptions.jsx
@@ -35,52 +36,49 @@ jobs:
           sha256sum client/src/plans.js > /tmp/plans.before
           sha256sum client/public/pixva-logo.png > /tmp/logo.before
 
-          echo "OK: Basis und geschützte Dateien vorhanden."
+          echo "OK: Basis und Schutzdateien vorhanden."
 
-      - name: Getestetes V14.10.5 Paket vorbereiten
+      - name: Getestetes V14.11 Paket vorbereiten
         shell: bash
         run: |
           set -euo pipefail
 
-          rm -rf /tmp/pixva-v14-10-4
-          mkdir -p /tmp/pixva-v14-10-4/payload
+          rm -rf /tmp/pixva-v14-11
+          mkdir -p /tmp/pixva-v14-11/payload
 
-          echo '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' | base64 --decode > /tmp/pixva-v14-10-4/payload.tar.gz
-          tar -xzf /tmp/pixva-v14-10-4/payload.tar.gz -C /tmp/pixva-v14-10-4/payload
+          echo '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' | base64 --decode > /tmp/pixva-v14-11/payload.tar.gz
+          tar -xzf /tmp/pixva-v14-11/payload.tar.gz -C /tmp/pixva-v14-11/payload
 
-          test -f /tmp/pixva-v14-10-4/payload/client/src/App.jsx
-          test -f /tmp/pixva-v14-10-4/payload/client/src/mobile-admin-fix.css
+          test -f /tmp/pixva-v14-11/payload/client/src/App.jsx
+          test -f /tmp/pixva-v14-11/payload/client/src/pixva-product-match.js
 
-          echo "OK: V14.10.4 Payload vollständig."
+          echo "OK: Payload vollstaendig."
 
-      - name: V14.10.5 einsetzen
+      - name: V14.11 einsetzen
         shell: bash
         run: |
           set -euo pipefail
 
-          cp /tmp/pixva-v14-10-4/payload/client/src/App.jsx client/src/App.jsx
-          cp /tmp/pixva-v14-10-4/payload/client/src/mobile-admin-fix.css client/src/mobile-admin-fix.css
+          cp /tmp/pixva-v14-11/payload/client/src/App.jsx client/src/App.jsx
+          cp /tmp/pixva-v14-11/payload/client/src/pixva-product-match.js client/src/pixva-product-match.js
 
-      - name: Vorlagen Ausblenden semantisch prüfen
+      - name: Flyer muss vom Chat wirklich in Work geoeffnet werden
         shell: bash
         run: |
           set -euo pipefail
 
           node <<'NODE'
           const fs=require('fs');
-
           const app=fs.readFileSync('client/src/App.jsx','utf8').replace(/\s+/g,'');
-          const editor=fs.readFileSync('client/src/components/DesignEditorLegacy.jsx','utf8').replace(/\s+/g,'');
-          const api=fs.readFileSync('api/pixva.js','utf8').replace(/\s+/g,'');
+          const chat=fs.readFileSync('client/src/components/Chat.jsx','utf8').replace(/\s+/g,'');
 
           const checks=[
-            [app.includes("templateConfig:{hiddenBuiltInIds:[],customTemplates:[]}"), 'App hat templateConfig Default.'],
-            [app.includes("/api/pixva?action=template-settings"), 'App lädt gespeicherte Vorlagen-Sichtbarkeit.'],
-            [app.includes("templateConfig={uiSettings.templateConfig}"), 'App gibt templateConfig an den Editor weiter.'],
-            [editor.includes("templateConfig={}"), 'Editor akzeptiert templateConfig.'],
-            [editor.includes("hiddenTemplateIds.has(template.id)"), 'Editor filtert ausgeblendete Standardvorlagen.'],
-            [api.includes("action==='template-settings'"), 'Backend liefert template-settings.'],
-            [api.includes("action==='template-settings-save'"), 'Backend speichert template-settings.'],
+            [app.includes('functionopenGeneratedFlyerProject(flyerProject)'), 'App besitzt einen Flyer-Open-Handler.'],
+            [app.includes("type:'flyer'"), 'Flyer-Projekt wird als flyer gespeichert.'],
+            [app.includes("navigateTo('flyer')"), 'App wechselt wirklich zu Angebote & Flyer.'],
+            [app.includes('onOpenFlyerProject={openGeneratedFlyerProject}'), 'Chat bekommt den Flyer-Open-Handler als Prop.'],
+            [chat.includes('onOpenFlyerProject'), 'Chat unterstuetzt den Flyer-Open-Callback.'],
+            [chat.includes('onOpenFlyerProject?.(') || chat.includes('if(onOpenFlyerProject)'), 'Chat ruft den Callback bei Flyer-Erstellung auf.']
           ];
 
           for(const [ok,label] of checks){
@@ -92,7 +90,7 @@ jobs:
           }
           NODE
 
-      - name: Mobile Admin semantisch prüfen
+      - name: Mobile Admin direkt im Hauptmenue pruefen
         shell: bash
         run: |
           set -euo pipefail
@@ -100,27 +98,48 @@ jobs:
           node <<'NODE'
           const fs=require('fs');
           const app=fs.readFileSync('client/src/App.jsx','utf8').replace(/\s+/g,'');
-          const css=fs.readFileSync('client/src/mobile-admin-fix.css','utf8').replace(/\s+/g,'');
 
-          const checks=[
-            [app.includes("import'./mobile-admin-fix.css'") || app.includes("import\"./mobile-admin-fix.css\""), 'Mobile-CSS wird geladen.'],
-            [app.includes("isMobile&&activeUser.role==='admin'"), 'Admin bekommt auf Mobile einen direkten Menüeintrag.'],
-            [app.includes("mobile-admin-shortcut"), 'Mobile-Admin-Schaltfläche ist vorhanden.'],
-            [css.includes("height:100dvh!important"), 'Sidebar bleibt innerhalb der Handyhöhe.'],
-            [css.includes("overflow-y:auto!important"), 'Hauptnavigation kann auf dem Handy scrollen.'],
-            [css.includes(".sidebar-bottom"), 'Unterer Kontobereich bleibt separat sichtbar.'],
-          ];
-
-          for(const [ok,label] of checks){
-            if(!ok){
-              console.error('FEHLER:',label);
-              process.exit(1);
-            }
-            console.log('OK:',label);
+          if(!app.includes("isMobile&&activeUser.role==='admin'")){
+            console.error('FEHLER: Mobile Admin Shortcut fehlt.');
+            process.exit(1);
           }
+          if(!app.includes("onClick={()=>changeView('admin')}")){
+            console.error('FEHLER: Mobile Admin Button oeffnet Admin nicht.');
+            process.exit(1);
+          }
+          console.log('OK: Admin ist fuer Admin-Konten direkt im mobilen Hauptmenue vorhanden.');
           NODE
 
-      - name: Nur erlaubte App Dateien dürfen geändert sein
+      - name: Ungenannte Uelker Varianten blockieren
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node --input-type=module - <<'NODE'
+          import {productVariantMismatch,isExactProductCandidate} from './client/src/pixva-product-match.js';
+
+          const generic='Uelker Gofret'.replace('Uelker','Ülker');
+          const wrong={title:'Ülker Gofret Deluxe Fındıklı 220 gr',brand:'Ülker'};
+          const plain={title:'Ülker Gofret 220 gr',brand:'Ülker'};
+          const explicit={title:'Ülker Gofret Fındıklı 220 gr',brand:'Ülker'};
+
+          if(!productVariantMismatch(wrong,generic))
+            throw new Error('Fındıklı/Deluxe wird bei generischem Ülker Gofret nicht blockiert.');
+
+          if(isExactProductCandidate(wrong,generic,.56))
+            throw new Error('Falsche Fındıklı/Deluxe-Variante wurde akzeptiert.');
+
+          if(!isExactProductCandidate(plain,generic,.56))
+            throw new Error('Neutrales Ülker Gofret wurde faelschlich blockiert.');
+
+          if(productVariantMismatch(explicit,'Ülker Gofret Fındıklı'))
+            throw new Error('Explizit verlangtes Fındıklı wurde faelschlich blockiert.');
+
+          console.log('OK: Generisch = keine ungenannte Fındıklı/Deluxe-Variante.');
+          console.log('OK: Explizit Fındıklı = weiterhin erlaubt.');
+          NODE
+
+      - name: Nur erlaubte Dateien duerfen geaendert sein
         shell: bash
         run: |
           set -euo pipefail
@@ -132,33 +151,61 @@ jobs:
             } | sed '/^$/d' | sort -u
           )"
 
-          echo "Gefundene Änderungen:"
+          echo "Gefundene Aenderungen:"
           if [ -n "$CHANGED" ]; then
             printf '%s\n' "$CHANGED"
           else
-            echo "(keine – Fix ist bereits identisch installiert)"
+            echo "(keine - V14.11 ist bereits identisch installiert)"
           fi
-
-          ALLOWED_APP='client/src/App.jsx'
-          ALLOWED_CSS='client/src/mobile-admin-fix.css'
 
           if [ -n "$CHANGED" ]; then
             while IFS= read -r FILE; do
               [ -z "$FILE" ] && continue
-              if [ "$FILE" != "$ALLOWED_APP" ] && [ "$FILE" != "$ALLOWED_CSS" ]; then
-                echo "FEHLER: Unerlaubte Änderung erkannt: $FILE"
-                exit 1
-              fi
+              case "$FILE" in
+                client/src/App.jsx|client/src/pixva-product-match.js) ;;
+                *) echo "FEHLER: Unerlaubte Aenderung: $FILE"; exit 1 ;;
+              esac
             done <<< "$CHANGED"
           fi
 
-          test -f "$ALLOWED_APP"
-          test -f "$ALLOWED_CSS"
+          echo "OK: Nur erlaubte Dateien betroffen."
 
-          echo "OK: Keine unerlaubten Dateien geändert."
-          echo "OK: 0, 1 oder 2 erlaubte Änderungen sind zulässig."
+      - name: JavaScript und JSX pruefen
+        shell: bash
+        run: |
+          set -euo pipefail
 
-      - name: Geld Preise Abos und PIXVA Hauptlogo unverändert
+          node --check client/src/pixva-product-match.js
+
+          NODE_PATH=/opt/hostedtoolcache/node/22.*/x64/lib/node_modules node -e "process.exit(0)" 2>/dev/null || true
+
+          npm install --prefix /tmp/pixva-v14-11-ts typescript@5.9.2 --no-save --no-audit --no-fund --ignore-scripts >/dev/null
+
+          cat > /tmp/pixva-v14-11-jsx.cjs <<'NODE'
+          const ts=require('typescript');
+          const fs=require('fs');
+          const file='client/src/App.jsx';
+          const source=fs.readFileSync(file,'utf8');
+          const result=ts.transpileModule(source,{
+            compilerOptions:{
+              jsx:ts.JsxEmit.ReactJSX,
+              target:ts.ScriptTarget.ES2022,
+              module:ts.ModuleKind.ESNext
+            },
+            reportDiagnostics:true,
+            fileName:file
+          });
+          const errors=(result.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
+          if(errors.length){
+            for(const d of errors)console.error(ts.flattenDiagnosticMessageText(d.messageText,' '));
+            process.exit(1);
+          }
+          console.log('APP JSX PASSED');
+          NODE
+
+          NODE_PATH=/tmp/pixva-v14-11-ts/node_modules node /tmp/pixva-v14-11-jsx.cjs
+
+      - name: Geld Preise Abos und PIXVA Hauptlogo unveraendert
         shell: bash
         run: |
           set -euo pipefail
@@ -173,16 +220,15 @@ jobs:
           diff /tmp/plans.before /tmp/plans.after
           diff /tmp/logo.before /tmp/logo.after
 
-          echo "OK: Billing, Abos, Preise und PIXVA Hauptlogo unverändert."
+          echo "OK: Billing, Abos, Preise und Hauptlogo unveraendert."
 
-      - name: Vercel Hobby Limit prüfen
+      - name: Vercel Hobby Limit pruefen
         shell: bash
         run: |
           set -euo pipefail
 
           COUNT="$(find api -type f -name '*.js' ! -name '_*.js' | wc -l | tr -d ' ')"
           echo "Deploybare Vercel Functions: $COUNT / 12"
-
           if [ "$COUNT" -gt 12 ]; then
             echo "FEHLER: Vercel Hobby erlaubt maximal 12 Functions."
             exit 1
@@ -196,7 +242,7 @@ jobs:
           npm install --prefix client --no-audit --no-fund
           npm run build --prefix client
 
-      - name: Build Ergebnis prüfen
+      - name: Build final pruefen
         shell: bash
         run: |
           set -euo pipefail
@@ -206,28 +252,28 @@ jobs:
 
           ASSET_COUNT="$(find client/dist/assets -type f | wc -l | tr -d ' ')"
           if [ "$ASSET_COUNT" -lt 1 ]; then
-            echo "FEHLER: Der Produktions-Build enthält keine Assets."
+            echo "FEHLER: Produktions-Bundle enthaelt keine Assets."
             exit 1
           fi
 
-          echo "OK: Produktions-Build enthält $ASSET_COUNT Assets."
+          echo "PIXVA V14.11 FINAL CHECK PASSED - $ASSET_COUNT Assets"
 
-      - name: Nur vollständig erfolgreichen V14.10.4 Stand veröffentlichen
+      - name: Nur vollstaendig erfolgreichen V14.11 Stand veroeffentlichen
         shell: bash
         run: |
           set -euo pipefail
 
-          git config user.name "PIXVA V14.10.5.1"
+          git config user.name "PIXVA V14.11"
           git config user.email "actions@users.noreply.github.com"
 
           git add -- \
             client/src/App.jsx \
-            client/src/mobile-admin-fix.css
+            client/src/pixva-product-match.js
 
           if git diff --cached --quiet; then
-            echo "PIXVA V14.10.5.1 ist bereits installiert."
+            echo "PIXVA V14.11 ist bereits installiert. Build und Checks waren erfolgreich."
             exit 0
           fi
 
-          git commit -m "PIXVA V14.10.5.1 Vorlagen und Mobile Admin Fix"
+          git commit -m "PIXVA V14.11 Flyer wirklich oeffnen und Varianten fixen"
           git push origin HEAD:main
