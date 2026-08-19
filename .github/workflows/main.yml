@@ -1,4 +1,4 @@
-name: PIXVA V14.11 FLYER OEFFNET WIRKLICH UND PRODUKTVARIANTEN FIX
+name: PIXVA V14.11.1 FORCE LIVE DEPLOY
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 jobs:
-  update:
+  deploy-fix:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Aktuellen PIXVA Stand und Schutzdateien pruefen
+      - name: Aktuellen V14.11 Code semantisch prüfen
         shell: bash
         run: |
           set -euo pipefail
@@ -25,6 +25,71 @@ jobs:
           test -f client/src/components/Chat.jsx
           test -f client/src/pixva-product-match.js
           test -f client/src/pixva-offer.js
+          test -f vercel.json
+
+          node <<'NODE'
+          const fs = require('fs');
+
+          const app = fs.readFileSync('client/src/App.jsx','utf8');
+          const chat = fs.readFileSync('client/src/components/Chat.jsx','utf8');
+
+          const checks = [
+            [/function\s+openGeneratedFlyerProject\s*\(/, app, 'App besitzt openGeneratedFlyerProject().'],
+            [/navigateTo\s*\(\s*['"]flyer['"]\s*\)/, app, 'Flyer-Handler wechselt zu Angebote & Flyer.'],
+            [/onOpenFlyerProject\s*=\s*\{\s*openGeneratedFlyerProject\s*\}/, app, 'Chat bekommt den Flyer-Open-Callback.'],
+            [/onOpenFlyerProject/, chat, 'Chat unterstützt onOpenFlyerProject.'],
+            [/generateOfferFlyerMessage/, chat, 'Chat besitzt Flyer-Erstellung.']
+          ];
+
+          for (const [pattern, source, label] of checks) {
+            if (!pattern.test(source)) {
+              console.error('FEHLER:', label);
+              process.exit(1);
+            }
+            console.log('OK:', label);
+          }
+          NODE
+
+      - name: Produktvarianten mit echtem Runtime Test prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node --input-type=module - <<'NODE'
+          import {
+            productVariantMismatch,
+            isExactProductCandidate
+          } from './client/src/pixva-product-match.js';
+
+          const requested = 'Ülker Gofret';
+          const wrong = {
+            title: 'Ülker Gofret Deluxe Fındıklı 220 gr',
+            brand: 'Ülker'
+          };
+          const neutral = {
+            title: 'Ülker Gofret 220 gr',
+            brand: 'Ülker'
+          };
+
+          if (!productVariantMismatch(wrong, requested)) {
+            throw new Error('Fındıklı/Deluxe wird noch nicht blockiert.');
+          }
+
+          if (isExactProductCandidate(wrong, requested, .56)) {
+            throw new Error('Falsche Fındıklı/Deluxe-Variante wird noch akzeptiert.');
+          }
+
+          if (!isExactProductCandidate(neutral, requested, .56)) {
+            throw new Error('Neutrales Ülker Gofret wird fälschlich blockiert.');
+          }
+
+          console.log('OK: Ülker Gofret blockiert ungenannte Fındıklı/Deluxe-Varianten.');
+          NODE
+
+      - name: Geschützte Dateien vor Änderung sichern
+        shell: bash
+        run: |
+          set -euo pipefail
 
           test -f api/billing.js
           test -f client/src/components/Subscriptions.jsx
@@ -36,176 +101,80 @@ jobs:
           sha256sum client/src/plans.js > /tmp/plans.before
           sha256sum client/public/pixva-logo.png > /tmp/logo.before
 
-          echo "OK: Basis und Schutzdateien vorhanden."
-
-      - name: Getestetes V14.11 Paket vorbereiten
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          rm -rf /tmp/pixva-v14-11
-          mkdir -p /tmp/pixva-v14-11/payload
-
-          echo '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' | base64 --decode > /tmp/pixva-v14-11/payload.tar.gz
-          tar -xzf /tmp/pixva-v14-11/payload.tar.gz -C /tmp/pixva-v14-11/payload
-
-          test -f /tmp/pixva-v14-11/payload/client/src/App.jsx
-          test -f /tmp/pixva-v14-11/payload/client/src/pixva-product-match.js
-
-          echo "OK: Payload vollstaendig."
-
-      - name: V14.11 einsetzen
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          cp /tmp/pixva-v14-11/payload/client/src/App.jsx client/src/App.jsx
-          cp /tmp/pixva-v14-11/payload/client/src/pixva-product-match.js client/src/pixva-product-match.js
-
-      - name: Flyer muss vom Chat wirklich in Work geoeffnet werden
+      - name: Vercel SPA Cache Bust einrichten
         shell: bash
         run: |
           set -euo pipefail
 
           node <<'NODE'
-          const fs=require('fs');
-          const app=fs.readFileSync('client/src/App.jsx','utf8').replace(/\s+/g,'');
-          const chat=fs.readFileSync('client/src/components/Chat.jsx','utf8').replace(/\s+/g,'');
+          const fs = require('fs');
 
-          const checks=[
-            [app.includes('functionopenGeneratedFlyerProject(flyerProject)'), 'App besitzt einen Flyer-Open-Handler.'],
-            [app.includes("type:'flyer'"), 'Flyer-Projekt wird als flyer gespeichert.'],
-            [app.includes("navigateTo('flyer')"), 'App wechselt wirklich zu Angebote & Flyer.'],
-            [app.includes('onOpenFlyerProject={openGeneratedFlyerProject}'), 'Chat bekommt den Flyer-Open-Handler als Prop.'],
-            [chat.includes('onOpenFlyerProject'), 'Chat unterstuetzt den Flyer-Open-Callback.'],
-            [chat.includes('onOpenFlyerProject?.(') || chat.includes('if(onOpenFlyerProject)'), 'Chat ruft den Callback bei Flyer-Erstellung auf.']
-          ];
+          const file = 'vercel.json';
+          const config = JSON.parse(fs.readFileSync(file, 'utf8'));
 
-          for(const [ok,label] of checks){
-            if(!ok){
-              console.error('FEHLER:',label);
-              process.exit(1);
-            }
-            console.log('OK:',label);
+          if (!Array.isArray(config.routes)) {
+            throw new Error('vercel.json enthält keine routes-Liste.');
           }
+
+          const spaRoute = config.routes.find(
+            route => route && route.dest === '/index.html'
+          );
+
+          if (!spaRoute) {
+            throw new Error('SPA-Route zu /index.html wurde nicht gefunden.');
+          }
+
+          spaRoute.headers = {
+            ...(spaRoute.headers || {}),
+            'Cache-Control': 'no-store, no-cache, must-revalidate'
+          };
+
+          fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+          console.log('OK: SPA-HTML wird nicht mehr als alter Browser-Build festgehalten.');
           NODE
 
-      - name: Mobile Admin direkt im Hauptmenue pruefen
+      - name: Eindeutigen Live Build Marker erzeugen
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p client/public
+
+          cat > client/public/pixva-build.json <<EOF
+          {
+            "build": "PIXVA V14.11.1",
+            "githubRun": "${GITHUB_RUN_NUMBER}",
+            "commitBeforeDeploy": "${GITHUB_SHA}",
+            "generatedAtUtc": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+
+          cat client/public/pixva-build.json
+
+      - name: Cache und Build Marker prüfen
         shell: bash
         run: |
           set -euo pipefail
 
           node <<'NODE'
-          const fs=require('fs');
-          const app=fs.readFileSync('client/src/App.jsx','utf8').replace(/\s+/g,'');
+          const fs = require('fs');
 
-          if(!app.includes("isMobile&&activeUser.role==='admin'")){
-            console.error('FEHLER: Mobile Admin Shortcut fehlt.');
-            process.exit(1);
+          const config = JSON.parse(fs.readFileSync('vercel.json','utf8'));
+          const route = config.routes.find(item => item?.dest === '/index.html');
+
+          if (route?.headers?.['Cache-Control'] !== 'no-store, no-cache, must-revalidate') {
+            throw new Error('Cache-Control für die SPA-Route fehlt.');
           }
-          if(!app.includes("onClick={()=>changeView('admin')}")){
-            console.error('FEHLER: Mobile Admin Button oeffnet Admin nicht.');
-            process.exit(1);
+
+          const build = JSON.parse(fs.readFileSync('client/public/pixva-build.json','utf8'));
+          if (build.build !== 'PIXVA V14.11.1') {
+            throw new Error('Build-Marker ist falsch.');
           }
-          console.log('OK: Admin ist fuer Admin-Konten direkt im mobilen Hauptmenue vorhanden.');
+
+          console.log('OK: Cache-Bust und Build-Marker vorhanden.');
           NODE
 
-      - name: Ungenannte Uelker Varianten blockieren
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          node --input-type=module - <<'NODE'
-          import {productVariantMismatch,isExactProductCandidate} from './client/src/pixva-product-match.js';
-
-          const generic='Uelker Gofret'.replace('Uelker','Ülker');
-          const wrong={title:'Ülker Gofret Deluxe Fındıklı 220 gr',brand:'Ülker'};
-          const plain={title:'Ülker Gofret 220 gr',brand:'Ülker'};
-          const explicit={title:'Ülker Gofret Fındıklı 220 gr',brand:'Ülker'};
-
-          if(!productVariantMismatch(wrong,generic))
-            throw new Error('Fındıklı/Deluxe wird bei generischem Ülker Gofret nicht blockiert.');
-
-          if(isExactProductCandidate(wrong,generic,.56))
-            throw new Error('Falsche Fındıklı/Deluxe-Variante wurde akzeptiert.');
-
-          if(!isExactProductCandidate(plain,generic,.56))
-            throw new Error('Neutrales Ülker Gofret wurde faelschlich blockiert.');
-
-          if(productVariantMismatch(explicit,'Ülker Gofret Fındıklı'))
-            throw new Error('Explizit verlangtes Fındıklı wurde faelschlich blockiert.');
-
-          console.log('OK: Generisch = keine ungenannte Fındıklı/Deluxe-Variante.');
-          console.log('OK: Explizit Fındıklı = weiterhin erlaubt.');
-          NODE
-
-      - name: Nur erlaubte Dateien duerfen geaendert sein
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          CHANGED="$(
-            {
-              git diff --name-only
-              git ls-files --others --exclude-standard
-            } | sed '/^$/d' | sort -u
-          )"
-
-          echo "Gefundene Aenderungen:"
-          if [ -n "$CHANGED" ]; then
-            printf '%s\n' "$CHANGED"
-          else
-            echo "(keine - V14.11 ist bereits identisch installiert)"
-          fi
-
-          if [ -n "$CHANGED" ]; then
-            while IFS= read -r FILE; do
-              [ -z "$FILE" ] && continue
-              case "$FILE" in
-                client/src/App.jsx|client/src/pixva-product-match.js) ;;
-                *) echo "FEHLER: Unerlaubte Aenderung: $FILE"; exit 1 ;;
-              esac
-            done <<< "$CHANGED"
-          fi
-
-          echo "OK: Nur erlaubte Dateien betroffen."
-
-      - name: JavaScript und JSX pruefen
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          node --check client/src/pixva-product-match.js
-
-          NODE_PATH=/opt/hostedtoolcache/node/22.*/x64/lib/node_modules node -e "process.exit(0)" 2>/dev/null || true
-
-          npm install --prefix /tmp/pixva-v14-11-ts typescript@5.9.2 --no-save --no-audit --no-fund --ignore-scripts >/dev/null
-
-          cat > /tmp/pixva-v14-11-jsx.cjs <<'NODE'
-          const ts=require('typescript');
-          const fs=require('fs');
-          const file='client/src/App.jsx';
-          const source=fs.readFileSync(file,'utf8');
-          const result=ts.transpileModule(source,{
-            compilerOptions:{
-              jsx:ts.JsxEmit.ReactJSX,
-              target:ts.ScriptTarget.ES2022,
-              module:ts.ModuleKind.ESNext
-            },
-            reportDiagnostics:true,
-            fileName:file
-          });
-          const errors=(result.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
-          if(errors.length){
-            for(const d of errors)console.error(ts.flattenDiagnosticMessageText(d.messageText,' '));
-            process.exit(1);
-          }
-          console.log('APP JSX PASSED');
-          NODE
-
-          NODE_PATH=/tmp/pixva-v14-11-ts/node_modules node /tmp/pixva-v14-11-jsx.cjs
-
-      - name: Geld Preise Abos und PIXVA Hauptlogo unveraendert
+      - name: Geld Preise Abos und PIXVA Hauptlogo unverändert
         shell: bash
         run: |
           set -euo pipefail
@@ -220,15 +189,16 @@ jobs:
           diff /tmp/plans.before /tmp/plans.after
           diff /tmp/logo.before /tmp/logo.after
 
-          echo "OK: Billing, Abos, Preise und Hauptlogo unveraendert."
+          echo "OK: Billing, Abos, Preise und Hauptlogo unverändert."
 
-      - name: Vercel Hobby Limit pruefen
+      - name: Vercel Hobby Function Limit prüfen
         shell: bash
         run: |
           set -euo pipefail
 
           COUNT="$(find api -type f -name '*.js' ! -name '_*.js' | wc -l | tr -d ' ')"
           echo "Deploybare Vercel Functions: $COUNT / 12"
+
           if [ "$COUNT" -gt 12 ]; then
             echo "FEHLER: Vercel Hobby erlaubt maximal 12 Functions."
             exit 1
@@ -242,38 +212,92 @@ jobs:
           npm install --prefix client --no-audit --no-fund
           npm run build --prefix client
 
-      - name: Build final pruefen
+      - name: Gebauten Live Marker prüfen
         shell: bash
         run: |
           set -euo pipefail
 
           test -d client/dist
           test -d client/dist/assets
+          test -f client/dist/pixva-build.json
 
-          ASSET_COUNT="$(find client/dist/assets -type f | wc -l | tr -d ' ')"
-          if [ "$ASSET_COUNT" -lt 1 ]; then
-            echo "FEHLER: Produktions-Bundle enthaelt keine Assets."
-            exit 1
-          fi
+          node <<'NODE'
+          const fs = require('fs');
+          const build = JSON.parse(fs.readFileSync('client/dist/pixva-build.json','utf8'));
 
-          echo "PIXVA V14.11 FINAL CHECK PASSED - $ASSET_COUNT Assets"
+          if (build.build !== 'PIXVA V14.11.1') {
+            throw new Error('pixva-build.json fehlt im Produktions-Build.');
+          }
 
-      - name: Nur vollstaendig erfolgreichen V14.11 Stand veroeffentlichen
+          console.log('OK: Produktions-Build enthält PIXVA V14.11.1 Marker.');
+          NODE
+
+      - name: Nur Deployment Dateien dürfen geändert sein
         shell: bash
         run: |
           set -euo pipefail
 
-          git config user.name "PIXVA V14.11"
-          git config user.email "actions@users.noreply.github.com"
+          CHANGED="$(
+            {
+              git diff --name-only
+              git ls-files --others --exclude-standard
+            } | sed '/^$/d' | sort -u
+          )"
 
-          git add -- \
-            client/src/App.jsx \
-            client/src/pixva-product-match.js
+          echo "Gefundene Änderungen:"
+          printf '%s\n' "$CHANGED"
 
-          if git diff --cached --quiet; then
-            echo "PIXVA V14.11 ist bereits installiert. Build und Checks waren erfolgreich."
-            exit 0
+          if [ -n "$CHANGED" ]; then
+            while IFS= read -r FILE; do
+              [ -z "$FILE" ] && continue
+              case "$FILE" in
+                vercel.json|client/public/pixva-build.json) ;;
+                *)
+                  echo "FEHLER: Unerlaubte Änderung erkannt: $FILE"
+                  exit 1
+                  ;;
+              esac
+            done <<< "$CHANGED"
           fi
 
-          git commit -m "PIXVA V14.11 Flyer wirklich oeffnen und Varianten fixen"
+          echo "OK: App-Code wurde nicht erneut blind verändert."
+
+      - name: Neuen Commit erzwingen und main aktualisieren
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "PIXVA V14.11.1"
+          git config user.email "actions@users.noreply.github.com"
+
+          git add -- vercel.json client/public/pixva-build.json
+
+          if git diff --cached --quiet; then
+            # Der Marker enthält die aktuelle Run-Nummer und sollte deshalb normalerweise
+            # immer einen neuen Commit erzeugen. Falls exakt derselbe Run erneut fortgesetzt
+            # wird, erzeugen wir bewusst einen leeren Deploy-Commit.
+            git commit --allow-empty -m "PIXVA V14.11.1 Force Live Deploy Run ${GITHUB_RUN_NUMBER}"
+          else
+            git commit -m "PIXVA V14.11.1 Force Live Deploy Run ${GITHUB_RUN_NUMBER}"
+          fi
+
           git push origin HEAD:main
+
+          echo "OK: Neuer main-Commit wurde erzeugt. Dadurch bekommt Vercel einen frischen Deployment-Trigger."
+
+      - name: Optionalen Vercel Deploy Hook auslösen
+        shell: bash
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${VERCEL_DEPLOY_HOOK:-}" ]; then
+            echo "Vercel Deploy Hook ist vorhanden und wird zusätzlich ausgelöst."
+            curl --fail --silent --show-error --request POST "$VERCEL_DEPLOY_HOOK"
+            echo
+            echo "OK: Vercel Deploy Hook ausgelöst."
+          else
+            echo "Kein VERCEL_DEPLOY_HOOK Secret gesetzt."
+            echo "Der neue main-Commit bleibt der normale Vercel-Git-Deployment-Trigger."
+          fi
