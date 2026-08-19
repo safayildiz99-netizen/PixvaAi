@@ -531,6 +531,97 @@ async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
     return'';
   };
 
+
+  const trimLogoMargins=async(source)=>{
+    const input=String(source||'');
+    if(!input.startsWith('data:image/'))return input;
+
+    try{
+      const imageElement=new Image();
+      await new Promise((resolve,reject)=>{
+        imageElement.onload=resolve;
+        imageElement.onerror=()=>reject(new Error('Logo konnte nicht analysiert werden.'));
+        imageElement.src=input;
+      });
+
+      const sourceWidth=Math.max(1,Number(imageElement.naturalWidth||imageElement.width||1));
+      const sourceHeight=Math.max(1,Number(imageElement.naturalHeight||imageElement.height||1));
+      if(sourceWidth<4||sourceHeight<4)return input;
+
+      const sourceCanvas=document.createElement('canvas');
+      sourceCanvas.width=sourceWidth;
+      sourceCanvas.height=sourceHeight;
+      const sourceContext=sourceCanvas.getContext('2d',{willReadFrequently:true});
+      if(!sourceContext)return input;
+
+      sourceContext.drawImage(imageElement,0,0,sourceWidth,sourceHeight);
+      const pixels=sourceContext.getImageData(0,0,sourceWidth,sourceHeight).data;
+
+      let minX=sourceWidth;
+      let minY=sourceHeight;
+      let maxX=-1;
+      let maxY=-1;
+
+      for(let y=0;y<sourceHeight;y++){
+        for(let x=0;x<sourceWidth;x++){
+          const offset=(y*sourceWidth+x)*4;
+          const red=pixels[offset];
+          const green=pixels[offset+1];
+          const blue=pixels[offset+2];
+          const alpha=pixels[offset+3];
+
+          if(alpha<18)continue;
+
+          // Weiße/fast weiße Außenfläche gehört bei gefundenen Web-Logos
+          // häufig nur zur Bilddatei und nicht zum eigentlichen Markenzeichen.
+          const nearWhite=red>=245&&green>=245&&blue>=245;
+          if(nearWhite)continue;
+
+          if(x<minX)minX=x;
+          if(y<minY)minY=y;
+          if(x>maxX)maxX=x;
+          if(y>maxY)maxY=y;
+        }
+      }
+
+      if(maxX<minX||maxY<minY)return input;
+
+      const contentWidth=maxX-minX+1;
+      const contentHeight=maxY-minY+1;
+
+      // Nur beschneiden, wenn tatsächlich merkliche Außenränder vorhanden sind.
+      const horizontalPadding=(sourceWidth-contentWidth)/sourceWidth;
+      const verticalPadding=(sourceHeight-contentHeight)/sourceHeight;
+      if(horizontalPadding<.08&&verticalPadding<.08)return input;
+
+      const padX=Math.max(2,Math.round(contentWidth*.07));
+      const padY=Math.max(2,Math.round(contentHeight*.10));
+
+      const cropX=Math.max(0,minX-padX);
+      const cropY=Math.max(0,minY-padY);
+      const cropRight=Math.min(sourceWidth,maxX+1+padX);
+      const cropBottom=Math.min(sourceHeight,maxY+1+padY);
+      const cropWidth=Math.max(1,cropRight-cropX);
+      const cropHeight=Math.max(1,cropBottom-cropY);
+
+      const targetCanvas=document.createElement('canvas');
+      targetCanvas.width=cropWidth;
+      targetCanvas.height=cropHeight;
+      const targetContext=targetCanvas.getContext('2d');
+      if(!targetContext)return input;
+
+      targetContext.drawImage(
+        sourceCanvas,
+        cropX,cropY,cropWidth,cropHeight,
+        0,0,cropWidth,cropHeight
+      );
+
+      return targetCanvas.toDataURL('image/png');
+    }catch{
+      return input;
+    }
+  };
+
   const placeInSlot=async({slotRole,imageRole,labelRole,source,displayName,allowExistingBounds=false})=>{
     if(!source)return false;
     let slot=(canvas.getObjects?.()||[]).find(object=>String(object.dataRole||'')===slotRole);
@@ -556,9 +647,13 @@ async function applyPixvaOfferDraftToCanvas(canvas,draft={}){
     if(label)canvas.remove(label);
     const resolved=await loadSource(source);
     if(!String(resolved||'').startsWith('data:image/'))return false;
-    const img=await FabricImage.fromURL(resolved,{crossOrigin:'anonymous'});
-    const targetW=Math.max(20,bounds.width*.90);
-    const targetH=Math.max(20,bounds.height*.90);
+    const preparedSource=String(imageRole||'').startsWith('logo-image:')
+      ? await trimLogoMargins(resolved)
+      : resolved;
+    const img=await FabricImage.fromURL(preparedSource,{crossOrigin:'anonymous'});
+    const isLogo=String(imageRole||'').startsWith('logo-image:');
+    const targetW=Math.max(20,bounds.width*(isLogo?.94:.90));
+    const targetH=Math.max(20,bounds.height*(isLogo?.86:.90));
     const factor=Math.min(targetW/Math.max(1,img.width),targetH/Math.max(1,img.height));
     img.scale(factor);
     img.set({
